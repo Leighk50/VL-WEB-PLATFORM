@@ -1,38 +1,33 @@
-# Village Limits Website — First Draft
+# Village Limits Website — Stage 2
 
-A Node.js 22 static website prepared for Azure App Service.
+Stage 2 adds a secure website administration area and live content management.
 
 ## Included
 
-- Premium responsive homepage
-- Menu page
-- Embedded TouchReservation table booking page
-- Embedded SiteMinder accommodation booking page
-- What's On page linked to TouchTakeaway tickets
-- Private Events and Contact pages
-- Village Limits logos and selected uploaded photography
+- Existing Stage 1 public website
+- Admin dashboard at `/admin`
+- Editable menus, dishes, prices and allergens
+- Editable What's On events and ticket links
+- Editable opening hours, telephone, email and address
+- Immediate public-site updates
+- Persistent JSON data stored under Azure App Service's `/home/site/data`
 
-## Deploy to the existing GitHub/Azure setup
+## Required Azure environment variables
 
-1. Download and unzip this package.
-2. Open the extracted `VL-WEB-PLATFORM-package` folder.
-3. Upload **all files and folders inside it** to the root of the GitHub repository `Leighk50/VL-WEB-PLATFORM`.
-4. Replace the existing README when prompted, but keep the existing `.github` folder already created by Azure.
-5. Commit directly to `main`.
-6. GitHub Actions will automatically build and deploy to Azure App Service `VLWEB2026`.
+In Azure Portal open **VLWEB2026 → Settings → Environment variables** and add:
 
-## Important before public launch
+- `ADMIN_USERNAME` — your chosen admin username
+- `ADMIN_PASSWORD` — a strong unique password
+- `SESSION_SECRET` — a long random value of at least 32 characters
 
-- Confirm the telephone number, email, postal address and opening times.
-- Replace sample menus with approved live menus.
-- Confirm event dates, wording and prices.
-- Test both embedded booking widgets on desktop and mobile.
-- Keep the current public domain connected to the old website until this draft is approved.
+Save and restart the App Service.
 
-## Run locally
+The temporary defaults are `admin` / `ChangeMe-Immediately`, but do not leave these in use.
 
-```bash
-npm start
-```
+## Deployment
 
-Then open `http://localhost:8080`.
+Upload the contents of this folder into the root of the GitHub repository. Keep the existing `.github` workflow folder. Commit to `main`; GitHub Actions will deploy it automatically.
+
+## Important note
+
+This Stage 2 draft uses Azure App Service persistent storage and is suitable for a single App Service instance. Before scaling to multiple instances, migrate content to Azure SQL or Azure Blob/Table Storage.
