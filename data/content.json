@@ -1,85 +1,186 @@
-{
-  "version": "1.0.0",
-  "buildLabel": "Clean Baseline",
-  "settings": {
-    "telephone": "01526 353312",
-    "email": "hello@villagelimits.co.uk",
-    "address": "Village Limits, Woodhall Spa, Lincolnshire",
-    "openingHours": "Wednesday–Saturday from 6pm · Sunday 12pm–4pm"
-  },
-  "menus": [
-    {
-      "id": "main",
-      "name": "Main Menu",
-      "description": "Seasonal dishes and Village Limits favourites.",
-      "visible": true,
-      "status": "Draft content",
-      "sections": [
-        {
-          "name": "Starters",
-          "items": [
-            {"name":"Homemade Soup of the Day","description":"Served with toasted sourdough.","price":"£8","allergens":"Gluten, celery"},
-            {"name":"House Garlic & Rosemary Focaccia","description":"Truffle and cauliflower hummus, roasted hazelnuts and crispy onions.","price":"£8.50","allergens":"Nuts, gluten, sesame"},
-            {"name":"Smoked Mackerel Fillet","description":"Beetroot, horseradish and spring leaf salad.","price":"£8.50","allergens":"Fish, sulphites, egg, mustard"},
-            {"name":"Pan-Fried Chestnut Mushrooms","description":"Garlic and herb vegan butter, toasted sourdough.","price":"£8.50","allergens":"Gluten, soya"},
-            {"name":"Crab, Prawn & Smoked Salmon","description":"Marie Rose, brown bread and lemon aioli.","price":"£8.50","allergens":"Crustaceans, gluten, mustard, egg, fish, sulphites"},
-            {"name":"Pulled Beef Rib Bonbons","description":"Burnt cider apple sauce and truffle aioli.","price":"£8.50","allergens":"Gluten, egg, milk, celery, sulphites, mustard"}
-          ]
-        }
-      ]
-    },
-    {
-      "id": "sunday",
-      "name": "Sunday Lunch",
-      "description": "Our dedicated Sunday lunch menu.",
-      "visible": true,
-      "status": "Awaiting approved dishes",
-      "sections": [
-        {"name":"Sunday Lunch","items":[{"name":"Full Sunday menu","description":"The approved Sunday dishes will be loaded into this section before launch.","price":"","allergens":"Please ask a member of the team"}]}
-      ]
-    },
-    {
-      "id": "specials",
-      "name": "Specials",
-      "description": "Current limited-availability dishes.",
-      "visible": true,
-      "status": "Draft content",
-      "sections": [
-        {"name":"Tonight's Specials","items":[
-          {"name":"Skate Wing","description":"Please ask the team for today's accompaniments.","price":"£22","allergens":"Please ask a member of the team"},
-          {"name":"Calves Liver","description":"Smoked bacon, peas and seasonal accompaniments.","price":"£18","allergens":"Please ask a member of the team"},
-          {"name":"Cod Tail","description":"Served with tartar sauce.","price":"£18","allergens":"Fish, egg, mustard"}
-        ]}
-      ]
-    },
-    {
-      "id": "desserts",
-      "name": "Desserts",
-      "description": "A selection of homemade desserts.",
-      "visible": true,
-      "status": "Draft content",
-      "sections": [
-        {"name":"Desserts","items":[
-          {"name":"Fruit Pavlova","description":"","price":"","allergens":"Egg, milk"},
-          {"name":"Crème Brûlée","description":"","price":"","allergens":"Egg, milk"},
-          {"name":"Bakewell Tart","description":"Served with custard.","price":"","allergens":"Gluten, nuts, egg, milk"},
-          {"name":"Passion Fruit Cheesecake","description":"","price":"","allergens":"Gluten, milk"}
-        ]}
-      ]
-    },
-    {
-      "id": "childrens",
-      "name": "Children's Menu",
-      "description": "Smaller portions and family favourites.",
-      "visible": true,
-      "status": "Awaiting approved dishes",
-      "sections": [
-        {"name":"Children's Menu","items":[{"name":"Children's dishes","description":"The approved children's menu will be loaded here before launch.","price":"","allergens":"Please ask a member of the team"}]}
-      ]
-    }
-  ],
-  "events": [
-    {"title":"Sarah-Jane Jazz","date":"Friday 4 September","description":"Three-course meal with music from the 1920s to the present day. Limited availability.","ticketUrl":"https://villagelimits.touchtakeaway.net/menu"},
-    {"title":"Psychic Evening","date":"Monday 30 November 2026 · 6:30pm","description":"Two-course meal, £30 per person.","ticketUrl":"https://villagelimits.touchtakeaway.net/menu"}
-  ]
+﻿{
+    "version":  "1.1.1",
+    "buildLabel":  "Homepage Restored and Accommodation Featured",
+    "settings":  {
+                     "telephone":  "01526 353312",
+                     "email":  "hello@villagelimits.co.uk",
+                     "address":  "Village Limits, Woodhall Spa, Lincolnshire",
+                     "openingHours":  "Wednesdayâ€“Saturday from 6pm Â· Sunday 12pmâ€“4pm"
+                 },
+    "menus":  [
+                  {
+                      "id":  "main",
+                      "name":  "Main Menu",
+                      "description":  "Seasonal dishes and Village Limits favourites.",
+                      "visible":  true,
+                      "status":  "Draft content",
+                      "sections":  [
+                                       {
+                                           "name":  "Starters",
+                                           "items":  [
+                                                         {
+                                                             "name":  "Homemade Soup of the Day",
+                                                             "description":  "Served with toasted sourdough.",
+                                                             "price":  "Â£8",
+                                                             "allergens":  "Gluten, celery"
+                                                         },
+                                                         {
+                                                             "name":  "House Garlic \u0026 Rosemary Focaccia",
+                                                             "description":  "Truffle and cauliflower hummus, roasted hazelnuts and crispy onions.",
+                                                             "price":  "Â£8.50",
+                                                             "allergens":  "Nuts, gluten, sesame"
+                                                         },
+                                                         {
+                                                             "name":  "Smoked Mackerel Fillet",
+                                                             "description":  "Beetroot, horseradish and spring leaf salad.",
+                                                             "price":  "Â£8.50",
+                                                             "allergens":  "Fish, sulphites, egg, mustard"
+                                                         },
+                                                         {
+                                                             "name":  "Pan-Fried Chestnut Mushrooms",
+                                                             "description":  "Garlic and herb vegan butter, toasted sourdough.",
+                                                             "price":  "Â£8.50",
+                                                             "allergens":  "Gluten, soya"
+                                                         },
+                                                         {
+                                                             "name":  "Crab, Prawn \u0026 Smoked Salmon",
+                                                             "description":  "Marie Rose, brown bread and lemon aioli.",
+                                                             "price":  "Â£8.50",
+                                                             "allergens":  "Crustaceans, gluten, mustard, egg, fish, sulphites"
+                                                         },
+                                                         {
+                                                             "name":  "Pulled Beef Rib Bonbons",
+                                                             "description":  "Burnt cider apple sauce and truffle aioli.",
+                                                             "price":  "Â£8.50",
+                                                             "allergens":  "Gluten, egg, milk, celery, sulphites, mustard"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+                  },
+                  {
+                      "id":  "sunday",
+                      "name":  "Sunday Lunch",
+                      "description":  "Our dedicated Sunday lunch menu.",
+                      "visible":  true,
+                      "status":  "Awaiting approved dishes",
+                      "sections":  [
+                                       {
+                                           "name":  "Sunday Lunch",
+                                           "items":  [
+                                                         {
+                                                             "name":  "Full Sunday menu",
+                                                             "description":  "The approved Sunday dishes will be loaded into this section before launch.",
+                                                             "price":  "",
+                                                             "allergens":  "Please ask a member of the team"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+                  },
+                  {
+                      "id":  "specials",
+                      "name":  "Specials",
+                      "description":  "Current limited-availability dishes.",
+                      "visible":  true,
+                      "status":  "Draft content",
+                      "sections":  [
+                                       {
+                                           "name":  "Tonight\u0027s Specials",
+                                           "items":  [
+                                                         {
+                                                             "name":  "Skate Wing",
+                                                             "description":  "Please ask the team for today\u0027s accompaniments.",
+                                                             "price":  "Â£22",
+                                                             "allergens":  "Please ask a member of the team"
+                                                         },
+                                                         {
+                                                             "name":  "Calves Liver",
+                                                             "description":  "Smoked bacon, peas and seasonal accompaniments.",
+                                                             "price":  "Â£18",
+                                                             "allergens":  "Please ask a member of the team"
+                                                         },
+                                                         {
+                                                             "name":  "Cod Tail",
+                                                             "description":  "Served with tartar sauce.",
+                                                             "price":  "Â£18",
+                                                             "allergens":  "Fish, egg, mustard"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+                  },
+                  {
+                      "id":  "desserts",
+                      "name":  "Desserts",
+                      "description":  "A selection of homemade desserts.",
+                      "visible":  true,
+                      "status":  "Draft content",
+                      "sections":  [
+                                       {
+                                           "name":  "Desserts",
+                                           "items":  [
+                                                         {
+                                                             "name":  "Fruit Pavlova",
+                                                             "description":  "",
+                                                             "price":  "",
+                                                             "allergens":  "Egg, milk"
+                                                         },
+                                                         {
+                                                             "name":  "CrÃ¨me BrÃ»lÃ©e",
+                                                             "description":  "",
+                                                             "price":  "",
+                                                             "allergens":  "Egg, milk"
+                                                         },
+                                                         {
+                                                             "name":  "Bakewell Tart",
+                                                             "description":  "Served with custard.",
+                                                             "price":  "",
+                                                             "allergens":  "Gluten, nuts, egg, milk"
+                                                         },
+                                                         {
+                                                             "name":  "Passion Fruit Cheesecake",
+                                                             "description":  "",
+                                                             "price":  "",
+                                                             "allergens":  "Gluten, milk"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+                  },
+                  {
+                      "id":  "childrens",
+                      "name":  "Children\u0027s Menu",
+                      "description":  "Smaller portions and family favourites.",
+                      "visible":  true,
+                      "status":  "Awaiting approved dishes",
+                      "sections":  [
+                                       {
+                                           "name":  "Children\u0027s Menu",
+                                           "items":  [
+                                                         {
+                                                             "name":  "Children\u0027s dishes",
+                                                             "description":  "The approved children\u0027s menu will be loaded here before launch.",
+                                                             "price":  "",
+                                                             "allergens":  "Please ask a member of the team"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+                  }
+              ],
+    "events":  [
+                   {
+                       "title":  "Sarah-Jane Jazz",
+                       "date":  "Friday 4 September",
+                       "description":  "Three-course meal with music from the 1920s to the present day. Limited availability.",
+                       "ticketUrl":  "https://villagelimits.touchtakeaway.net/menu"
+                   },
+                   {
+                       "title":  "Psychic Evening",
+                       "date":  "Monday 30 November 2026 Â· 6:30pm",
+                       "description":  "Two-course meal, Â£30 per person.",
+                       "ticketUrl":  "https://villagelimits.touchtakeaway.net/menu"
+                   }
+               ]
 }
