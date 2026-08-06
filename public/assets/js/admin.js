@@ -2,10 +2,10 @@ let content = null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-async function request(url, options={}) { const r=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.error||'Request failed'); return data; }
+async function request(url, options={}) { const token=sessionStorage.getItem('vl_admin_token'); const headers={'Content-Type':'application/json',...(options.headers||{})}; if(token) headers.Authorization=`Bearer ${token}`; const r=await fetch(url,{...options,headers,credentials:'same-origin'}); const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.error||'Request failed'); return data; }
 async function start(){ const status=await request('/api/admin/status'); if(status.authenticated){ $('#loginView').hidden=true; $('#adminView').hidden=false; $('#passwordWarning').hidden=!status.usingDefaultPassword; await load(); } }
-$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#loginError').textContent='';try{await request('/api/admin/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});location.reload();}catch(err){$('#loginError').textContent=err.message;}});
-$('#logoutBtn').addEventListener('click',async()=>{await request('/api/admin/logout',{method:'POST'});location.reload();});
+$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();$('#loginError').textContent='';try{const result=await request('/api/admin/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})}); if(result.token) sessionStorage.setItem('vl_admin_token',result.token); $('#loginView').hidden=true; $('#adminView').hidden=false; await load();}catch(err){$('#loginError').textContent=err.message;}});
+$('#logoutBtn').addEventListener('click',async()=>{await request('/api/admin/logout',{method:'POST'});sessionStorage.removeItem('vl_admin_token');location.reload();});
 document.querySelectorAll('.admin-nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.admin-nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.admin-panel').forEach(p=>p.hidden=true);$(`#panel-${btn.dataset.panel}`).hidden=false;}));
 async function load(){content=await request('/api/admin/content');render();}
 function render(){renderStats();renderSettings();renderMenus();renderEvents();}

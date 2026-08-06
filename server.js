@@ -72,7 +72,9 @@ function makeSession() {
 }
 function validSession(req) {
   const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2));
-  const token = cookies.vl_admin;
+  const authHeader = req.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const token = bearerToken || cookies.vl_admin;
   if (!token || !token.includes('.')) return false;
   const [encoded, signature] = token.split('.');
   let value;
@@ -104,8 +106,9 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/admin/login' && req.method === 'POST') {
       const body = await parseBody(req);
       if (!safeEqual(body.username || '', adminUser) || !safeEqual(body.password || '', adminPassword)) return json(res, 401, { error: 'Incorrect username or password' });
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': `vl_admin=${encodeURIComponent(makeSession())}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`, 'Cache-Control': 'no-store' });
-      return res.end(JSON.stringify({ ok: true }));
+      const token = makeSession();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': `vl_admin=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`, 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({ ok: true, token }));
     }
     if (pathname === '/api/admin/logout' && req.method === 'POST') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': 'vl_admin=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0', 'Cache-Control': 'no-store' });

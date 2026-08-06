@@ -31,3 +31,7 @@ Upload the contents of this folder into the root of the GitHub repository. Keep 
 ## Important note
 
 This Stage 2 draft uses Azure App Service persistent storage and is suitable for a single App Service instance. Before scaling to multiple instances, migrate content to Azure SQL or Azure Blob/Table Storage.
+
+
+## Stage 2.1 login fix
+Uses both a secure cookie and a signed session token fallback for Azure browsers/proxies.
