@@ -1,12 +1,24 @@
-# Village Limits Website — Version 3.1
+# Village Limits Platform — Version 1.0.0
 
-This correction fixes the menu-card behaviour:
+Clean baseline deployment.
 
-- the whole card and its gold action lead to the same menu page;
-- action labels now identify the menu, for example **Open Main Menu**;
-- visible menus with no available dishes are automatically hidden from the public Eat page;
-- empty menus remain available in Admin so they can be populated and switched on later.
+## Included
+- Homepage
+- Menu directory and five menu pages
+- Stay page with direct-booking button
+- Table reservation embed
+- What's On
+- Private Events
+- Contact
+- Working admin login and deployment inventory
+- Version/build display in footer and admin dashboard
 
-## Deploy
+## Azure environment variables
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `SESSION_SECRET`
 
-Copy these files into the local `VL-WEB-PLATFORM` repository, keeping the existing `.github` folder, then commit and push to `main`.
+## Checks
+- `/api/version` shows the deployed version and build.
+- `/api/content` shows exactly which content is in this release.
+- `/admin` shows the menu inventory after sign-in.

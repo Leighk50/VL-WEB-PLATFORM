@@ -1,6 +1,3 @@
-const nav = `
-<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">☰</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/book-table">Book</a></div></header>`;
-const footer = `<footer class="footer"><div class="container"><div class="footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Explore</div><p><a href="/eat">Menus</a><br><a href="/stay">Accommodation</a><br><a href="/whats-on">What's On</a><br><a href="/book-table">Book a Table</a></p></div><div><div class="eyebrow">Opening</div><p>Wednesday–Saturday from 6pm<br>Sunday 12pm–4pm</p><small>Draft hours — update before launch.</small></div></div><div class="footer-bottom"><small>© ${new Date().getFullYear()} Village Limits. First draft website.</small></div></div></footer><div class="sticky-book"><a class="btn" href="/book-table">Book a Table</a></div>`;
-document.querySelector('[data-header]')?.insertAdjacentHTML('afterbegin',nav);
-document.querySelector('[data-footer]')?.insertAdjacentHTML('afterbegin',footer);
-document.addEventListener('click',e=>{if(e.target.matches('.menu-toggle'))document.querySelector('.navlinks').classList.toggle('open')});
+document.addEventListener('click', event => {
+  if (event.target.matches('.menu-toggle')) document.querySelector('.navlinks')?.classList.toggle('open');
+});

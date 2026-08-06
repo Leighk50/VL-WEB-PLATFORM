@@ -3,238 +3,67 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const root = path.join(__dirname, 'public');
-const port = process.env.PORT || 8080;
-const dataDir = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, 'site', 'data') : path.join(__dirname, 'data'));
-const dataFile = path.join(dataDir, 'content.json');
-const adminUser = process.env.ADMIN_USERNAME || 'admin';
-const adminPassword = process.env.ADMIN_PASSWORD || 'ChangeMe-Immediately';
-const sessionSecret = process.env.SESSION_SECRET || 'change-this-session-secret';
+const PORT = process.env.PORT || 8080;
+const ROOT = path.join(__dirname, 'public');
+const CONTENT_PATH = path.join(__dirname, 'data', 'content.json');
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe-Immediately';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-session-secret';
+const BUILD_SHA = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'local';
 
-const mime = {
-  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon'
-};
+const mime = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml'};
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const content = () => JSON.parse(fs.readFileSync(CONTENT_PATH, 'utf8'));
+const json = (res, code, body) => { res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); res.end(JSON.stringify(body)); };
 
-const defaultContent = {
-  settings: {
-    openingHours: 'Wednesday–Saturday from 6pm · Sunday 12–4pm',
-    telephone: '01526 353312',
-    email: 'hello@villagelimits.co.uk',
-    address: 'Village Limits, Woodhall Spa, Lincolnshire',
-    homepageNotice: ''
-  },
-  menus: [
-    { id: 'main', name: 'Main Menu', description: 'Seasonal dishes and Village Limits favourites.', active: true, dishes: [
-      { id: crypto.randomUUID(), section: 'Starters', name: 'Homemade soup of the day', description: 'Served with toasted sourdough.', price: '£8', allergens: 'Gluten, celery', active: true },
-      { id: crypto.randomUUID(), section: 'Starters', name: 'Garlic & rosemary focaccia', description: 'Truffle and cauliflower hummus, roasted hazelnuts and crispy onions.', price: '£8.50', allergens: 'Nuts, gluten, sesame', active: true },
-      { id: crypto.randomUUID(), section: 'Starters', name: 'Pan-fried chestnut mushrooms', description: 'Garlic and herb vegan butter, toasted sourdough.', price: '£8.50', allergens: 'Gluten, soya', active: true },
-      { id: crypto.randomUUID(), section: 'Starters', name: 'Pulled beef rib bonbons', description: 'Burnt cider apple sauce and truffle aioli.', price: '£8.50', allergens: 'Gluten, egg, milk, celery, sulphites, mustard', active: true }
-    ]},
-    { id: 'sunday', name: 'Sunday Lunch', description: 'Traditional favourites and seasonal accompaniments.', active: true, dishes: [] },
-    { id: 'specials', name: 'Specials', description: 'Our latest seasonal and limited-availability dishes.', active: true, dishes: [] },
-    { id: 'desserts', name: 'Desserts', description: 'Finish with something special.', active: true, dishes: [] },
-    { id: 'childrens', name: "Children's Menu", description: 'Smaller portions and family favourites.', active: true, dishes: [] }
-  ],
-  events: [
-    { id: crypto.randomUUID(), title: 'Sarah-Jane Jazz', date: '2026-09-04', displayDate: 'Friday 4 September', time: '', price: '', description: 'A three-course meal with music from the 1920s to the present day. Limited availability.', image: '/assets/images/event.webp', ticketUrl: 'https://villagelimits.touchtakeaway.net/menu', status: 'limited', featured: true },
-    { id: crypto.randomUUID(), title: 'Psychic evening', date: '2026-11-30', displayDate: 'Monday 30 November 2026 · 6:30pm', time: '18:30', price: '£30 per person', description: 'Two-course meal with MediumJoe.', image: '/assets/images/interior.webp', ticketUrl: 'https://villagelimits.touchtakeaway.net/menu', status: 'available', featured: true }
-  ]
-};
+function sign(value){ return crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('hex'); }
+function makeToken(){ const raw = `${ADMIN_USERNAME}|${Date.now()+8*60*60*1000}`; return `${Buffer.from(raw).toString('base64url')}.${sign(raw)}`; }
+function isLoggedIn(req){
+  const cookie = (req.headers.cookie || '').split(';').map(x=>x.trim()).find(x=>x.startsWith('vl_admin='));
+  if(!cookie) return false;
+  const token = decodeURIComponent(cookie.slice(9));
+  const [encoded, sig] = token.split('.');
+  if(!encoded || !sig) return false;
+  let raw; try { raw = Buffer.from(encoded,'base64url').toString(); } catch { return false; }
+  const expected = sign(raw);
+  if(sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expected))) return false;
+  const [user, expiry] = raw.split('|');
+  return user === ADMIN_USERNAME && Number(expiry) > Date.now();
+}
+function readBody(req){ return new Promise((resolve,reject)=>{ let body=''; req.on('data',c=>body+=c); req.on('end',()=>{try{resolve(JSON.parse(body||'{}'))}catch(e){reject(e)}}); req.on('error',reject); }); }
 
-function ensureData() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(dataFile)) fs.writeFileSync(dataFile, JSON.stringify(defaultContent, null, 2));
-}
-function normaliseContent(content) {
-  content = content && typeof content === 'object' ? content : {};
-  content.settings = content.settings || {};
-  content.events = Array.isArray(content.events) ? content.events : [];
-  content.menus = Array.isArray(content.menus) ? content.menus : [];
-  const requiredMenus = [
-    { id: 'main', name: 'Main Menu', description: 'Seasonal dishes and Village Limits favourites.' },
-    { id: 'sunday', name: 'Sunday Lunch', description: 'Traditional favourites and seasonal accompaniments.' },
-    { id: 'specials', name: 'Specials', description: 'Our latest seasonal and limited-availability dishes.' },
-    { id: 'desserts', name: 'Desserts', description: 'Finish with something special.' },
-    { id: 'childrens', name: "Children's Menu", description: 'Smaller portions and family favourites.' }
-  ];
-  const evening = content.menus.find(m => m.id === 'evening');
-  if (evening && !content.menus.some(m => m.id === 'main')) {
-    evening.id = 'main'; evening.name = 'Main Menu';
-  }
-  requiredMenus.forEach(menu => {
-    if (!content.menus.some(existing => existing.id === menu.id)) {
-      content.menus.push({ ...menu, active: true, dishes: [] });
-    }
-  });
-  content.menus.forEach(menu => {
-    if (typeof menu.active !== 'boolean') menu.active = true;
-    menu.dishes = Array.isArray(menu.dishes) ? menu.dishes : [];
-    menu.dishes.forEach(dish => { if (typeof dish.active !== 'boolean') dish.active = true; });
-  });
-  return content;
-}
-function readContent() {
-  ensureData();
-  try {
-    const raw = fs.readFileSync(dataFile, 'utf8');
-    const content = normaliseContent(JSON.parse(raw));
-    writeContent(content);
-    return content;
-  } catch (error) {
-    console.error('Content data was invalid and has been reset:', error.message);
-    const backup = `${dataFile}.invalid-${Date.now()}`;
-    try { if (fs.existsSync(dataFile)) fs.copyFileSync(dataFile, backup); } catch {}
-    const restored = normaliseContent(JSON.parse(JSON.stringify(defaultContent)));
-    writeContent(restored);
-    return restored;
-  }
-}
-function writeContent(content) {
-  ensureData();
-  const temp = `${dataFile}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(content, null, 2));
-  fs.renameSync(temp, dataFile);
-}
-function json(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
-}
-function parseBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', chunk => { body += chunk; if (body.length > 1_000_000) reject(new Error('Request too large')); });
-    req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(new Error('Invalid JSON')); } });
-    req.on('error', reject);
-  });
-}
-function sign(value) { return crypto.createHmac('sha256', sessionSecret).update(value).digest('hex'); }
-function makeSession() {
-  const expiry = Date.now() + 8 * 60 * 60 * 1000;
-  const value = `${adminUser}|${expiry}`;
-  return `${Buffer.from(value).toString('base64url')}.${sign(value)}`;
-}
-function validSession(req) {
-  const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2));
-  const authHeader = req.headers.authorization || '';
-  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const token = bearerToken || cookies.vl_admin;
-  if (!token || !token.includes('.')) return false;
-  const [encoded, signature] = token.split('.');
-  let value;
-  try { value = Buffer.from(encoded, 'base64url').toString(); } catch { return false; }
-  if (!crypto.timingSafeEqual(Buffer.from(sign(value)), Buffer.from(signature))) return false;
-  const [user, expiry] = value.split('|');
-  return user === adminUser && Number(expiry) > Date.now();
-}
-function safeEqual(a, b) {
-  const x = Buffer.from(String(a)); const y = Buffer.from(String(b));
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
-}
-function sanitiseContent(input) {
-  if (!input || typeof input !== 'object') throw new Error('Invalid content');
-  const output = { settings: input.settings || {}, menus: Array.isArray(input.menus) ? input.menus : [], events: Array.isArray(input.events) ? input.events : [] };
-  if (JSON.stringify(output).length > 900000) throw new Error('Content is too large');
-  return output;
-}
+function header(){ return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">☰</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/book-table">Book</a></div></header>`; }
+function footer(c){ return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform · Version ${esc(c.version)} · Build ${BUILD_SHA}</small></div></footer>`; }
+function shell(title, body, options={}){ const c=content(); return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | Village Limits</title><link rel="stylesheet" href="/assets/css/styles.css"></head><body>${header()}${body}${footer(c)}<script src="/assets/js/site.js"></script></body></html>`; }
+function hero(eyebrow, heading, intro){ return `<section class="page-hero"><div class="container"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(heading)}</h1><p>${esc(intro)}</p></div></section>`; }
+function renderHome(){ return shell('Home', `<section class="home-hero"><div class="shade"></div><div class="container hero-copy"><img src="/assets/images/logo-white.png" alt="Village Limits"><p>Boutique accommodation, memorable dining and entertaining evenings in Woodhall Spa.</p><div class="actions"><a class="btn" href="/book-table">Book a Table</a><a class="btn outline-light" href="/stay">Book a Stay</a></div></div></section><section class="section"><div class="container split"><div><div class="eyebrow">Welcome</div><h2>Good food, comfortable rooms and memorable evenings</h2><p class="lead">Discover Village Limits in Woodhall Spa.</p><div class="actions"><a class="btn" href="/eat">View Menus</a><a class="btn outline" href="/whats-on">What's On</a></div></div><img src="/assets/images/interior.webp" alt="Village Limits interior"></div></section>`); }
+function renderEat(){ const c=content(); const cards=c.menus.filter(m=>m.visible).map(m=>`<a class="menu-card" href="/menu/${encodeURIComponent(m.id)}"><div class="eyebrow">${esc(m.status)}</div><h2>${esc(m.name)}</h2><p>${esc(m.description)}</p><span class="btn">Open ${esc(m.name)}</span></a>`).join(''); return shell('Menus', `${hero('Restaurant','Our menus','Every menu shown below is included in Version 1.')}<section class="section"><div class="container menu-grid">${cards}</div></section>`); }
+function renderMenu(id){ const c=content(); const m=c.menus.find(x=>x.id===id && x.visible); if(!m) return shell('Menu unavailable', `${hero('Menus','Menu unavailable','This menu is currently hidden.')}<section class="section"><div class="container"><a class="btn" href="/eat">Back to menus</a></div></section>`); const sections=m.sections.map(s=>`<section class="menu-section"><div class="eyebrow">${esc(s.name)}</div><h2>${esc(s.name)}</h2>${s.items.map(i=>`<article class="dish"><div class="dish-row"><h3>${esc(i.name)}</h3><strong>${esc(i.price)}</strong></div>${i.description?`<p>${esc(i.description)}</p>`:''}${i.allergens?`<small>Allergens: ${esc(i.allergens)}</small>`:''}</article>`).join('')}</section>`).join(''); return shell(m.name, `${hero('Menu',m.name,m.description)}<section class="section"><div class="container narrow"><div class="status-note">${esc(m.status)}</div>${sections}<a class="back-link" href="/eat">← Back to all menus</a></div></section>`); }
+function renderStay(){ const url='https://direct-book.com/properties/VillageLimitsMotelDirect?locale=en&items[0][adults]=2&items[0][children]=0&items[0][infants]=0&currency=GBP&trackPage=yes'; return shell('Stay', `${hero('Accommodation','Stay at Village Limits','Comfortable, air-conditioned rooms in Woodhall Spa.')}<section class="section"><div class="container split"><img src="/assets/images/rooms.webp" alt="Village Limits room"><div><div class="eyebrow">Direct booking</div><h2>Check availability and book your stay</h2><p class="lead">Use our secure accommodation booking site to select your dates and room.</p><a class="btn large" target="_blank" rel="noopener" href="${url}">Check Availability & Book</a></div></div></section>`); }
+function renderWhatsOn(){ const c=content(); return shell("What's On", `${hero('Entertainment',"What's On",'Dinner, live music and special evenings.')}<section class="section"><div class="container event-grid">${c.events.map(e=>`<article class="event-card"><div class="eyebrow">${esc(e.date)}</div><h2>${esc(e.title)}</h2><p>${esc(e.description)}</p><a class="btn" target="_blank" rel="noopener" href="${esc(e.ticketUrl)}">Buy Tickets</a></article>`).join('')}</div></section>`); }
+function renderBookTable(){ return shell('Book a Table', `${hero('Restaurant','Book a Table','Reserve your table using our secure booking system.')}<section class="section"><div class="container booking-box"><script src="https://touchreservation.net/customer/javascript/embed.js?coalias=villagelimits&site=1" type="text/javascript"></script><noscript>Please enable JavaScript to use the booking form.</noscript></div></section>`); }
+function renderContact(){ const c=content(); return shell('Contact', `${hero('Contact','Get in touch','We look forward to welcoming you.')}<section class="section"><div class="container contact-grid"><div><h2>Village Limits</h2><p>${esc(c.settings.address)}</p><p><strong>Telephone:</strong> ${esc(c.settings.telephone)}<br><strong>Email:</strong> ${esc(c.settings.email)}</p></div><img src="/assets/images/exterior.webp" alt="Village Limits exterior"></div></section>`); }
+function renderPrivateEvents(){ return shell('Private Events', `${hero('Celebrations','Private Events','Parties, celebrations and special occasions.')}<section class="section"><div class="container split"><div><h2>Create an occasion to remember</h2><p class="lead">Contact us to discuss private dining, celebrations and group events.</p><a class="btn" href="/contact">Contact Us</a></div><img src="/assets/images/courtyard.webp" alt="Village Limits courtyard"></div></section>`); }
+function renderAdmin(loggedIn, error=''){ const c=content(); if(!loggedIn) return shell('Website Administration', `<main class="admin-wrap"><section class="login-card"><img src="/assets/images/logo-gold.png" alt="Village Limits"><h1>Website administration</h1><p>Sign in to view exactly what is included in the current deployment.</p>${error?`<div class="error">${esc(error)}</div>`:''}<form method="post" action="/admin/login"><label>Username<input name="username" required autocomplete="username"></label><label>Password<input name="password" type="password" required autocomplete="current-password"></label><button class="btn" type="submit">Sign In</button></form></section></main>`); const rows=c.menus.map(m=>`<tr><td>${esc(m.name)}</td><td>${m.visible?'Visible':'Hidden'}</td><td>${m.sections.reduce((n,s)=>n+s.items.length,0)}</td><td>${esc(m.status)}</td></tr>`).join(''); return shell('Admin Dashboard', `<main class="admin-dashboard"><div class="container"><div class="admin-top"><div><div class="eyebrow">Current deployment</div><h1>Version ${esc(c.version)}</h1><p>Build ${BUILD_SHA} · ${esc(c.buildLabel)}</p></div><form method="post" action="/admin/logout"><button class="btn outline" type="submit">Log Out</button></form></div><div class="admin-panel"><h2>Menus uploaded in this version</h2><table><thead><tr><th>Menu</th><th>Public</th><th>Items</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div><div class="admin-panel"><h2>Public checks</h2><p><a href="/eat">Open menu directory</a> · <a href="/api/version">Open version JSON</a> · <a href="/api/content">Open content JSON</a></p></div></div></main>`); }
 
-ensureData();
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[char]);
-}
-function pageShell({ title, eyebrow, heading, intro, body, compact = false }) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} | Village Limits</title><meta name="description" content="${escapeHtml(intro || heading)}"><link rel="stylesheet" href="/assets/css/styles.css"></head><body><div data-header></div><section class="page-hero${compact ? ' compact' : ''}"><div class="container"><div class="eyebrow">${escapeHtml(eyebrow)}</div><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(intro || '')}</p></div></section>${body}<div data-footer></div><script src="/assets/js/site.js"></script></body></html>`;
-}
-function menuIcon(id) {
-  return ({ main: '🍽', sunday: '🍖', specials: '★', desserts: '🍰', childrens: '◌' })[id] || '◆';
-}
-function renderEatPage() {
-  const content = readContent();
-  const menus = content.menus.filter(menu => menu.active && (menu.dishes || []).some(dish => dish.active));
-  const cards = menus.length ? menus.map(menu => `
-    <a class="menu-choice" href="/menu?id=${encodeURIComponent(menu.id)}">
-      <span class="menu-choice-icon" aria-hidden="true">${menuIcon(menu.id)}</span>
-      <h2>${escapeHtml(menu.name)}</h2>
-      <p>${escapeHtml(menu.description || '')}</p>
-      <span class="menu-choice-link">Open ${escapeHtml(menu.name)} <span aria-hidden="true">→</span></span>
-    </a>`).join('') : '<div class="empty-menu"><h2>Menus are being updated</h2><p>Please contact us for today’s availability.</p></div>';
-  return pageShell({
-    title: 'Menus', eyebrow: 'Restaurant', heading: 'Our menus',
-    intro: 'Choose from our current menus. Hidden menus and menus without any available dishes are automatically removed.',
-    body: `<section class="section menu-section"><div class="container"><div class="menu-directory">${cards}</div></div></section>
-    <section class="section alt"><div class="container split"><div><div class="eyebrow">Dining at Village Limits</div><h2>Freshly prepared and regularly updated</h2><p class="lead">Our menus change with the seasons and availability. Specials may change daily.</p><p>Please speak to a member of the team before ordering if you have any allergies or dietary requirements.</p><div class="actions"><a class="btn" href="/book-table">Book a Table</a><a class="btn outline" href="/contact">Contact Us</a></div></div><img src="/assets/images/food2.webp" alt="Food served at Village Limits"></div></section>`
-  });
-}
-function renderMenuPage(id) {
-  const content = readContent();
-  const menu = content.menus.find(item => item.id === id && item.active);
-  if (!menu) return pageShell({ title: 'Menu unavailable', eyebrow: 'Village Limits', heading: 'Menu unavailable', intro: 'This menu is not currently available.', compact: true, body: '<section class="section"><div class="container empty-menu"><h2>Please choose another menu</h2><p>Only menus currently available are shown on our menu page.</p><a class="btn" href="/eat">View available menus</a></div></section>' });
-  const dishes = (menu.dishes || []).filter(dish => dish.active);
-  const sections = [...new Set(dishes.map(dish => dish.section || 'Menu'))];
-  const menuBody = dishes.length ? sections.map(section => `<section class="dynamic-menu"><div class="menu-section-heading"><div class="eyebrow">${escapeHtml(section)}</div><h2>${escapeHtml(section)}</h2></div><div class="menu-list">${dishes.filter(d => (d.section || 'Menu') === section).map(d => `<article class="dish"><div class="dish-row"><h3>${escapeHtml(d.name)}</h3><span class="price">${escapeHtml(d.price || '')}</span></div>${d.description ? `<p>${escapeHtml(d.description)}</p>` : ''}${d.allergens ? `<div class="allergens">Contains: ${escapeHtml(d.allergens)}</div>` : ''}</article>`).join('')}</div></section>`).join('') : '<div class="empty-menu"><h2>Menu details coming soon</h2><p>Please contact us for current dishes and prices.</p></div>';
-  return pageShell({ title: menu.name, eyebrow: 'Village Limits', heading: menu.name, intro: menu.description || '', compact: true, body: `<section class="section"><div class="container menu-page">${menuBody}<div class="menu-back"><a href="/eat">← Back to all menus</a></div></div></section><section class="section alt"><div class="container centre"><p>Please inform a member of the team about any allergies or dietary requirements before ordering.</p><a class="btn" href="/book-table">Book a Table</a></div></section>` });
-}
-
-http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const pathname = decodeURIComponent(url.pathname);
-
-    if (pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true, dataFile });
-    if (pathname === '/api/content' && req.method === 'GET') return json(res, 200, readContent());
-    if (pathname === '/api/admin/status' && req.method === 'GET') return json(res, 200, { authenticated: validSession(req), usingDefaultPassword: adminPassword === 'ChangeMe-Immediately' });
-    if (pathname === '/api/admin/login' && req.method === 'POST') {
-      const body = await parseBody(req);
-      if (!safeEqual(body.username || '', adminUser) || !safeEqual(body.password || '', adminPassword)) return json(res, 401, { error: 'Incorrect username or password' });
-      const token = makeSession();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': `vl_admin=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`, 'Cache-Control': 'no-store' });
-      return res.end(JSON.stringify({ ok: true, token }));
-    }
-    if (pathname === '/api/admin/logout' && req.method === 'POST') {
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': 'vl_admin=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0', 'Cache-Control': 'no-store' });
-      return res.end(JSON.stringify({ ok: true }));
-    }
-    if (pathname === '/api/admin/content' && req.method === 'GET') {
-      if (!validSession(req)) return json(res, 401, { error: 'Unauthorised' });
-      return json(res, 200, readContent());
-    }
-    if (pathname === '/api/admin/content' && req.method === 'PUT') {
-      if (!validSession(req)) return json(res, 401, { error: 'Unauthorised' });
-      const body = sanitiseContent(await parseBody(req));
-      writeContent(body);
-      return json(res, 200, { ok: true });
-    }
-
-    if (pathname === '/eat' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end(renderEatPage());
-    }
-    if (pathname === '/menu' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end(renderMenuPage(url.searchParams.get('id') || ''));
-    }
-
-    const clean = pathname === '/' ? '/index.html' : pathname;
-    let filePath = path.normalize(path.join(root, clean));
-    if (!filePath.startsWith(root)) { res.writeHead(403); return res.end('Forbidden'); }
-    if (!path.extname(filePath)) filePath += '.html';
-    fs.stat(filePath, (err, stat) => {
-      if (err || !stat.isFile()) filePath = path.join(root, '404.html');
-      fs.readFile(filePath, (readErr, data) => {
-        if (readErr) { res.writeHead(500); return res.end('Server error'); }
-        res.writeHead(filePath.endsWith('404.html') ? 404 : 200, {
-          'Content-Type': mime[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-          'Cache-Control': filePath.endsWith('.html') ? 'no-cache' : 'public, max-age=604800'
-        });
-        res.end(data);
-      });
-    });
-  } catch (error) {
-    json(res, 400, { error: error.message || 'Request failed' });
-  }
-}).listen(port, () => console.log(`Village Limits website running on port ${port}`));
+http.createServer(async (req,res)=>{
+  try{
+    const u=new URL(req.url,`http://${req.headers.host||'localhost'}`); const p=decodeURIComponent(u.pathname);
+    if(p==='/api/version') return json(res,200,{version:content().version,build:BUILD_SHA,label:content().buildLabel});
+    if(p==='/api/content') return json(res,200,content());
+    if(p==='/admin/login' && req.method==='POST'){ const b=await readBody(req); if(b.username===ADMIN_USERNAME && b.password===ADMIN_PASSWORD){ const t=makeToken(); res.writeHead(302,{'Set-Cookie':`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`,'Location':'/admin'}); return res.end(); } res.writeHead(401,{'Content-Type':'text/html; charset=utf-8'}); return res.end(renderAdmin(false,'Incorrect username or password.')); }
+    if(p==='/admin/logout' && req.method==='POST'){ res.writeHead(302,{'Set-Cookie':'vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0','Location':'/admin'}); return res.end(); }
+    if(p==='/admin') { res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); return res.end(renderAdmin(isLoggedIn(req))); }
+    if(p==='/') return html(res,renderHome());
+    if(p==='/eat') return html(res,renderEat());
+    if(p.startsWith('/menu/')) return html(res,renderMenu(p.slice(6)));
+    if(p==='/stay') return html(res,renderStay());
+    if(p==='/whats-on') return html(res,renderWhatsOn());
+    if(p==='/book-table') return html(res,renderBookTable());
+    if(p==='/contact') return html(res,renderContact());
+    if(p==='/private-events') return html(res,renderPrivateEvents());
+    const file=path.normalize(path.join(ROOT,p)); if(!file.startsWith(ROOT)) {res.writeHead(403);return res.end('Forbidden');}
+    fs.stat(file,(err,st)=>{ if(err||!st.isFile()){res.writeHead(404);return res.end('Not found');} fs.readFile(file,(e,d)=>{if(e){res.writeHead(500);return res.end('Error');} res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream'});res.end(d);});});
+  }catch(e){json(res,500,{error:e.message});}
+}).listen(PORT,()=>console.log(`Village Limits Version 1 running on ${PORT}`));
+function html(res,body){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(body);}
