@@ -1,11 +1,6 @@
-{
-  "name": "village-limits-website",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Village Limits website first draft",
-  "engines": { "node": ">=22" },
-  "scripts": {
-    "start": "node server.js",
-    "build": "node -e \"console.log('Static site ready')\""
-  }
-}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Village Limits | Dine, Stay & What's On</title><meta name="description" content="Village Limits in Woodhall Spa — restaurant, accommodation and live entertainment."><link rel="stylesheet" href="/assets/css/styles.css"></head><body><div data-header></div>
+<section class="hero"><div class="container hero-inner"><img class="logo" src="/assets/images/logo-white.png" alt="Village Limits"><div class="eyebrow">Woodhall Spa, Lincolnshire</div><h1>Dine. Stay. Make an evening of it.</h1><p>Thoughtful food, welcoming rooms and entertainment worth leaving home for.</p><div class="actions"><a class="btn" href="/book-table">Book a Table</a><a class="btn outline" href="/stay">Book Accommodation</a><a class="btn outline" href="/whats-on">What's On</a></div></div></section>
+<section class="section"><div class="container"><div class="eyebrow">Village Limits</div><h2>Three reasons to visit</h2><p class="lead">A relaxed destination for dinner, a restful stay and memorable live entertainment.</p><div class="three-grid" style="margin-top:36px"><a class="feature-card" href="/eat" style="background-image:url('/assets/images/food1.webp')"><div><div class="eyebrow">Eat</div><h3>Seasonal food, made with care</h3><p>Evening dining, Sunday lunch and changing specials.</p></div></a><a class="feature-card" href="/stay" style="background-image:url('/assets/images/rooms.webp')"><div><div class="eyebrow">Stay</div><h3>Comfortable rooms</h3><p>Air-conditioned accommodation with direct online booking.</p></div></a><a class="feature-card" href="/whats-on" style="background-image:url('/assets/images/event.webp')"><div><div class="eyebrow">What's On</div><h3>Evenings to remember</h3><p>Live music, dining events and special entertainment.</p></div></a></div></div></section>
+<section class="section alt"><div class="container split"><img src="/assets/images/interior.webp" alt="Village Limits interior"><div><div class="eyebrow">Warmly different</div><h2>A place where every visit feels special</h2><p class="lead">Join us for a relaxed meal, celebrate an occasion, enjoy an evening of entertainment or stay a little longer.</p><div class="actions"><a class="btn dark" href="/book-table">Reserve a Table</a><a class="btn outline" href="/private-events">Private Events</a></div></div></div></section>
+<section class="section"><div class="container"><div class="eyebrow">Coming up</div><h2>What's on at Village Limits</h2><div class="notice" data-home-notice hidden></div><div class="cards" data-dynamic-events="featured"><p>Loading events…</p></div></div></section>
+<div data-footer></div><script src="/assets/js/site.js"></script><script src="/assets/js/content.js"></script></body></html>

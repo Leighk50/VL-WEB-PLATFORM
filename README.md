@@ -1,37 +1,8 @@
-# Village Limits Website — Stage 2
-
-Stage 2 adds a secure website administration area and live content management.
-
-## Included
-
-- Existing Stage 1 public website
-- Admin dashboard at `/admin`
-- Editable menus, dishes, prices and allergens
-- Editable What's On events and ticket links
-- Editable opening hours, telephone, email and address
-- Immediate public-site updates
-- Persistent JSON data stored under Azure App Service's `/home/site/data`
-
-## Required Azure environment variables
-
-In Azure Portal open **VLWEB2026 → Settings → Environment variables** and add:
-
-- `ADMIN_USERNAME` — your chosen admin username
-- `ADMIN_PASSWORD` — a strong unique password
-- `SESSION_SECRET` — a long random value of at least 32 characters
-
-Save and restart the App Service.
-
-The temporary defaults are `admin` / `ChangeMe-Immediately`, but do not leave these in use.
-
-## Deployment
-
-Upload the contents of this folder into the root of the GitHub repository. Keep the existing `.github` workflow folder. Commit to `main`; GitHub Actions will deploy it automatically.
-
-## Important note
-
-This Stage 2 draft uses Azure App Service persistent storage and is suitable for a single App Service instance. Before scaling to multiple instances, migrate content to Azure SQL or Azure Blob/Table Storage.
-
-
-## Stage 2.1 login fix
-Uses both a secure cookie and a signed session token fallback for Azure browsers/proxies.
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website Admin | Village Limits</title><link rel="stylesheet" href="/assets/css/styles.css"><link rel="stylesheet" href="/assets/css/admin.css"></head><body class="admin-body">
+<div id="loginView" class="admin-login"><div class="login-card"><img src="/assets/images/logo-gold.png" alt="Village Limits"><h1>Website administration</h1><p>Sign in to update menus, events, opening hours and contact details.</p><form id="loginForm"><label>Username<input id="username" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">Sign in</button><p id="loginError" class="form-error"></p></form></div></div>
+<div id="adminView" hidden><header class="admin-top"><div><strong>Village Limits</strong><span>Website administration</span></div><div><a class="admin-preview" href="/" target="_blank">View website</a><button id="logoutBtn">Sign out</button></div></header><div class="admin-shell"><aside class="admin-nav"><button class="active" data-panel="dashboard">Dashboard</button><button data-panel="menus">Menus</button><button data-panel="events">What's On</button><button data-panel="settings">Website details</button></aside><main class="admin-main">
+<section id="panel-dashboard" class="admin-panel"><div class="admin-heading"><div><span class="eyebrow">Stage 2.2</span><h1>Dashboard</h1></div><button id="saveAll" class="btn">Save all changes</button></div><div id="passwordWarning" class="admin-warning" hidden>For security, set ADMIN_USERNAME, ADMIN_PASSWORD and SESSION_SECRET in Azure App Service environment variables before sharing this address.</div><div class="stat-grid"><div class="stat"><strong id="menuCount">0</strong><span>Published menus</span></div><div class="stat"><strong id="dishCount">0</strong><span>Menu dishes</span></div><div class="stat"><strong id="eventCount">0</strong><span>Upcoming events</span></div></div><div class="admin-card"><h2>How updates work</h2><p>Changes are saved on the Azure server and appear on the public website immediately. Use the preview link to check them.</p><p id="saveStatus" class="save-status"></p></div></section>
+<section id="panel-menus" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Restaurant</span><h1>Menus</h1><p>Show or hide complete menus, amend dishes and mark individual items unavailable.</p></div><button id="addMenu" class="btn">Add menu</button></div><div id="menusEditor"></div></section>
+<section id="panel-events" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Entertainment</span><h1>What's On</h1></div><button id="addEvent" class="btn">Add event</button></div><div id="eventsEditor" class="editor-grid"></div></section>
+<section id="panel-settings" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">General</span><h1>Website details</h1></div></div><div class="admin-card form-grid"><label>Opening hours<input data-setting="openingHours"></label><label>Telephone<input data-setting="telephone"></label><label>Email<input data-setting="email" type="email"></label><label>Address<textarea data-setting="address"></textarea></label><label class="wide">Homepage notice<textarea data-setting="homepageNotice" placeholder="Leave blank for no notice"></textarea></label></div></section>
+</main></div></div><script src="/assets/js/admin.js"></script></body></html>
