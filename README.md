@@ -1,10 +1,15 @@
-# Village Limits Website — Stage 2.2
+# Village Limits Website — Stage 2.3
 
-This release adds editable Main, Sunday Lunch, Specials, Desserts and Children's menus, plus show/hide controls for each complete menu and each dish. It also includes the revised accommodation page with a gold SiteMinder booking button.
+This release fixes menu loading and automatically repairs invalid persisted menu data.
 
-Upload all files to the root of the GitHub repository, preserving the existing `.github` workflow directory.
+## Azure settings
 
-Admin: `/admin`
-Menus: `/eat`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `SESSION_SECRET`
 
-Azure environment variables required: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET`.
+Optional: `CONTENT_DATA_DIR` to choose a persistent content folder.
+
+## Diagnostics
+
+Visit `/api/health` to confirm the Node application is running and `/api/content` to inspect the public menu data.

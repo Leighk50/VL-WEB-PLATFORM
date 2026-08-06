@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const root = path.join(__dirname, 'public');
 const port = process.env.PORT || 8080;
-const dataDir = process.env.HOME ? path.join(process.env.HOME, 'site', 'data') : path.join(__dirname, 'data');
+const dataDir = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, 'site', 'data') : path.join(__dirname, 'data'));
 const dataFile = path.join(dataDir, 'content.json');
 const adminUser = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'ChangeMe-Immediately';
@@ -78,9 +78,19 @@ function normaliseContent(content) {
 }
 function readContent() {
   ensureData();
-  const content = normaliseContent(JSON.parse(fs.readFileSync(dataFile, 'utf8')));
-  writeContent(content);
-  return content;
+  try {
+    const raw = fs.readFileSync(dataFile, 'utf8');
+    const content = normaliseContent(JSON.parse(raw));
+    writeContent(content);
+    return content;
+  } catch (error) {
+    console.error('Content data was invalid and has been reset:', error.message);
+    const backup = `${dataFile}.invalid-${Date.now()}`;
+    try { if (fs.existsSync(dataFile)) fs.copyFileSync(dataFile, backup); } catch {}
+    const restored = normaliseContent(JSON.parse(JSON.stringify(defaultContent)));
+    writeContent(restored);
+    return restored;
+  }
 }
 function writeContent(content) {
   ensureData();
@@ -137,6 +147,7 @@ http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = decodeURIComponent(url.pathname);
 
+    if (pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true, dataFile });
     if (pathname === '/api/content' && req.method === 'GET') return json(res, 200, readContent());
     if (pathname === '/api/admin/status' && req.method === 'GET') return json(res, 200, { authenticated: validSession(req), usingDefaultPassword: adminPassword === 'ChangeMe-Immediately' });
     if (pathname === '/api/admin/login' && req.method === 'POST') {
