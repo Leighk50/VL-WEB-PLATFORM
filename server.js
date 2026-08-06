@@ -155,18 +155,17 @@ function menuIcon(id) {
 }
 function renderEatPage() {
   const content = readContent();
-  const menus = content.menus.filter(menu => menu.active);
+  const menus = content.menus.filter(menu => menu.active && (menu.dishes || []).some(dish => dish.active));
   const cards = menus.length ? menus.map(menu => `
     <a class="menu-choice" href="/menu?id=${encodeURIComponent(menu.id)}">
       <span class="menu-choice-icon" aria-hidden="true">${menuIcon(menu.id)}</span>
-      <span class="eyebrow">View menu</span>
       <h2>${escapeHtml(menu.name)}</h2>
       <p>${escapeHtml(menu.description || '')}</p>
-      <span class="menu-choice-link">Open menu <span aria-hidden="true">→</span></span>
+      <span class="menu-choice-link">Open ${escapeHtml(menu.name)} <span aria-hidden="true">→</span></span>
     </a>`).join('') : '<div class="empty-menu"><h2>Menus are being updated</h2><p>Please contact us for today’s availability.</p></div>';
   return pageShell({
     title: 'Menus', eyebrow: 'Restaurant', heading: 'Our menus',
-    intro: 'Choose from our current menus. Hidden menus are automatically removed from this page.',
+    intro: 'Choose from our current menus. Hidden menus and menus without any available dishes are automatically removed.',
     body: `<section class="section menu-section"><div class="container"><div class="menu-directory">${cards}</div></div></section>
     <section class="section alt"><div class="container split"><div><div class="eyebrow">Dining at Village Limits</div><h2>Freshly prepared and regularly updated</h2><p class="lead">Our menus change with the seasons and availability. Specials may change daily.</p><p>Please speak to a member of the team before ordering if you have any allergies or dietary requirements.</p><div class="actions"><a class="btn" href="/book-table">Book a Table</a><a class="btn outline" href="/contact">Contact Us</a></div></div><img src="/assets/images/food2.webp" alt="Food served at Village Limits"></div></section>`
   });

@@ -1,10 +1,12 @@
-# Village Limits Website — Version 3
+# Village Limits Website — Version 3.1
 
-Azure-ready Node.js website with server-rendered menu pages, editable content administration, accommodation and table-booking integrations, and events.
+This correction fixes the menu-card behaviour:
 
-## Version 3 improvements
-- Menus render on the server with no “Loading menus…” screen.
-- Visible menus appear automatically as premium menu cards.
-- Hidden menus are removed immediately.
-- Individual menu pages are search-engine friendly and mobile responsive.
-- Existing `/admin`, `/api/health`, and `/api/content` features remain available.
+- the whole card and its gold action lead to the same menu page;
+- action labels now identify the menu, for example **Open Main Menu**;
+- visible menus with no available dishes are automatically hidden from the public Eat page;
+- empty menus remain available in Admin so they can be populated and switched on later.
+
+## Deploy
+
+Copy these files into the local `VL-WEB-PLATFORM` repository, keeping the existing `.github` folder, then commit and push to `main`.
