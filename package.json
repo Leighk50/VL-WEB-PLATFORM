@@ -1,11 +1,11 @@
 {
-  "name": "village-limits-version-1",
-  "version": "1.0.0",
+  "name": "village-limits-platform",
+  "version": "2.0.0",
   "private": true,
-  "description": "Clean baseline website for Village Limits",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "start": "node server.js",
-    "test": "node --check server.js"
+    "start": "node server.js"
   }
 }

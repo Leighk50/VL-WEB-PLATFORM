@@ -1,3 +1,1 @@
-document.addEventListener('click', event => {
-  if (event.target.matches('.menu-toggle')) document.querySelector('.navlinks')?.classList.toggle('open');
-});
+document.addEventListener('click',e=>{if(e.target.matches('.menu-toggle'))document.querySelector('.navlinks')?.classList.toggle('open')});
