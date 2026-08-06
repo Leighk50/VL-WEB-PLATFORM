@@ -142,6 +142,45 @@ function sanitiseContent(input) {
 
 ensureData();
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+function pageShell({ title, eyebrow, heading, intro, body, compact = false }) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} | Village Limits</title><meta name="description" content="${escapeHtml(intro || heading)}"><link rel="stylesheet" href="/assets/css/styles.css"></head><body><div data-header></div><section class="page-hero${compact ? ' compact' : ''}"><div class="container"><div class="eyebrow">${escapeHtml(eyebrow)}</div><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(intro || '')}</p></div></section>${body}<div data-footer></div><script src="/assets/js/site.js"></script></body></html>`;
+}
+function menuIcon(id) {
+  return ({ main: '🍽', sunday: '🍖', specials: '★', desserts: '🍰', childrens: '◌' })[id] || '◆';
+}
+function renderEatPage() {
+  const content = readContent();
+  const menus = content.menus.filter(menu => menu.active);
+  const cards = menus.length ? menus.map(menu => `
+    <a class="menu-choice" href="/menu?id=${encodeURIComponent(menu.id)}">
+      <span class="menu-choice-icon" aria-hidden="true">${menuIcon(menu.id)}</span>
+      <span class="eyebrow">View menu</span>
+      <h2>${escapeHtml(menu.name)}</h2>
+      <p>${escapeHtml(menu.description || '')}</p>
+      <span class="menu-choice-link">Open menu <span aria-hidden="true">→</span></span>
+    </a>`).join('') : '<div class="empty-menu"><h2>Menus are being updated</h2><p>Please contact us for today’s availability.</p></div>';
+  return pageShell({
+    title: 'Menus', eyebrow: 'Restaurant', heading: 'Our menus',
+    intro: 'Choose from our current menus. Hidden menus are automatically removed from this page.',
+    body: `<section class="section menu-section"><div class="container"><div class="menu-directory">${cards}</div></div></section>
+    <section class="section alt"><div class="container split"><div><div class="eyebrow">Dining at Village Limits</div><h2>Freshly prepared and regularly updated</h2><p class="lead">Our menus change with the seasons and availability. Specials may change daily.</p><p>Please speak to a member of the team before ordering if you have any allergies or dietary requirements.</p><div class="actions"><a class="btn" href="/book-table">Book a Table</a><a class="btn outline" href="/contact">Contact Us</a></div></div><img src="/assets/images/food2.webp" alt="Food served at Village Limits"></div></section>`
+  });
+}
+function renderMenuPage(id) {
+  const content = readContent();
+  const menu = content.menus.find(item => item.id === id && item.active);
+  if (!menu) return pageShell({ title: 'Menu unavailable', eyebrow: 'Village Limits', heading: 'Menu unavailable', intro: 'This menu is not currently available.', compact: true, body: '<section class="section"><div class="container empty-menu"><h2>Please choose another menu</h2><p>Only menus currently available are shown on our menu page.</p><a class="btn" href="/eat">View available menus</a></div></section>' });
+  const dishes = (menu.dishes || []).filter(dish => dish.active);
+  const sections = [...new Set(dishes.map(dish => dish.section || 'Menu'))];
+  const menuBody = dishes.length ? sections.map(section => `<section class="dynamic-menu"><div class="menu-section-heading"><div class="eyebrow">${escapeHtml(section)}</div><h2>${escapeHtml(section)}</h2></div><div class="menu-list">${dishes.filter(d => (d.section || 'Menu') === section).map(d => `<article class="dish"><div class="dish-row"><h3>${escapeHtml(d.name)}</h3><span class="price">${escapeHtml(d.price || '')}</span></div>${d.description ? `<p>${escapeHtml(d.description)}</p>` : ''}${d.allergens ? `<div class="allergens">Contains: ${escapeHtml(d.allergens)}</div>` : ''}</article>`).join('')}</div></section>`).join('') : '<div class="empty-menu"><h2>Menu details coming soon</h2><p>Please contact us for current dishes and prices.</p></div>';
+  return pageShell({ title: menu.name, eyebrow: 'Village Limits', heading: menu.name, intro: menu.description || '', compact: true, body: `<section class="section"><div class="container menu-page">${menuBody}<div class="menu-back"><a href="/eat">← Back to all menus</a></div></div></section><section class="section alt"><div class="container centre"><p>Please inform a member of the team about any allergies or dietary requirements before ordering.</p><a class="btn" href="/book-table">Book a Table</a></div></section>` });
+}
+
 http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -170,6 +209,15 @@ http.createServer(async (req, res) => {
       const body = sanitiseContent(await parseBody(req));
       writeContent(body);
       return json(res, 200, { ok: true });
+    }
+
+    if (pathname === '/eat' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(renderEatPage());
+    }
+    if (pathname === '/menu' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(renderMenuPage(url.searchParams.get('id') || ''));
     }
 
     const clean = pathname === '/' ? '/index.html' : pathname;

@@ -1,15 +1,10 @@
-# Village Limits Website — Stage 2.3
+# Village Limits Website — Version 3
 
-This release fixes menu loading and automatically repairs invalid persisted menu data.
+Azure-ready Node.js website with server-rendered menu pages, editable content administration, accommodation and table-booking integrations, and events.
 
-## Azure settings
-
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD`
-- `SESSION_SECRET`
-
-Optional: `CONTENT_DATA_DIR` to choose a persistent content folder.
-
-## Diagnostics
-
-Visit `/api/health` to confirm the Node application is running and `/api/content` to inspect the public menu data.
+## Version 3 improvements
+- Menus render on the server with no “Loading menus…” screen.
+- Visible menus appear automatically as premium menu cards.
+- Hidden menus are removed immediately.
+- Individual menu pages are search-engine friendly and mobile responsive.
+- Existing `/admin`, `/api/health`, and `/api/content` features remain available.
