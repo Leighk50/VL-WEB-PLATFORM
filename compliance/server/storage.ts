@@ -1,0 +1,4 @@
+import {mkdirSync,createReadStream} from 'node:fs'; import {writeFile} from 'node:fs/promises'; import {dirname,resolve} from 'node:path'; import {randomUUID} from 'node:crypto';
+export interface ObjectStorage{put(data:Buffer,originalName:string):Promise<string>;stream(key:string):NodeJS.ReadableStream}
+export class LocalStorage implements ObjectStorage{root=resolve(process.env.LOCAL_STORAGE_PATH||'.data/uploads');async put(data:Buffer,name:string){const ext=name.includes('.')?'.'+name.split('.').pop()!.replace(/[^a-z0-9]/gi,''):'';const key=`${new Date().getFullYear()}/${randomUUID()}${ext}`;const p=resolve(this.root,key);mkdirSync(dirname(p),{recursive:true});await writeFile(p,data,{mode:0o600});return key}stream(key:string){const p=resolve(this.root,key);if(!p.startsWith(this.root))throw new Error('Invalid key');return createReadStream(p)}}
+export const storage:ObjectStorage=new LocalStorage();
