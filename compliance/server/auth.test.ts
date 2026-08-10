@@ -22,46 +22,44 @@ describe("venue security, current authorization and immutable history", () => {
 
   beforeAll(async () => {
     venue1 = Number(
-      (db.prepare("SELECT id FROM venues ORDER BY id LIMIT 1").get() as any).id,
+      (await db.get<any>("SELECT id FROM venues ORDER BY id LIMIT 1"))!.id,
     );
     location1 = Number(
-      (
-        db
-          .prepare(
-            "SELECT id FROM locations WHERE venue_id=? ORDER BY id LIMIT 1",
-          )
-          .get(venue1) as any
-      ).id,
+      (await db.get<any>(
+        "SELECT id FROM locations WHERE venue_id=? ORDER BY id LIMIT 1",
+        [venue1],
+      ))!.id,
     );
-    const venue = db
-      .prepare("INSERT INTO venues(name,is_demo) VALUES('Second Venue Test',1)")
-      .run();
+    const venue = await db.run(
+      "INSERT INTO venues(name,is_demo) VALUES('Second Venue Test',1)",
+    );
     venue2 = Number(venue.lastInsertRowid);
-    const location = db
-      .prepare("INSERT INTO locations(venue_id,name) VALUES(?,?)")
-      .run(venue2, "Other Venue Bar");
+    const location = await db.run(
+      "INSERT INTO locations(venue_id,name) VALUES(?,?)",
+      [venue2, "Other Venue Bar"],
+    );
     location2 = Number(location.lastInsertRowid);
     asset1 = Number(
-      (
-        db
-          .prepare("SELECT id FROM assets WHERE venue_id=? ORDER BY id LIMIT 1")
-          .get(venue1) as any
-      ).id,
+      (await db.get<any>(
+        "SELECT id FROM assets WHERE venue_id=? ORDER BY id LIMIT 1",
+        [venue1],
+      ))!.id,
     );
     asset2 = Number(
-      db
-        .prepare(
+      (
+        await db.run(
           "INSERT INTO assets(barcode,description,venue_id,location_id,pat_status,is_demo) VALUES(?,?,?,?,?,1)",
+          ["V2-ASSET", "Other venue asset", venue2, location2, "PAT Required"],
         )
-        .run("V2-ASSET", "Other venue asset", venue2, location2, "PAT Required")
-        .lastInsertRowid,
+      ).lastInsertRowid,
     );
     extinguisher1 = Number(
-      db
-        .prepare(
+      (
+        await db.run(
           "INSERT INTO extinguishers(barcode,type,venue_id,location_id,is_demo) VALUES(?,?,?,?,1)",
+          ["EXT-TEST-1", "CO2", venue1, location1],
         )
-        .run("EXT-TEST-1", "CO2", venue1, location1).lastInsertRowid,
+      ).lastInsertRowid,
     );
     const passwordHash = bcrypt.hashSync("ChangeMe!123", 4);
     for (const [name, role] of [
@@ -69,9 +67,10 @@ describe("venue security, current authorization and immutable history", () => {
       ["contractor", "contractor"],
       ["auditor", "auditor"],
     ]) {
-      db.prepare(
+      await db.run(
         "INSERT INTO users(email,password_hash,name,role,venue_id) VALUES(?,?,?,?,?)",
-      ).run(`${name}@test.local`, passwordHash, name, role, venue1);
+        [`${name}@test.local`, passwordHash, name, role, venue1],
+      );
       const login = await request(app)
         .post("/api/auth/login")
         .send({ email: `${name}@test.local`, password: "ChangeMe!123" });
@@ -130,7 +129,7 @@ describe("venue security, current authorization and immutable history", () => {
       .send({ venue_id: venue2 })
       .expect(403);
     expect(
-      (db.prepare("SELECT venue_id FROM assets WHERE id=?").get(asset1) as any)
+      (await db.get<any>("SELECT venue_id FROM assets WHERE id=?", [asset1]))!
         .venue_id,
     ).toBe(venue1);
   });
@@ -157,17 +156,15 @@ describe("venue security, current authorization and immutable history", () => {
 
   it("uses current role and venue immediately rather than stale token claims", async () => {
     const staffId = Number(
-      (
-        db
-          .prepare("SELECT id FROM users WHERE email='staff@test.local'")
-          .get() as any
-      ).id,
+      (await db.get<any>(
+        "SELECT id FROM users WHERE email='staff@test.local'",
+      ))!.id,
     );
     await request(app)
       .get(`/api/assets/${asset1}`)
       .set(auth(tokens.staff))
       .expect(200);
-    db.prepare("UPDATE users SET venue_id=? WHERE id=?").run(venue2, staffId);
+    await db.run("UPDATE users SET venue_id=? WHERE id=?", [venue2, staffId]);
     await request(app)
       .get(`/api/assets/${asset1}`)
       .set(auth(tokens.staff))
@@ -176,10 +173,10 @@ describe("venue security, current authorization and immutable history", () => {
       .get(`/api/assets/${asset2}`)
       .set(auth(tokens.staff))
       .expect(200);
-    db.prepare("UPDATE users SET venue_id=?,role='auditor' WHERE id=?").run(
+    await db.run("UPDATE users SET venue_id=?,role='auditor' WHERE id=?", [
       venue1,
       staffId,
-    );
+    ]);
     await request(app)
       .post("/api/assets")
       .set(auth(tokens.staff))
@@ -192,7 +189,7 @@ describe("venue security, current authorization and immutable history", () => {
         status: "Active",
       })
       .expect(403);
-    db.prepare("UPDATE users SET role='staff' WHERE id=?").run(staffId);
+    await db.run("UPDATE users SET role='staff' WHERE id=?", [staffId]);
   });
 
   it("keeps auditors read-only while staff and contractors can write in scope", async () => {

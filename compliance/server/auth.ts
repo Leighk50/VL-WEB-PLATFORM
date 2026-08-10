@@ -1,18 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { db } from "./db.js";
+import { config } from "./config.js";
 import type { Role, User } from "./types.js";
 
 const secret = () => {
-  const value =
-    process.env.JWT_SECRET || "local-development-only-change-this-secret";
-  if (
-    process.env.NODE_ENV === "production" &&
-    value.includes("local-development")
-  ) {
-    throw new Error("JWT_SECRET is required in production");
-  }
-  return value;
+  return config.JWT_SECRET || "local-development-only-change-this-secret";
 };
 
 export interface AuthedRequest extends Request {
@@ -29,7 +22,7 @@ export function tokenFor(user: Pick<User, "id">) {
   });
 }
 
-export function authenticate(
+export async function authenticate(
   req: AuthedRequest,
   res: Response,
   next: NextFunction,
@@ -39,11 +32,10 @@ export function authenticate(
   try {
     const payload = jwt.verify(raw, secret(), { issuer: "vl-compliance" });
     const subject = typeof payload === "string" ? undefined : payload.sub;
-    const user = db
-      .prepare(
-        "SELECT id,email,name,role,venue_id venueId FROM users WHERE id=? AND active=1",
-      )
-      .get(Number(subject)) as User | undefined;
+    const user = await db.get<User>(
+      "SELECT id,email,name,role,venue_id venueId FROM users WHERE id=? AND active=1",
+      [Number(subject)],
+    );
     if (!user)
       return res.status(401).json({ error: "Invalid or expired session" });
     req.user = user;

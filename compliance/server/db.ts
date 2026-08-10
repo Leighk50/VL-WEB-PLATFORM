@@ -1,46 +1,198 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import sql from "mssql";
+import { DefaultAzureCredential } from "@azure/identity";
 import bcrypt from "bcryptjs";
+import { config, demoSeedEnabled } from "./config.js";
+import { migrations } from "./migrations.js";
 
-const path = resolve(process.env.SQLITE_PATH || ".data/compliance.db");
-mkdirSync(dirname(path), { recursive: true });
-export const db = new DatabaseSync(path);
-db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;");
-export function migrate() {
-  db.exec(`
-CREATE TABLE IF NOT EXISTS venues(id INTEGER PRIMARY KEY,name TEXT NOT NULL,is_demo INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS locations(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER DEFAULT 1,UNIQUE(venue_id,name));
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,venue_id INTEGER REFERENCES venues(id),active INTEGER DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS assets(id INTEGER PRIMARY KEY,barcode TEXT UNIQUE NOT NULL,description TEXT NOT NULL,category TEXT,manufacturer TEXT,model TEXT,serial_number TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),purchase_date TEXT,status TEXT DEFAULT 'Active',notes TEXT,pat_status TEXT DEFAULT 'Assessment Required',main_photo_id INTEGER,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS pat_tests(id INTEGER PRIMARY KEY,asset_id INTEGER NOT NULL REFERENCES assets(id),visual_result TEXT,result TEXT NOT NULL,test_date TEXT NOT NULL,next_date TEXT,tester TEXT,readings TEXT,notes TEXT,document_id INTEGER,action_required TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
-CREATE TABLE IF NOT EXISTS extinguishers(id INTEGER PRIMARY KEY,barcode TEXT UNIQUE NOT NULL,type TEXT NOT NULL,capacity TEXT,manufacturer TEXT,model TEXT,serial_number TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),manufacture_date TEXT,commissioned_date TEXT,status TEXT DEFAULT 'In Service',last_service_date TEXT,next_service_date TEXT,pressure_condition TEXT,pin_seal_ok INTEGER,hose_ok INTEGER,signage_present INTEGER,positioned_ok INTEGER,accessible INTEGER,damage_corrosion TEXT,contractor TEXT,document_id INTEGER,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS extinguisher_checks(id INTEGER PRIMARY KEY,extinguisher_id INTEGER NOT NULL REFERENCES extinguishers(id),check_date TEXT NOT NULL,result TEXT NOT NULL,pressure_condition TEXT,pin_seal_ok INTEGER,hose_ok INTEGER,signage_present INTEGER,positioned_ok INTEGER,accessible INTEGER,damage_corrosion TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
-CREATE TABLE IF NOT EXISTS fire_alarm_tests(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),test_datetime TEXT NOT NULL,call_point TEXT,zone TEXT,sounder_result TEXT,equipment_result TEXT,result TEXT NOT NULL,faults TEXT,completed_by TEXT,confirmed INTEGER DEFAULT 0,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS fire_alarm_services(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),contractor TEXT,service_date TEXT NOT NULL,next_service_date TEXT,interval_months INTEGER,document_id INTEGER,defects TEXT,remedial_actions TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
-CREATE TABLE IF NOT EXISTS risk_assessments(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),assessment_date TEXT NOT NULL,assessor TEXT,review_date TEXT,document_id INTEGER,hazards TEXT,people_at_risk TEXT,escape_routes TEXT,detection_warning TEXT,doors_compartmentation TEXT,emergency_lighting TEXT,extinguishers TEXT,training TEXT,evacuation TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);
-CREATE TABLE IF NOT EXISTS furnishings(id INTEGER PRIMARY KEY,description TEXT NOT NULL,quantity INTEGER DEFAULT 1,category TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),supplier TEXT,purchase_date TEXT,fire_status TEXT NOT NULL,treatment_product TEXT,treatment_date TEXT,treatment_provider TEXT,batch_reference TEXT,document_id INTEGER,next_review_date TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS documents(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),type TEXT NOT NULL,title TEXT NOT NULL,reference TEXT,issue_date TEXT,review_date TEXT,issuer TEXT,notes TEXT,storage_key TEXT,mime_type TEXT,version INTEGER DEFAULT 1,previous_version_id INTEGER REFERENCES documents(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS document_links(id INTEGER PRIMARY KEY,document_id INTEGER NOT NULL REFERENCES documents(id),entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,UNIQUE(document_id,entity_type,entity_id));
-CREATE TABLE IF NOT EXISTS photos(id INTEGER PRIMARY KEY,entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,storage_key TEXT NOT NULL,mime_type TEXT,captured_at TEXT,caption TEXT,is_main INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
-CREATE TABLE IF NOT EXISTS actions(id INTEGER PRIMARY KEY,description TEXT NOT NULL,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),related_type TEXT,related_id INTEGER,priority TEXT DEFAULT 'Medium',responsible_person TEXT,created_date TEXT DEFAULT CURRENT_DATE,due_date TEXT,status TEXT DEFAULT 'Open',completion_notes TEXT,completion_document_id INTEGER,closed_date TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,entity_type TEXT NOT NULL,entity_id INTEGER,action TEXT NOT NULL,before_json TEXT,after_json TEXT,user_id INTEGER,occurred_at TEXT DEFAULT CURRENT_TIMESTAMP,ip_address TEXT);
-CREATE INDEX IF NOT EXISTS idx_pat_asset ON pat_tests(asset_id); CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status); CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type,entity_id);
-`);
-  seed();
+export type RunResult = { lastInsertRowid: number; changes?: number };
+export interface DatabaseAdapter {
+  readonly provider: "sqlite" | "azure-sql";
+  get<T = Record<string, unknown>>(
+    statement: string,
+    params?: unknown[],
+  ): Promise<T | undefined>;
+  all<T = Record<string, unknown>>(
+    statement: string,
+    params?: unknown[],
+  ): Promise<T[]>;
+  run(statement: string, params?: unknown[]): Promise<RunResult>;
+  exec(statement: string): Promise<void>;
 }
-function seed() {
-  if (!process.env.DEMO_SEED || process.env.DEMO_SEED === "false") return;
-  let venue = db.prepare("SELECT id FROM venues LIMIT 1").get() as
-    { id: number } | undefined;
-  if (!venue) {
-    db.prepare("INSERT INTO venues(name,is_demo) VALUES(?,1)").run(
-      "Village Limits (DEMO)",
-    );
-    venue = {
-      id: Number(db.prepare("SELECT last_insert_rowid() id").get()!.id),
+
+class SqliteAdapter implements DatabaseAdapter {
+  readonly provider = "sqlite" as const;
+  readonly raw: DatabaseSync;
+  constructor(path: string) {
+    const absolute = resolve(path);
+    mkdirSync(dirname(absolute), { recursive: true });
+    this.raw = new DatabaseSync(absolute);
+    this.raw.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;");
+  }
+  async get<T>(statement: string, params: unknown[] = []) {
+    return this.raw.prepare(statement).get(...(params as SQLInputValue[])) as
+      T | undefined;
+  }
+  async all<T>(statement: string, params: unknown[] = []) {
+    return this.raw
+      .prepare(statement)
+      .all(...(params as SQLInputValue[])) as T[];
+  }
+  async run(statement: string, params: unknown[] = []) {
+    const result = this.raw
+      .prepare(statement)
+      .run(...(params as SQLInputValue[]));
+    return {
+      lastInsertRowid: Number(result.lastInsertRowid),
+      changes: Number(result.changes),
     };
-    for (const n of [
+  }
+  async exec(statement: string) {
+    this.raw.exec(statement);
+  }
+}
+
+class AzureSqlAdapter implements DatabaseAdapter {
+  readonly provider = "azure-sql" as const;
+  private credential = new DefaultAzureCredential();
+  private connection?: sql.ConnectionPool;
+  private expiresAt = 0;
+  private async pool() {
+    if (this.connection?.connected && Date.now() < this.expiresAt - 300_000)
+      return this.connection;
+    if (this.connection) await this.connection.close().catch(() => undefined);
+    const token = await this.credential.getToken(
+      "https://database.windows.net/.default",
+    );
+    if (!token)
+      throw new Error("Managed identity could not obtain an Azure SQL token");
+    this.expiresAt = token.expiresOnTimestamp;
+    this.connection = await new sql.ConnectionPool({
+      server: config.AZURE_SQL_SERVER!,
+      database: config.AZURE_SQL_DATABASE!,
+      options: {
+        encrypt: true,
+        trustServerCertificate: false,
+        enableArithAbort: true,
+      },
+      authentication: {
+        type: "azure-active-directory-access-token",
+        options: { token: token.token },
+      },
+      pool: { min: 0, max: 10, idleTimeoutMillis: 30_000 },
+      connectionTimeout: 30_000,
+      requestTimeout: 30_000,
+    }).connect();
+    return this.connection;
+  }
+  private bind(statement: string, params: unknown[]) {
+    let index = 0;
+    let transformed = statement.replace(/\?/g, () => `@p${index++}`);
+    transformed = transformed.replace(
+      /\s+LIMIT\s+(\d+)\s*$/i,
+      " OFFSET 0 ROWS FETCH NEXT $1 ROWS ONLY",
+    );
+    return { transformed, params };
+  }
+  private async request(
+    statement: string,
+    params: unknown[],
+    identity = false,
+  ) {
+    const pool = await this.pool(),
+      request = pool.request(),
+      bound = this.bind(statement, params);
+    bound.params.forEach((value, index) =>
+      request.input(`p${index}`, value === undefined ? null : (value as any)),
+    );
+    const query = identity
+      ? `${bound.transformed}; SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS insertedId;`
+      : bound.transformed;
+    return request.query(query);
+  }
+  async get<T>(statement: string, params: unknown[] = []) {
+    return (await this.request(statement, params)).recordset?.[0] as
+      T | undefined;
+  }
+  async all<T>(statement: string, params: unknown[] = []) {
+    return ((await this.request(statement, params)).recordset || []) as T[];
+  }
+  async run(statement: string, params: unknown[] = []) {
+    const insert = /^\s*INSERT\s/i.test(statement);
+    const result = await this.request(statement, params, insert);
+    const recordsets = result.recordsets as any[];
+    return {
+      lastInsertRowid: insert
+        ? Number(recordsets?.[recordsets.length - 1]?.[0]?.insertedId || 0)
+        : 0,
+      changes: result.rowsAffected?.[0],
+    };
+  }
+  async exec(statement: string) {
+    const pool = await this.pool();
+    await pool.request().batch(statement);
+  }
+}
+
+export function createDatabase(): DatabaseAdapter {
+  return config.DATABASE_PROVIDER === "azure-sql"
+    ? new AzureSqlAdapter()
+    : new SqliteAdapter(config.SQLITE_PATH);
+}
+export const db = createDatabase();
+
+export async function migrateDatabase() {
+  const create =
+    db.provider === "sqlite"
+      ? "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+      : "IF OBJECT_ID('schema_migrations','U') IS NULL CREATE TABLE schema_migrations(version INT PRIMARY KEY,name NVARCHAR(250) NOT NULL,applied_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())";
+  await db.exec(create);
+  const applied = new Set(
+    (
+      await db.all<{ version: number }>("SELECT version FROM schema_migrations")
+    ).map((row) => Number(row.version)),
+  );
+  for (const migration of migrations) {
+    if (applied.has(migration.version)) continue;
+    await db.exec(
+      db.provider === "sqlite" ? migration.sqlite : migration.azure,
+    );
+    await db.run("INSERT INTO schema_migrations(version,name) VALUES(?,?)", [
+      migration.version,
+      migration.name,
+    ]);
+  }
+  if (db.provider === "sqlite" && demoSeedEnabled()) await seedDemo();
+}
+
+export async function assertDatabaseReady() {
+  const latest = migrations.at(-1)!.version;
+  try {
+    const row = await db.get<{ version: number }>(
+      "SELECT MAX(version) version FROM schema_migrations",
+    );
+    if (Number(row?.version || 0) < latest)
+      throw new Error("Database migrations are pending; run npm run migrate");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("pending"))
+      throw error;
+    throw new Error("Database is not initialised; run npm run migrate", { cause: error });
+  }
+}
+
+async function seedDemo() {
+  let venue = await db.get<{ id: number }>("SELECT id FROM venues LIMIT 1");
+  if (!venue) {
+    venue = {
+      id: (
+        await db.run("INSERT INTO venues(name,is_demo) VALUES(?,1)", [
+          "Village Limits (DEMO)",
+        ])
+      ).lastInsertRowid,
+    };
+    for (const name of [
       "Bar",
       "Restaurant",
       "Main Kitchen",
@@ -58,42 +210,46 @@ function seed() {
       "Outside",
       "Plant Room",
     ])
-      db.prepare("INSERT INTO locations(venue_id,name) VALUES(?,?)").run(
+      await db.run("INSERT INTO locations(venue_id,name) VALUES(?,?)", [
         venue.id,
-        n,
-      );
+        name,
+      ]);
   }
-  if (!db.prepare("SELECT id FROM users LIMIT 1").get()) {
-    db.prepare(
+  if (!(await db.get("SELECT id FROM users LIMIT 1")))
+    await db.run(
       "INSERT INTO users(email,password_hash,name,role,venue_id) VALUES(?,?,?,?,?)",
-    ).run(
-      "admin@demo.local",
-      bcrypt.hashSync("ChangeMe!123", 12),
-      "Demo Administrator",
-      "administrator",
-      venue.id,
+      [
+        "admin@demo.local",
+        bcrypt.hashSync("ChangeMe!123", 12),
+        "Demo Administrator",
+        "administrator",
+        venue.id,
+      ],
     );
-  }
-  if (!db.prepare("SELECT id FROM assets LIMIT 1").get()) {
-    const loc = db
-      .prepare("SELECT id FROM locations WHERE venue_id=? AND name=?")
-      .get(venue.id, "Main Kitchen") as { id: number };
-    db.prepare(
+  if (!(await db.get("SELECT id FROM assets LIMIT 1"))) {
+    const location = await db.get<{ id: number }>(
+      "SELECT id FROM locations WHERE venue_id=? AND name=?",
+      [venue.id, "Main Kitchen"],
+    );
+    await db.run(
       "INSERT INTO assets(barcode,description,category,venue_id,location_id,pat_status,is_demo) VALUES(?,?,?,?,?,?,1)",
-    ).run(
-      "VL-DEMO-001",
-      "Demo commercial toaster",
-      "Kitchen Equipment",
-      venue.id,
-      loc.id,
-      "PAT Required",
+      [
+        "VL-DEMO-001",
+        "Demo commercial toaster",
+        "Kitchen Equipment",
+        venue.id,
+        location!.id,
+        "PAT Required",
+      ],
     );
   }
 }
-export function rows(sql: string, ...params: any[]) {
-  return db.prepare(sql).all(...params);
-}
-export function audit(
+
+export const rows = <T = Record<string, unknown>>(
+  statement: string,
+  ...params: unknown[]
+) => db.all<T>(statement, params);
+export async function audit(
   entityType: string,
   entityId: number | null,
   action: string,
@@ -102,15 +258,16 @@ export function audit(
   userId?: number,
   ip?: string,
 ) {
-  db.prepare(
+  await db.run(
     "INSERT INTO audit_events(entity_type,entity_id,action,before_json,after_json,user_id,ip_address) VALUES(?,?,?,?,?,?,?)",
-  ).run(
-    entityType,
-    entityId,
-    action,
-    before ? JSON.stringify(before) : null,
-    after ? JSON.stringify(after) : null,
-    userId || null,
-    ip || null,
+    [
+      entityType,
+      entityId,
+      action,
+      before ? JSON.stringify(before) : null,
+      after ? JSON.stringify(after) : null,
+      userId || null,
+      ip || null,
+    ],
   );
 }

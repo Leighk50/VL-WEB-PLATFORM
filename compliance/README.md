@@ -1,61 +1,127 @@
 # Village Limits Compliance Hub
 
-Production-oriented foundation for a separate, mobile-first compliance application. It does not share authentication, routes, content files, or operational records with the public Village Limits website.
+Separate, mobile-first compliance application. It does not share authentication, routes, content files, deployment packaging, or operational records with the public Village Limits website.
 
 ## Architecture
 
-- React + TypeScript responsive client, served separately from the API in development.
-- Express API with Helmet, strict JSON limits, JWT sessions, bcrypt password hashes, role gates and venue scoping.
-- Authentication tokens contain only a user identity; active state, current role and current venue are reloaded from the database on every request. Login and general API rate limits provide baseline brute-force protection.
-- Relational schema covering venues/locations, assets, append-only PAT tests, extinguishers/checks, alarm tests/services, risk assessments, furnishings, documents/version links, photos, corrective actions and immutable audit events.
-- `ObjectStorage` abstraction with a private local adapter. Azure Blob is the production target; uploaded objects are never public by default.
-- Local database adapter uses Node's built-in SQLite driver and WAL journalling. Operational records are not stored in website JSON.
-- Azure SQL is the production target. The schema deliberately uses conventional relational types and foreign keys so an Azure SQL adapter/migrations can replace the local adapter without changing API contracts.
+- React, TypeScript and Vite frontend; Express API and compiled frontend run in one Node 22 Linux process in production.
+- Async database interface selects SQLite locally/tests or Azure SQL in staging/production.
+- Azure SQL uses `mssql`/Tedious with an access token from `DefaultAzureCredential`; no SQL password path exists.
+- Deterministic, versioned, rerunnable migrations translate the relational model to SQLite or SQL Server (`BIGINT IDENTITY`, `DATETIME2`, `NVARCHAR`, SQL Server indexes/defaults).
+- Private object-storage interface selects the local filesystem only outside production or Azure Blob Storage using `DefaultAzureCredential`.
+- Blob downloads are streamed through authenticated, venue-authorized `/files` routes. Containers/blobs are never made public.
+- JWTs contain identity only. Active state, role and venue are reloaded from the database on every request.
+- Append-only PAT, extinguisher check, photograph and audit history behavior is unchanged across providers.
 
 ## Local development
 
-Requires Node 24+.
+Requires Node 22 or 24.
 
 ```sh
 npm install
 copy .env.example .env
+npm run migrate:dev
 npm run dev
 ```
 
-Open `http://localhost:5173`. With `DEMO_SEED=true`, sign in using `admin@demo.local` / `ChangeMe!123`. These records and the venue are labelled demo data. Change or disable this credential before any shared deployment.
+With `DEMO_SEED=true`, local SQLite is seeded with the clearly labelled demo account `admin@demo.local` / `ChangeMe!123`. Production always disables demo seeding regardless of the supplied value.
 
-Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
+Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm audit`.
 
-## Environment variables
+## Deterministic migrations
 
-See `.env.example`. `JWT_SECRET` must be a randomly generated value of at least 32 bytes in production. Secrets belong in Azure Key Vault/App Service settings, never source control. Set an exact `CORS_ORIGIN` for the compliance hostname.
+`npm run build` compiles the migration runner, then:
 
-## Azure SQL requirements
+```sh
+npm run migrate
+```
 
-Provision a private Azure SQL database, Entra/managed-identity access for the application, encrypted connections, point-in-time restore, geo/backups appropriate to business needs, and auditing/Defender policies. Add a production `Database` adapter and idempotent migration runner using `AZURE_SQL_CONNECTION_STRING` or preferably managed identity. Translate SQLite `INTEGER PRIMARY KEY` to SQL Server `BIGINT IDENTITY`; preserve all constraints, history tables and indexes. Run migrations as a separate least-privileged deployment step.
+The command obtains managed-identity credentials in Azure, creates `schema_migrations` if required, and applies only unapplied versions. It is safe to rerun. Production application startup does not create tables ad hoc: it checks the current migration version and fails with a migration-required message when the database is not ready.
 
-## Azure Blob Storage requirements
+## Azure staging architecture
 
-Provision a private container (suggested `compliance-private`), disable anonymous access, use managed identity with Blob Data Contributor scoped to that container, enable encryption, soft delete, versioning, lifecycle policies and malware/content scanning. Implement the existing `ObjectStorage` interface with the Azure SDK. Serve downloads only after API authorization using short-lived SAS URLs or streamed authenticated responses. Configure size/type allowlists and retention.
+Already provisioned:
 
-## Production security
+- App Service `vl-compliance-staging`, UK West, Node 22 Linux, system-assigned managed identity.
+- Azure SQL server `vl-compliance-staging-sql.database.windows.net`, database `vl-compliance-staging-db`.
+- Database user `vl-compliance-staging` with data reader/writer and migration DDL permissions.
+- Storage account `vlcompliancestaging`, private container `compliance-private`.
+- App Service identity has Storage Blob Data Contributor on the storage scope.
 
-- Replace demo credentials, turn `DEMO_SEED` off, enforce a strong secret and HTTPS-only secure cookies or an Entra-backed session implementation.
+The runtime uses the App Service system identity for both Azure SQL access tokens and Blob authorization. No SQL login, password, storage key, connection string, publish profile, or SAS secret is supported.
+
+## Required App Service settings
+
+Configure these under **App Service → Configuration → Application settings**:
+
+```text
+NODE_ENV=production
+DATABASE_PROVIDER=azure-sql
+AZURE_SQL_SERVER=vl-compliance-staging-sql.database.windows.net
+AZURE_SQL_DATABASE=vl-compliance-staging-db
+STORAGE_PROVIDER=azure-blob
+AZURE_STORAGE_ACCOUNT=vlcompliancestaging
+AZURE_STORAGE_CONTAINER=compliance-private
+JWT_SECRET=<random secret of at least 32 characters, stored only in App Settings/Key Vault>
+DEMO_SEED=false
+CORS_ORIGIN=https://vl-compliance-staging.azurewebsites.net
+LOGIN_RATE_LIMIT=10
+API_RATE_LIMIT=600
+SCM_DO_BUILD_DURING_DEPLOYMENT=false
+```
+
+Do not set `PORT`; Azure supplies it. Set the App Service startup command to `npm start`. Production startup fails if the JWT secret is missing/weak or local providers are selected.
+
+Under **Health check**, configure path `/health`. The endpoint reports service/provider readiness without credentials or internal error details.
+
+## SQL networking requirement
+
+Managed identity handles authentication, not firewall routing. Before migration/runtime:
+
+- Preferred: integrate the App Service with a VNet, use an Azure SQL private endpoint and private DNS for `privatelink.database.windows.net`.
+- Staging alternative: enable Azure SQL public networking and add every App Service outbound IP to the SQL firewall (or temporarily allow Azure services only if that broader posture is explicitly accepted).
+
+Verify from the App Service/Kudu environment that port 1433 and DNS resolution reach the SQL server. After the first reviewed deployment and settings configuration, run `npm run migrate` once from the App Service SSH/Kudu console in `/home/site/wwwroot`; reruns are safe.
+
+## GitHub Actions staging workflow
+
+`.github/workflows/compliance-staging.yml` validates only the `compliance/` application on pushes to `codex/compliance-hub`. It uses Node 22, `npm ci`, tests, lint, typecheck and a production build. A push **cannot deploy**: the deploy job runs only from `workflow_dispatch` and is additionally bound to the protected `compliance-staging` GitHub Environment.
+
+The deployment artifact contains only the compiled Compliance Hub, its package manifests and production dependencies. The root Village Limits website and its existing workflow are untouched.
+
+### OIDC configuration still required
+
+1. Create an Entra application or, preferably, a user-assigned managed identity for GitHub staging deployment (for example `vl-compliance-github-staging`). This is separate from the App Service runtime identity.
+2. Assign it the minimum `Website Contributor` role scoped to App Service `vl-compliance-staging` (not the subscription). It does not need SQL or Blob data roles because migrations/runtime use the App Service identity.
+3. Add a federated credential with:
+   - Issuer: `https://token.actions.githubusercontent.com`
+   - Audience: `api://AzureADTokenExchange`
+   - Subject: `repo:Leighk50/VL-WEB-PLATFORM:environment:compliance-staging`
+4. In GitHub, create Environment `compliance-staging`, add required reviewers, prevent self-review if desired, and restrict deployment branches to `codex/compliance-hub` while staging is under review.
+5. Add Environment secrets:
+   - `AZURE_CLIENT_ID`: deployment application/user-assigned identity client ID.
+   - `AZURE_TENANT_ID`: Entra tenant ID.
+   - `AZURE_SUBSCRIPTION_ID`: Azure subscription ID.
+6. Review this PR/workflow. Only afterward, manually run **Compliance Hub staging** with `workflow_dispatch` and approve the protected environment gate.
+
+No publish profile or client secret should be created.
+
+## Staging test checklist
+
+1. Confirm App Settings, startup command, Node 22 stack and `/health` health check.
+2. Confirm SQL DNS/firewall/private connectivity from App Service.
+3. After the reviewed first deployment, run `npm run migrate` through App Service SSH/Kudu and restart.
+4. Verify `/health` returns HTTP 200 and identifies `azure-sql`/`azure-blob` without sensitive data.
+5. Create non-demo administrator and venue-scoped test users through an approved bootstrap/admin process before disabling any temporary setup access.
+6. Test role/venue isolation, login throttling, asset barcode scanning, PAT history, extinguisher checks, photo upload/main-photo history and authenticated downloads on phones.
+7. Confirm blobs remain private and cannot be downloaded anonymously.
+8. Confirm failed requests and Azure SDK/SQL failures return generic client errors; inspect Application Insights for server-side diagnostics.
+9. Verify audit events and database backups/restore posture.
+10. Do not promote to production until accessibility, security, retention/DPIA, penetration and recovery testing are complete.
+
+## Production security notes
+
+- Keep JWT secrets in App Settings backed by Key Vault references and rotate them deliberately.
 - Add MFA/SSO, password reset and account lifecycle workflows before real users are onboarded.
-- Put the API behind App Service authentication/WAF/rate limiting; add CSRF controls if moving JWTs to cookies.
-- Validate all file contents, scan uploads, log access, centralise audit events in Application Insights/Log Analytics, and configure alerting.
+- Add Application Insights/Log Analytics, alerting, file malware scanning, retention policies, WAF/rate limiting and dependency/SAST scanning.
 - Apply venue scope and least privilege to every new endpoint. Auditor remains read-only; destructive history deletion endpoints intentionally do not exist.
-- Complete a DPIA/retention policy, penetration test, dependency/SAST scanning and recovery drill before launch.
-
-## Deployment plan (not performed)
-
-1. Create separate Azure SQL, Storage, Key Vault, App Service/Static Web App resources and managed identities in a non-production environment.
-2. Implement/test the Azure adapters, migrations and private networking.
-3. Build in CI, run lint/type/tests, scan dependencies and deploy to staging only.
-4. Configure `compliance.villagelimits.co.uk`, managed TLS, exact CORS/CSP and monitoring.
-5. Carry out UAT on phones/tablets, accessibility/security testing and restore testing.
-6. Obtain owner approval before a production release. This iteration does not deploy or alter the existing website.
-
-## Current iteration boundaries
-
-The working foundation includes strict per-resource validation, authentication/RBAC, enforced venue/location boundaries, dashboard, core register CRUD, append-only PAT and extinguisher checks, camera barcode scanning with fallback, authenticated historical photographs, document-link validation, reports index and responsive UI. Azure adapters, account administration/MFA, CSV/PDF generators and automated action creation require follow-on implementation and Azure resources.

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 import express, {
   type NextFunction,
   type Request,
@@ -10,7 +11,8 @@ import helmet from "helmet";
 import multer from "multer";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { db, migrate, rows, audit } from "./db.js";
+import { db, migrateDatabase, assertDatabaseReady, rows, audit } from "./db.js";
+import { config } from "./config.js";
 import {
   authenticate,
   allow,
@@ -28,7 +30,8 @@ import {
   resourceSchemas,
 } from "./validation.js";
 
-migrate();
+if (db.provider === "sqlite") await migrateDatabase();
+else await assertDatabaseReady();
 const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173" }));
@@ -59,6 +62,19 @@ function rateLimit(prefix: string, max: number, windowMs: number) {
   };
 }
 
+app.get("/health", async (_req, res) => {
+  try {
+    await db.get("SELECT 1 ready");
+    res.json({
+      ok: true,
+      service: "vl-compliance",
+      database: db.provider,
+      storage: storage.provider,
+    });
+  } catch {
+    res.status(503).json({ ok: false, service: "vl-compliance" });
+  }
+});
 app.get("/api/health", (_req, res) =>
   res.json({ ok: true, service: "vl-compliance" }),
 );
@@ -69,7 +85,7 @@ app.use(
 app.post(
   "/api/auth/login",
   rateLimit("login", Number(process.env.LOGIN_RATE_LIMIT || 10), 15 * 60_000),
-  (req, res) => {
+  async (req, res) => {
     const parsed = z
       .object({
         email: z.string().email().max(254),
@@ -81,13 +97,12 @@ app.post(
       ? parsed.data.email.trim().toLowerCase()
       : "invalid";
     const user = parsed.success
-      ? (db
-          .prepare(
-            "SELECT id,email,name,role,venue_id venueId,password_hash passwordHash,active FROM users WHERE lower(email)=?",
-          )
-          .get(email) as
-          | (Record<string, unknown> & { passwordHash: string; active: number })
-          | undefined)
+      ? await db.get<
+          Record<string, unknown> & { passwordHash: string; active: number }
+        >(
+          "SELECT id,email,name,role,venue_id venueId,password_hash passwordHash,active FROM users WHERE lower(email)=?",
+          [email],
+        )
       : undefined;
     const passwordMatches =
       parsed.success &&
@@ -100,7 +115,7 @@ app.post(
         .update(email)
         .digest("hex")
         .slice(0, 16);
-      audit(
+      await audit(
         "session",
         null,
         "login_failed",
@@ -118,7 +133,15 @@ app.post(
       role: user.role as any,
       venueId: user.venueId == null ? null : Number(user.venueId),
     };
-    audit("session", null, "login", null, { userId: safe.id }, safe.id, req.ip);
+    await audit(
+      "session",
+      null,
+      "login",
+      null,
+      { userId: safe.id },
+      safe.id,
+      req.ip,
+    );
     res.json({ token: tokenFor(safe), user: safe });
   },
 );
@@ -130,26 +153,27 @@ const isAdmin = (req: AuthedRequest) => req.user!.role === "administrator";
 function venueAllowed(req: AuthedRequest, venueId: number) {
   return isAdmin(req) || req.user!.venueId === venueId;
 }
-function assertVenue(req: AuthedRequest, res: Response, venueId: number) {
+async function assertVenue(req: AuthedRequest, res: Response, venueId: number) {
   if (!venueAllowed(req, venueId)) {
     res.status(403).json({ error: "Venue access denied" });
     return false;
   }
-  if (!db.prepare("SELECT id FROM venues WHERE id=?").get(venueId)) {
+  if (!(await db.get("SELECT id FROM venues WHERE id=?", [venueId]))) {
     res.status(400).json({ error: "Invalid venue" });
     return false;
   }
   return true;
 }
-function assertLocation(
+async function assertLocation(
   res: Response,
   venueId: number,
   locationId?: number | null,
 ) {
   if (locationId == null) return true;
-  const found = db
-    .prepare("SELECT id FROM locations WHERE id=? AND venue_id=? AND active=1")
-    .get(locationId, venueId);
+  const found = await db.get(
+    "SELECT id FROM locations WHERE id=? AND venue_id=? AND active=1",
+    [locationId, venueId],
+  );
   if (!found) {
     res
       .status(400)
@@ -167,25 +191,28 @@ const entityTables: Record<string, { table: string; via?: string }> = {
   pat_test: { table: "pat_tests", via: "assets" },
   extinguisher_check: { table: "extinguisher_checks", via: "extinguishers" },
 };
-function entityVenue(type: string, id: number): number | undefined {
+async function entityVenue(
+  type: string,
+  id: number,
+): Promise<number | undefined> {
   const cfg = entityTables[type];
   if (!cfg) return undefined;
   if (!cfg.via)
     return (
-      db
-        .prepare(`SELECT venue_id venueId FROM ${cfg.table} WHERE id=?`)
-        .get(id) as { venueId: number } | undefined
+      await db.get<{ venueId: number }>(
+        `SELECT venue_id venueId FROM ${cfg.table} WHERE id=?`,
+        [id],
+      )
     )?.venueId;
   const parentKey = cfg.via === "assets" ? "asset_id" : "extinguisher_id";
   return (
-    db
-      .prepare(
-        `SELECT p.venue_id venueId FROM ${cfg.table} c JOIN ${cfg.via} p ON p.id=c.${parentKey} WHERE c.id=?`,
-      )
-      .get(id) as { venueId: number } | undefined
+    await db.get<{ venueId: number }>(
+      `SELECT p.venue_id venueId FROM ${cfg.table} c JOIN ${cfg.via} p ON p.id=c.${parentKey} WHERE c.id=?`,
+      [id],
+    )
   )?.venueId;
 }
-function assertEntityReference(
+async function assertEntityReference(
   req: AuthedRequest,
   res: Response,
   type?: string | null,
@@ -199,7 +226,7 @@ function assertEntityReference(
       .json({ error: "Related type and ID must be supplied together" });
     return false;
   }
-  const venue = entityVenue(type, id);
+  const venue = await entityVenue(type, id);
   if (!venue || venue !== expectedVenue || !venueAllowed(req, venue)) {
     res
       .status(400)
@@ -208,16 +235,17 @@ function assertEntityReference(
   }
   return true;
 }
-function assertDocument(
+async function assertDocument(
   req: AuthedRequest,
   res: Response,
   documentId?: number | null,
   expectedVenue?: number,
 ) {
   if (!documentId) return true;
-  const doc = db
-    .prepare("SELECT venue_id venueId FROM documents WHERE id=?")
-    .get(documentId) as { venueId: number } | undefined;
+  const doc = await db.get<{ venueId: number }>(
+    "SELECT venue_id venueId FROM documents WHERE id=?",
+    [documentId],
+  );
   if (
     !doc ||
     doc.venueId !== expectedVenue ||
@@ -229,76 +257,80 @@ function assertDocument(
   return true;
 }
 
-app.get("/api/bootstrap", (req: AuthedRequest, res) => {
+app.get("/api/bootstrap", async (req: AuthedRequest, res) => {
   if (isAdmin(req))
     return res.json({
-      venues: rows("SELECT * FROM venues"),
-      locations: rows("SELECT * FROM locations WHERE active=1 ORDER BY name"),
+      venues: await rows("SELECT * FROM venues"),
+      locations: await rows(
+        "SELECT * FROM locations WHERE active=1 ORDER BY name",
+      ),
     });
   res.json({
-    venues: rows("SELECT * FROM venues WHERE id=?", req.user!.venueId),
-    locations: rows(
+    venues: await rows("SELECT * FROM venues WHERE id=?", req.user!.venueId),
+    locations: await rows(
       "SELECT * FROM locations WHERE active=1 AND venue_id=? ORDER BY name",
       req.user!.venueId,
     ),
   });
 });
 
-app.get("/api/dashboard", (req: AuthedRequest, res) => {
+app.get("/api/dashboard", async (req: AuthedRequest, res) => {
   const v = isAdmin(req) ? [] : [req.user!.venueId];
   const where = v.length ? " WHERE venue_id=?" : "";
   const today = new Date().toISOString().slice(0, 10),
     soon = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
-  const one = (sql: string, ...p: any[]) =>
-    Number((db.prepare(sql).get(...p) as any).n);
+  const one = async (statement: string, ...params: any[]) =>
+    Number((await db.get<any>(statement, params))?.n || 0);
   res.json({
-    assets: one(`SELECT count(*) n FROM assets${where}`, ...v),
-    patRequired: one(
+    assets: await one(`SELECT count(*) n FROM assets${where}`, ...v),
+    patRequired: await one(
       `SELECT count(*) n FROM assets${where}${where ? " AND" : " WHERE"} pat_status='PAT Required'`,
       ...v,
     ),
-    patOverdue: one(
+    patOverdue: await one(
       `SELECT count(*) n FROM assets a WHERE a.pat_status='PAT Required'${v.length ? " AND a.venue_id=?" : ""} AND COALESCE((SELECT max(next_date) FROM pat_tests p WHERE p.asset_id=a.id),'1900-01-01')<?`,
       ...v,
       today,
     ),
-    patDueSoon: one(
+    patDueSoon: await one(
       `SELECT count(*) n FROM assets a WHERE a.pat_status='PAT Required'${v.length ? " AND a.venue_id=?" : ""} AND (SELECT max(next_date) FROM pat_tests p WHERE p.asset_id=a.id) BETWEEN ? AND ?`,
       ...v,
       today,
       soon,
     ),
-    failed: one(
+    failed: await one(
       `SELECT count(*) n FROM pat_tests p JOIN assets a ON a.id=p.asset_id WHERE p.result='Fail'${v.length ? " AND a.venue_id=?" : ""}`,
       ...v,
     ),
-    extinguishers: one(`SELECT count(*) n FROM extinguishers${where}`, ...v),
-    openActions: one(
+    extinguishers: await one(
+      `SELECT count(*) n FROM extinguishers${where}`,
+      ...v,
+    ),
+    openActions: await one(
       `SELECT count(*) n FROM actions${where}${where ? " AND" : " WHERE"} status NOT IN ('Closed','Complete')`,
       ...v,
     ),
-    expiredDocuments: one(
+    expiredDocuments: await one(
       `SELECT count(*) n FROM documents${where}${where ? " AND" : " WHERE"} review_date<?`,
       ...v,
       today,
     ),
-    furnishingEvidence: one(
+    furnishingEvidence: await one(
       `SELECT count(*) n FROM furnishings${where}${where ? " AND" : " WHERE"} fire_status IN ('Evidence required','Requires assessment')`,
       ...v,
     ),
   });
 });
 
-app.get("/api/assets/barcode/:barcode", (req: AuthedRequest, res) => {
-  const row = (
-    isAdmin(req)
-      ? db
-          .prepare("SELECT * FROM assets WHERE barcode=?")
-          .get(String(req.params.barcode))
-      : db
-          .prepare("SELECT * FROM assets WHERE barcode=? AND venue_id=?")
-          .get(String(req.params.barcode), req.user!.venueId)
-  ) as any;
+app.get("/api/assets/barcode/:barcode", async (req: AuthedRequest, res) => {
+  const row = await (isAdmin(req)
+    ? db.get("SELECT * FROM assets WHERE barcode=?", [
+        String(req.params.barcode),
+      ])
+    : db.get("SELECT * FROM assets WHERE barcode=? AND venue_id=?", [
+        String(req.params.barcode),
+        req.user!.venueId,
+      ]));
   if (!row)
     return res
       .status(404)
@@ -340,7 +372,7 @@ const resources: Record<
     location: true,
   },
 };
-function validateReferences(
+async function validateReferences(
   req: AuthedRequest,
   res: Response,
   route: string,
@@ -348,19 +380,19 @@ function validateReferences(
   venueId: number,
 ) {
   if (
-    !assertVenue(req, res, venueId) ||
-    !assertLocation(res, venueId, body.location_id)
+    !(await assertVenue(req, res, venueId)) ||
+    !(await assertLocation(res, venueId, body.location_id))
   )
     return false;
   if (
     route === "actions" &&
-    !assertEntityReference(
+    !(await assertEntityReference(
       req,
       res,
       body.related_type,
       body.related_id,
       venueId,
-    )
+    ))
   )
     return false;
   for (const key of [
@@ -368,14 +400,17 @@ function validateReferences(
     "completion_document_id",
     "previous_version_id",
   ]) {
-    if (body[key] && !assertDocument(req, res, Number(body[key]), venueId))
+    if (
+      body[key] &&
+      !(await assertDocument(req, res, Number(body[key]), venueId))
+    )
       return false;
   }
   return true;
 }
 
 for (const [route, cfg] of Object.entries(resources)) {
-  app.get(`/api/${route}`, (req: AuthedRequest, res) => {
+  app.get(`/api/${route}`, async (req: AuthedRequest, res) => {
     const scoped = isAdmin(req)
       ? { sql: "", params: [] }
       : { sql: " WHERE t.venue_id=?", params: [req.user!.venueId] };
@@ -384,22 +419,22 @@ for (const [route, cfg] of Object.entries(resources)) {
       : "";
     const locationColumn = cfg.location ? ",l.name location_name" : "";
     res.json(
-      rows(
+      await rows(
         `SELECT t.*,v.name venue_name${locationColumn} FROM ${cfg.table} t LEFT JOIN venues v ON v.id=t.venue_id${joinLocation}${scoped.sql} ORDER BY t.id DESC`,
         ...scoped.params,
       ),
     );
   });
-  app.get(`/api/${route}/:id`, (req: AuthedRequest, res) => {
-    const row = db
-      .prepare(`SELECT * FROM ${cfg.table} WHERE id=?`)
-      .get(Number(req.params.id)) as any;
+  app.get(`/api/${route}/:id`, async (req: AuthedRequest, res) => {
+    const row = await db.get<any>(`SELECT * FROM ${cfg.table} WHERE id=?`, [
+      Number(req.params.id),
+    ]);
     if (!row) return res.status(404).json({ error: "Not found" });
     if (!venueAllowed(req, row.venue_id))
       return res.status(403).json({ error: "Venue access denied" });
     res.json(row);
   });
-  app.post(`/api/${route}`, canWrite, (req: AuthedRequest, res) => {
+  app.post(`/api/${route}`, canWrite, async (req: AuthedRequest, res) => {
     const parsed = cfg.schema.safeParse(req.body);
     if (!parsed.success)
       return res
@@ -407,28 +442,25 @@ for (const [route, cfg] of Object.entries(resources)) {
         .json({ error: "Invalid record", issues: parsed.error.flatten() });
     const body = parsed.data as Record<string, any>,
       venueId = Number(body.venue_id);
-    if (!validateReferences(req, res, route, body, venueId)) return;
+    if (!(await validateReferences(req, res, route, body, venueId))) return;
     const cols = Object.keys(body),
       vals = Object.values(body);
     try {
-      const result = db
-        .prepare(
-          `INSERT INTO ${cfg.table}(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`,
-        )
-        .run(...vals, req.user!.id);
+      const result = await db.run(
+        `INSERT INTO ${cfg.table}(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`,
+        [...vals, req.user!.id],
+      );
       const id = Number(result.lastInsertRowid),
-        after = db.prepare(`SELECT * FROM ${cfg.table} WHERE id=?`).get(id);
-      audit(route, id, "create", null, after, req.user!.id, req.ip);
+        after = await db.get(`SELECT * FROM ${cfg.table} WHERE id=?`, [id]);
+      await audit(route, id, "create", null, after, req.user!.id, req.ip);
       res.status(201).json(after);
     } catch {
       res.status(400).json({ error: "Record could not be saved" });
     }
   });
-  app.patch(`/api/${route}/:id`, canWrite, (req: AuthedRequest, res) => {
+  app.patch(`/api/${route}/:id`, canWrite, async (req: AuthedRequest, res) => {
     const id = Number(req.params.id),
-      before = db
-        .prepare(`SELECT * FROM ${cfg.table} WHERE id=?`)
-        .get(id) as any;
+      before = await db.get<any>(`SELECT * FROM ${cfg.table} WHERE id=?`, [id]);
     if (!before) return res.status(404).json({ error: "Not found" });
     if (!venueAllowed(req, before.venue_id))
       return res.status(403).json({ error: "Venue access denied" });
@@ -449,22 +481,23 @@ for (const [route, cfg] of Object.entries(resources)) {
     const targetLocation =
       body.location_id !== undefined ? body.location_id : before.location_id;
     if (
-      !validateReferences(
+      !(await validateReferences(
         req,
         res,
         route,
         { ...before, ...body, location_id: targetLocation },
         targetVenue,
-      )
+      ))
     )
       return;
     const cols = Object.keys(body);
     try {
-      db.prepare(
+      await db.run(
         `UPDATE ${cfg.table} SET ${cols.map((c) => `${c}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`,
-      ).run(...Object.values(body), req.user!.id, id);
-      const after = db.prepare(`SELECT * FROM ${cfg.table} WHERE id=?`).get(id);
-      audit(route, id, "update", before, after, req.user!.id, req.ip);
+        [...Object.values(body), req.user!.id, id],
+      );
+      const after = await db.get(`SELECT * FROM ${cfg.table} WHERE id=?`, [id]);
+      await audit(route, id, "update", before, after, req.user!.id, req.ip);
       res.json(after);
     } catch {
       res.status(400).json({ error: "Record could not be saved" });
@@ -472,55 +505,62 @@ for (const [route, cfg] of Object.entries(resources)) {
   });
 }
 
-app.get("/api/assets/:id/pat-tests", (req: AuthedRequest, res) => {
-  const asset = db
-    .prepare("SELECT venue_id venueId FROM assets WHERE id=?")
-    .get(Number(req.params.id)) as { venueId: number } | undefined;
+app.get("/api/assets/:id/pat-tests", async (req: AuthedRequest, res) => {
+  const asset = await db.get<{ venueId: number }>(
+    "SELECT venue_id venueId FROM assets WHERE id=?",
+    [Number(req.params.id)],
+  );
   if (!asset) return res.status(404).json({ error: "Asset not found" });
   if (!venueAllowed(req, asset.venueId))
     return res.status(403).json({ error: "Venue access denied" });
   res.json(
-    rows(
+    await rows(
       "SELECT * FROM pat_tests WHERE asset_id=? ORDER BY test_date DESC,id DESC",
       Number(req.params.id),
     ),
   );
 });
-app.post("/api/assets/:id/pat-tests", canWrite, (req: AuthedRequest, res) => {
-  const asset = db
-    .prepare("SELECT * FROM assets WHERE id=?")
-    .get(Number(req.params.id)) as any;
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
-  if (!venueAllowed(req, asset.venue_id))
-    return res.status(403).json({ error: "Venue access denied" });
-  const parsed = patSchema.safeParse(req.body);
-  if (!parsed.success)
-    return res
-      .status(400)
-      .json({ error: "Invalid PAT test", issues: parsed.error.flatten() });
-  if (!assertDocument(req, res, parsed.data.document_id, asset.venue_id))
-    return;
-  const cols = Object.keys(parsed.data),
-    result = db
-      .prepare(
+app.post(
+  "/api/assets/:id/pat-tests",
+  canWrite,
+  async (req: AuthedRequest, res) => {
+    const asset = await db.get<any>("SELECT * FROM assets WHERE id=?", [
+      Number(req.params.id),
+    ]);
+    if (!asset) return res.status(404).json({ error: "Asset not found" });
+    if (!venueAllowed(req, asset.venue_id))
+      return res.status(403).json({ error: "Venue access denied" });
+    const parsed = patSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ error: "Invalid PAT test", issues: parsed.error.flatten() });
+    if (
+      !(await assertDocument(req, res, parsed.data.document_id, asset.venue_id))
+    )
+      return;
+    const cols = Object.keys(parsed.data),
+      result = await db.run(
         `INSERT INTO pat_tests(asset_id,${cols.join(",")},created_by) VALUES(?,${cols.map(() => "?").join(",")},?)`,
-      )
-      .run(asset.id, ...Object.values(parsed.data), req.user!.id);
-  const id = Number(result.lastInsertRowid),
-    after = db.prepare("SELECT * FROM pat_tests WHERE id=?").get(id);
-  audit("pat_tests", id, "create", null, after, req.user!.id, req.ip);
-  res.status(201).json(after);
-});
+        [asset.id, ...Object.values(parsed.data), req.user!.id],
+      );
+    const id = Number(result.lastInsertRowid),
+      after = await db.get("SELECT * FROM pat_tests WHERE id=?", [id]);
+    await audit("pat_tests", id, "create", null, after, req.user!.id, req.ip);
+    res.status(201).json(after);
+  },
+);
 
-app.get("/api/extinguishers/:id/checks", (req: AuthedRequest, res) => {
-  const item = db
-    .prepare("SELECT venue_id venueId FROM extinguishers WHERE id=?")
-    .get(Number(req.params.id)) as { venueId: number } | undefined;
+app.get("/api/extinguishers/:id/checks", async (req: AuthedRequest, res) => {
+  const item = await db.get<{ venueId: number }>(
+    "SELECT venue_id venueId FROM extinguishers WHERE id=?",
+    [Number(req.params.id)],
+  );
   if (!item) return res.status(404).json({ error: "Extinguisher not found" });
   if (!venueAllowed(req, item.venueId))
     return res.status(403).json({ error: "Venue access denied" });
   res.json(
-    rows(
+    await rows(
       "SELECT * FROM extinguisher_checks WHERE extinguisher_id=? ORDER BY check_date DESC,id DESC",
       Number(req.params.id),
     ),
@@ -529,10 +569,10 @@ app.get("/api/extinguishers/:id/checks", (req: AuthedRequest, res) => {
 app.post(
   "/api/extinguishers/:id/checks",
   canWrite,
-  (req: AuthedRequest, res) => {
-    const item = db
-      .prepare("SELECT * FROM extinguishers WHERE id=?")
-      .get(Number(req.params.id)) as any;
+  async (req: AuthedRequest, res) => {
+    const item = await db.get<any>("SELECT * FROM extinguishers WHERE id=?", [
+      Number(req.params.id),
+    ]);
     if (!item) return res.status(404).json({ error: "Extinguisher not found" });
     if (!venueAllowed(req, item.venue_id))
       return res.status(403).json({ error: "Venue access denied" });
@@ -543,16 +583,15 @@ app.post(
         issues: parsed.error.flatten(),
       });
     const cols = Object.keys(parsed.data),
-      result = db
-        .prepare(
-          `INSERT INTO extinguisher_checks(extinguisher_id,${cols.join(",")},created_by) VALUES(?,${cols.map(() => "?").join(",")},?)`,
-        )
-        .run(item.id, ...Object.values(parsed.data), req.user!.id);
+      result = await db.run(
+        `INSERT INTO extinguisher_checks(extinguisher_id,${cols.join(",")},created_by) VALUES(?,${cols.map(() => "?").join(",")},?)`,
+        [item.id, ...Object.values(parsed.data), req.user!.id],
+      );
     const id = Number(result.lastInsertRowid),
-      after = db
-        .prepare("SELECT * FROM extinguisher_checks WHERE id=?")
-        .get(id);
-    audit(
+      after = await db.get("SELECT * FROM extinguisher_checks WHERE id=?", [
+        id,
+      ]);
+    await audit(
       "extinguisher_checks",
       id,
       "create",
@@ -571,15 +610,15 @@ const upload = multer({
   fileFilter: (_req, file, cb) =>
     cb(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)),
 });
-app.get("/api/:entityType/:id/photos", (req: AuthedRequest, res) => {
+app.get("/api/:entityType/:id/photos", async (req: AuthedRequest, res) => {
   const type = String(req.params.entityType).replace(/s$/, ""),
     id = Number(req.params.id),
-    venue = entityVenue(type, id);
+    venue = await entityVenue(type, id);
   if (!venue) return res.status(404).json({ error: "Record not found" });
   if (!venueAllowed(req, venue))
     return res.status(403).json({ error: "Venue access denied" });
   res.json(
-    rows(
+    await rows(
       "SELECT * FROM photos WHERE entity_type=? AND entity_id=? ORDER BY is_main DESC,captured_at DESC,created_at DESC",
       type,
       id,
@@ -595,7 +634,7 @@ app.post(
       id = Number(req.params.id);
     if (!["asset", "furnishing", "extinguisher_check"].includes(type))
       return res.status(400).json({ error: "Unsupported photo target" });
-    const venue = entityVenue(type, id);
+    const venue = await entityVenue(type, id);
     if (!venue) return res.status(404).json({ error: "Record not found" });
     if (!venueAllowed(req, venue))
       return res.status(403).json({ error: "Venue access denied" });
@@ -606,17 +645,20 @@ app.post(
     const metadata = photoMetadataSchema.safeParse(req.body);
     if (!metadata.success)
       return res.status(400).json({ error: "Invalid photo metadata" });
-    const key = await storage.put(req.file.buffer, req.file.originalname),
+    const key = await storage.put(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      ),
       captured = metadata.data.captured_at || new Date().toISOString();
     if (metadata.data.is_main)
-      db.prepare(
+      await db.run(
         "UPDATE photos SET is_main=0 WHERE entity_type=? AND entity_id=?",
-      ).run(type, id);
-    const result = db
-      .prepare(
-        "INSERT INTO photos(entity_type,entity_id,storage_key,mime_type,captured_at,caption,is_main,created_by) VALUES(?,?,?,?,?,?,?,?)",
-      )
-      .run(
+        [type, id],
+      );
+    const result = await db.run(
+      "INSERT INTO photos(entity_type,entity_id,storage_key,mime_type,captured_at,caption,is_main,created_by) VALUES(?,?,?,?,?,?,?,?)",
+      [
         type,
         id,
         key,
@@ -625,26 +667,28 @@ app.post(
         metadata.data.caption || null,
         metadata.data.is_main,
         req.user!.id,
-      );
+      ],
+    );
     const photoId = Number(result.lastInsertRowid),
-      after = db.prepare("SELECT * FROM photos WHERE id=?").get(photoId);
-    audit("photos", photoId, "create", null, after, req.user!.id, req.ip);
+      after = await db.get("SELECT * FROM photos WHERE id=?", [photoId]);
+    await audit("photos", photoId, "create", null, after, req.user!.id, req.ip);
     res.status(201).json(after);
   },
 );
-app.patch("/api/photos/:id/main", canWrite, (req: AuthedRequest, res) => {
-  const photo = db
-    .prepare("SELECT * FROM photos WHERE id=?")
-    .get(Number(req.params.id)) as any;
+app.patch("/api/photos/:id/main", canWrite, async (req: AuthedRequest, res) => {
+  const photo = await db.get<any>("SELECT * FROM photos WHERE id=?", [
+    Number(req.params.id),
+  ]);
   if (!photo) return res.status(404).json({ error: "Photo not found" });
-  const venue = entityVenue(photo.entity_type, photo.entity_id);
+  const venue = await entityVenue(photo.entity_type, photo.entity_id);
   if (!venue || !venueAllowed(req, venue))
     return res.status(403).json({ error: "Venue access denied" });
-  db.prepare(
+  await db.run(
     "UPDATE photos SET is_main=0 WHERE entity_type=? AND entity_id=?",
-  ).run(photo.entity_type, photo.entity_id);
-  db.prepare("UPDATE photos SET is_main=1 WHERE id=?").run(photo.id);
-  audit(
+    [photo.entity_type, photo.entity_id],
+  );
+  await db.run("UPDATE photos SET is_main=1 WHERE id=?", [photo.id]);
+  await audit(
     "photos",
     photo.id,
     "set_main",
@@ -656,83 +700,99 @@ app.patch("/api/photos/:id/main", canWrite, (req: AuthedRequest, res) => {
   res.json({ ...photo, is_main: 1 });
 });
 
-app.post("/api/documents/:id/links", canWrite, (req: AuthedRequest, res) => {
-  const doc = db
-    .prepare("SELECT * FROM documents WHERE id=?")
-    .get(Number(req.params.id)) as any;
-  if (!doc) return res.status(404).json({ error: "Document not found" });
-  if (!venueAllowed(req, doc.venue_id))
-    return res.status(403).json({ error: "Venue access denied" });
-  const parsed = documentLinkSchema.safeParse(req.body);
-  if (!parsed.success)
-    return res.status(400).json({ error: "Invalid document link" });
-  if (
-    !assertEntityReference(
-      req,
-      res,
-      parsed.data.entity_type,
-      parsed.data.entity_id,
-      doc.venue_id,
+app.post(
+  "/api/documents/:id/links",
+  canWrite,
+  async (req: AuthedRequest, res) => {
+    const doc = await db.get<any>("SELECT * FROM documents WHERE id=?", [
+      Number(req.params.id),
+    ]);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    if (!venueAllowed(req, doc.venue_id))
+      return res.status(403).json({ error: "Venue access denied" });
+    const parsed = documentLinkSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Invalid document link" });
+    if (
+      !(await assertEntityReference(
+        req,
+        res,
+        parsed.data.entity_type,
+        parsed.data.entity_id,
+        doc.venue_id,
+      ))
     )
-  )
-    return;
-  const result = db
-    .prepare(
+      return;
+    const result = await db.run(
       "INSERT INTO document_links(document_id,entity_type,entity_id) VALUES(?,?,?)",
-    )
-    .run(doc.id, parsed.data.entity_type, parsed.data.entity_id);
-  audit(
-    "document_links",
-    Number(result.lastInsertRowid),
-    "create",
-    null,
-    parsed.data,
-    req.user!.id,
-    req.ip,
-  );
-  res.status(201).json(parsed.data);
-});
+      [doc.id, parsed.data.entity_type, parsed.data.entity_id],
+    );
+    await audit(
+      "document_links",
+      Number(result.lastInsertRowid),
+      "create",
+      null,
+      parsed.data,
+      req.user!.id,
+      req.ip,
+    );
+    res.status(201).json(parsed.data);
+  },
+);
 
-app.get(/^\/files\/(.+)$/, authenticate, (req: AuthedRequest, res) => {
+app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
   const key = String(req.params[0]);
-  const photo = db
-    .prepare(
-      "SELECT entity_type entityType,entity_id entityId FROM photos WHERE storage_key=?",
-    )
-    .get(key) as { entityType: string; entityId: number } | undefined;
-  const document = db
-    .prepare("SELECT venue_id venueId FROM documents WHERE storage_key=?")
-    .get(key) as { venueId: number } | undefined;
+  const photo = await db.get<{ entityType: string; entityId: number }>(
+    "SELECT entity_type entityType,entity_id entityId FROM photos WHERE storage_key=?",
+    [key],
+  );
+  const document = await db.get<{ venueId: number }>(
+    "SELECT venue_id venueId FROM documents WHERE storage_key=?",
+    [key],
+  );
   const venue = photo
-    ? entityVenue(photo.entityType, photo.entityId)
+    ? await entityVenue(photo.entityType, photo.entityId)
     : document?.venueId;
   if (!venue) return res.status(404).end();
   if (!venueAllowed(req, venue)) return res.status(403).end();
   try {
-    storage.stream(key).pipe(res);
+    const object = await storage.get(key);
+    if (object.contentType) res.type(object.contentType);
+    if (object.length) res.setHeader("Content-Length", String(object.length));
+    res.setHeader("Cache-Control", "private, no-store");
+    object.stream.pipe(res);
   } catch {
     res.status(404).end();
   }
 });
 
-app.get("/api/audit", allow("administrator", "auditor"), (_req, res) =>
+app.get("/api/audit", allow("administrator", "auditor"), async (_req, res) =>
   res.json(
-    rows(
+    await rows(
       "SELECT a.*,u.name user_name FROM audit_events a LEFT JOIN users u ON u.id=a.user_id ORDER BY occurred_at DESC LIMIT 500",
     ),
   ),
 );
-app.get("/api/users", canAdmin, (_req, res) =>
+app.get("/api/users", canAdmin, async (_req, res) =>
   res.json(
-    rows("SELECT id,email,name,role,venue_id,active,created_at FROM users"),
+    await rows(
+      "SELECT id,email,name,role,venue_id,active,created_at FROM users",
+    ),
   ),
 );
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error(error);
   res.status(500).json({ error: "Unexpected server error" });
 });
-const port = Number(process.env.PORT || 4100);
-if (process.env.NODE_ENV !== "test")
+if (config.NODE_ENV === "production") {
+  const frontend = resolve(process.cwd(), "dist");
+  app.use(express.static(frontend, { index: false, fallthrough: true }));
+  app.get(/^(?!\/api(?:\/|$)|\/files(?:\/|$)|\/health$).*/, (_req, res) =>
+    res.sendFile(resolve(frontend, "index.html")),
+  );
+}
+const port = config.PORT;
+if (config.NODE_ENV !== "test")
   app.listen(port, () =>
     console.log(`Compliance API on http://localhost:${port}`),
   );

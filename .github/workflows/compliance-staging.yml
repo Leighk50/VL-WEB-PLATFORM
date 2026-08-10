@@ -1,0 +1,71 @@
+name: Compliance Hub staging
+
+on:
+  push:
+    branches: [codex/compliance-hub]
+    paths:
+      - "compliance/**"
+      - ".github/workflows/compliance-staging.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: compliance-staging
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./compliance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: compliance/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm prune --omit=dev
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compliance-app
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            compliance/dist
+            compliance/dist-server
+            compliance/node_modules
+            compliance/package.json
+            compliance/package-lock.json
+
+  deploy-staging:
+    # Pushes validate only. Deployment requires a reviewed manual workflow run
+    # and approval through the protected compliance-staging environment.
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: compliance-staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compliance-app
+          path: compliance-app
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: vl-compliance-staging
+          package: compliance-app
