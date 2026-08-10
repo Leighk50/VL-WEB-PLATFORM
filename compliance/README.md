@@ -6,6 +6,7 @@ Production-oriented foundation for a separate, mobile-first compliance applicati
 
 - React + TypeScript responsive client, served separately from the API in development.
 - Express API with Helmet, strict JSON limits, JWT sessions, bcrypt password hashes, role gates and venue scoping.
+- Authentication tokens contain only a user identity; active state, current role and current venue are reloaded from the database on every request. Login and general API rate limits provide baseline brute-force protection.
 - Relational schema covering venues/locations, assets, append-only PAT tests, extinguishers/checks, alarm tests/services, risk assessments, furnishings, documents/version links, photos, corrective actions and immutable audit events.
 - `ObjectStorage` abstraction with a private local adapter. Azure Blob is the production target; uploaded objects are never public by default.
 - Local database adapter uses Node's built-in SQLite driver and WAL journalling. Operational records are not stored in website JSON.
@@ -57,4 +58,4 @@ Provision a private container (suggested `compliance-private`), disable anonymou
 
 ## Current iteration boundaries
 
-The working foundation includes schema, authentication/RBAC, dashboard, core register CRUD, append-only PAT workflow, barcode lookup API, upload abstraction, reports index and responsive UI. Camera decoding, Azure adapters, certificate linking UI, full extinguisher-check detail UI, account administration/MFA, CSV/PDF generators and automated action creation are prepared by the model but require follow-on implementation and Azure resources.
+The working foundation includes strict per-resource validation, authentication/RBAC, enforced venue/location boundaries, dashboard, core register CRUD, append-only PAT and extinguisher checks, camera barcode scanning with fallback, authenticated historical photographs, document-link validation, reports index and responsive UI. Azure adapters, account administration/MFA, CSV/PDF generators and automated action creation require follow-on implementation and Azure resources.

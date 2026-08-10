@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
-import { api } from "./api";
+import { api, privateImageUrl, uploadPhoto } from "./api";
 type User = { name: string; role: string };
 type Boot = { venues: any[]; locations: any[] };
 const nav = [
@@ -144,14 +144,7 @@ export default function App() {
           <Route path="/pat" element={<Pat boot={boot} />} />
           <Route
             path="/extinguishers"
-            element={
-              <Register
-                kind="extinguishers"
-                title="Fire Extinguishers"
-                boot={boot}
-                fields={extFields}
-              />
-            }
+            element={<ExtinguisherPage boot={boot} />}
           />
           <Route
             path="/alarm"
@@ -277,7 +270,11 @@ function Register({
 }) {
   const [items, setItems] = useState<any[]>([]),
     [editing, setEditing] = useState<any | null>(null),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [scanning, setScanning] = useState(
+      kind === "assets" &&
+        new URLSearchParams(window.location.search).has("scan"),
+    );
   const load = () => api<any[]>("/" + kind).then(setItems);
   useEffect(() => {
     void load();
@@ -292,11 +289,14 @@ function Register({
         Object.assign(body, { [f.key]: f.type === "number" ? Number(v) : v });
     }
     try {
-      await api("/" + kind + (editing?.id ? "/" + editing.id : ""), {
-        method: editing?.id ? "PATCH" : "POST",
-        body: JSON.stringify(body),
-      });
-      setEditing(null);
+      const saved = await api<any>(
+        "/" + kind + (editing?.id ? "/" + editing.id : ""),
+        {
+          method: editing?.id ? "PATCH" : "POST",
+          body: JSON.stringify(body),
+        },
+      );
+      setEditing(["assets", "furnishings"].includes(kind) ? saved : null);
       setError("");
       load();
     } catch (e: any) {
@@ -308,11 +308,41 @@ function Register({
       title={title}
       subtitle={`${items.length} records`}
       actions={
-        <button onClick={() => setEditing({ venue_id: boot?.venues[0]?.id })}>
-          + Add record
-        </button>
+        <div className="pageactions">
+          {kind === "assets" && (
+            <button className="secondary" onClick={() => setScanning(true)}>
+              Scan barcode
+            </button>
+          )}
+          <button onClick={() => setEditing({ venue_id: boot?.venues[0]?.id })}>
+            + Add record
+          </button>
+        </div>
       }
     >
+      {scanning && (
+        <BarcodeScanner
+          onClose={() => setScanning(false)}
+          onCode={async (barcode) => {
+            try {
+              const asset = await api<any>(
+                `/assets/barcode/${encodeURIComponent(barcode)}`,
+              );
+              setEditing(asset);
+            } catch (error) {
+              if (error instanceof Error && error.message === "Unknown barcode")
+                setEditing({ barcode, venue_id: boot?.venues[0]?.id });
+              else
+                setError(
+                  error instanceof Error
+                    ? error.message
+                    : "Barcode lookup failed",
+                );
+            }
+            setScanning(false);
+          }}
+        />
+      )}
       {editing && (
         <section className="panel formpanel">
           <h2>{editing.id ? "Edit" : "New"} record</h2>
@@ -337,6 +367,9 @@ function Register({
               <button>Save record</button>
             </div>
           </form>
+          {editing.id && ["assets", "furnishings"].includes(kind) && (
+            <PhotoManager entityType={kind} entityId={editing.id} />
+          )}
         </section>
       )}
       <section className="panel tablewrap">
@@ -426,6 +459,327 @@ function FieldInput({
         />
       )}
     </label>
+  );
+}
+function BarcodeScanner({
+  onCode,
+  onClose,
+}: {
+  onCode: (code: string) => void;
+  onClose: () => void;
+}) {
+  const video = useRef<HTMLVideoElement>(null),
+    [manual, setManual] = useState(""),
+    [message, setMessage] = useState("Requesting camera permission…");
+  useEffect(() => {
+    let stream: MediaStream | undefined,
+      timer: number | undefined,
+      stopped = false;
+    async function start() {
+      const Detector = (window as any).BarcodeDetector;
+      if (!Detector) {
+        setMessage(
+          "Camera barcode detection is not supported by this browser. Enter the barcode manually.",
+        );
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (!video.current || stopped) return;
+        video.current.srcObject = stream;
+        await video.current.play();
+        setMessage("Point the camera at the barcode.");
+        const detector = new Detector({
+          formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code"],
+        });
+        timer = window.setInterval(async () => {
+          if (!video.current || video.current.readyState < 2) return;
+          try {
+            const found = await detector.detect(video.current);
+            if (found[0]?.rawValue) {
+              window.clearInterval(timer);
+              onCode(found[0].rawValue);
+            }
+          } catch {
+            /* retry next frame */
+          }
+        }, 450);
+      } catch (error) {
+        setMessage(
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "Camera permission was denied. Allow camera access or enter the barcode manually."
+            : "The camera could not be started. Enter the barcode manually.",
+        );
+      }
+    }
+    void start();
+    return () => {
+      stopped = true;
+      if (timer) window.clearInterval(timer);
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [onCode]);
+  return (
+    <section className="panel scanner">
+      <div className="sectionhead">
+        <h2>Scan asset barcode</h2>
+        <button className="secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <video ref={video} playsInline muted />
+      <p>{message}</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (manual.trim()) onCode(manual.trim());
+        }}
+      >
+        <label>
+          Manual barcode
+          <input
+            value={manual}
+            onChange={(e) => setManual(e.target.value)}
+            autoFocus
+          />
+        </label>
+        <button>Find asset</button>
+      </form>
+    </section>
+  );
+}
+
+function PhotoManager({
+  entityType,
+  entityId,
+}: {
+  entityType: string;
+  entityId: number;
+}) {
+  const [photos, setPhotos] = useState<any[]>([]),
+    [urls, setUrls] = useState<Record<number, string>>({}),
+    [error, setError] = useState("");
+  const load = async () => {
+    const list = await api<any[]>(`/${entityType}/${entityId}/photos`);
+    setPhotos(list);
+    const pairs = await Promise.all(
+      list.map(
+        async (photo) =>
+          [photo.id, await privateImageUrl(photo.storage_key)] as const,
+      ),
+    );
+    setUrls(Object.fromEntries(pairs));
+  };
+  useEffect(() => {
+    void load();
+    return () => Object.values(urls).forEach(URL.revokeObjectURL);
+  }, [entityType, entityId]);
+  async function upload(file: File | undefined, main: boolean) {
+    if (!file) return;
+    try {
+      await uploadPhoto(entityType, entityId, file, main);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    }
+  }
+  return (
+    <div className="photos">
+      <h3>Identification photographs</h3>
+      <div className="photoactions">
+        <label className="upload">
+          Take/set main photo
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => void upload(e.target.files?.[0], true)}
+          />
+        </label>
+        <label className="upload secondary">
+          Add dated photo
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => void upload(e.target.files?.[0], false)}
+          />
+        </label>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="photogrid">
+        {photos.map((photo) => (
+          <figure key={photo.id} className={photo.is_main ? "mainphoto" : ""}>
+            <img
+              src={urls[photo.id]}
+              alt={photo.caption || "Compliance evidence"}
+            />
+            <figcaption>
+              {photo.is_main ? "Main · " : ""}
+              {new Date(photo.captured_at || photo.created_at).toLocaleString()}
+            </figcaption>
+            {!photo.is_main && (
+              <button
+                className="link"
+                onClick={async () => {
+                  await api(`/photos/${photo.id}/main`, {
+                    method: "PATCH",
+                    body: "{}",
+                  });
+                  await load();
+                }}
+              >
+                Set as main
+              </button>
+            )}
+          </figure>
+        ))}
+      </div>
+      <small>
+        Changing the main image retains every historical photograph.
+      </small>
+    </div>
+  );
+}
+
+function ExtinguisherPage({ boot }: { boot: Boot | null }) {
+  return (
+    <>
+      <Register
+        kind="extinguishers"
+        title="Fire Extinguishers"
+        boot={boot}
+        fields={extFields}
+      />
+      <ExtinguisherCheck />
+    </>
+  );
+}
+function ExtinguisherCheck() {
+  const [items, setItems] = useState<any[]>([]),
+    [item, setItem] = useState<any>(),
+    [history, setHistory] = useState<any[]>([]),
+    [error, setError] = useState("");
+  useEffect(() => {
+    api<any[]>("/extinguishers").then(setItems);
+  }, []);
+  const loadHistory = async (selected: any) => {
+    setItem(selected);
+    if (selected)
+      setHistory(await api<any[]>(`/extinguishers/${selected.id}/checks`));
+  };
+  async function save(e: any) {
+    e.preventDefault();
+    const form = e.currentTarget,
+      data = new FormData(form),
+      file = data.get("photo") as File;
+    data.delete("photo");
+    const body = Object.fromEntries(data);
+    try {
+      const check = await api<any>(`/extinguishers/${item.id}/checks`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (file?.size)
+        await uploadPhoto("extinguisher_checks", check.id, file, false);
+      form.reset();
+      await loadHistory(item);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Check could not be saved");
+    }
+  }
+  const yesNo = (name: string, label: string) => (
+    <label>
+      {label}
+      <select name={name} required>
+        <option value="1">Satisfactory</option>
+        <option value="0">Defect</option>
+      </select>
+    </label>
+  );
+  return (
+    <section className="panel checkpanel">
+      <h2>Fast extinguisher check</h2>
+      <label>
+        Scan/select extinguisher
+        <select
+          onChange={(e) =>
+            void loadHistory(items.find((x) => x.id === Number(e.target.value)))
+          }
+        >
+          <option value="">Select extinguisher…</option>
+          {items.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.barcode} — {x.type} — {x.location_name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {item && (
+        <>
+          <form className="gridform" onSubmit={save}>
+            <label>
+              Check date
+              <input
+                name="check_date"
+                type="date"
+                required
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+            </label>
+            <label>
+              Overall result
+              <select name="result">
+                <option>Pass</option>
+                <option>Fail</option>
+              </select>
+            </label>
+            <label>
+              Pressure / condition
+              <input name="pressure_condition" />
+            </label>
+            {yesNo("pin_seal_ok", "Safety pin / tamper seal")}
+            {yesNo("hose_ok", "Hose / nozzle")}
+            {yesNo("signage_present", "Signage")}
+            {yesNo("positioned_ok", "Position / mounting")}
+            {yesNo("accessible", "Accessible / unobstructed")}
+            <label>
+              Damage / corrosion
+              <textarea name="damage_corrosion" />
+            </label>
+            <label>
+              Notes
+              <textarea name="notes" />
+            </label>
+            <label>
+              Evidence photograph
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+              />
+            </label>
+            {error && <p className="error">{error}</p>}
+            <button>Save immutable check</button>
+          </form>
+          <div className="history">
+            <h3>Check history</h3>
+            {history.map((check) => (
+              <p key={check.id}>
+                <b className={check.result === "Fail" ? "bad" : ""}>
+                  {check.result}
+                </b>{" "}
+                · {check.check_date} · {check.notes || "No notes"}
+              </p>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 function Pat({ boot: _boot }: { boot: Boot | null }) {
