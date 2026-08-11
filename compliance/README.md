@@ -83,6 +83,17 @@ Managed identity handles authentication, not firewall routing. Before migration/
 
 Verify from the App Service/Kudu environment that port 1433 and DNS resolution reach the SQL server. The normal `npm start` command now migrates before starting the server, so SSH bootstrap is not required. `npm run migrate` remains available as an explicit, safe-to-rerun administrative command.
 
+## Create the first administrator
+
+After the first successful deployment, open an SSH session for the Compliance Hub App Service and run exactly:
+
+```sh
+cd /home/site/wwwroot
+npm run create-admin
+```
+
+Enter the administrator email, display name, password and password confirmation at the prompts. Password input is hidden. The command uses the same database adapter as the application, so in Azure it authenticates to SQL with the App Service system-assigned managed identity and requires no SQL credentials. It creates only the non-demo `Village Limits` venue, its default operational locations and the real administrator; it never enables demo seeding or creates demo compliance records. A duplicate email is refused, and creating an additional administrator requires explicit terminal confirmation.
+
 ## GitHub Actions staging workflow
 
 `.github/workflows/compliance-staging.yml` validates only the `compliance/` application on pushes to `codex/compliance-hub`. It uses Node 22, `npm ci`, tests, lint, typecheck and a production build. A push **cannot deploy**: the deploy job runs only from `workflow_dispatch` and is additionally bound to the protected `compliance-staging` GitHub Environment.

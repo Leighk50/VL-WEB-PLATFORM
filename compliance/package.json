@@ -16,6 +16,7 @@
     "typecheck": "tsc -b --pretty false",
     "migrate": "node dist-server/migrate.js",
     "migrate:dev": "tsx server/migrate.ts",
+    "create-admin": "node dist-server/create-admin.js",
     "start": "node dist-server/index.js"
   },
   "dependencies": {
