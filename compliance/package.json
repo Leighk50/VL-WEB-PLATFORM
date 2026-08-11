@@ -17,6 +17,7 @@
     "migrate": "node dist-server/migrate.js",
     "migrate:dev": "tsx server/migrate.ts",
     "create-admin": "node dist-server/create-admin.js",
+    "storage:diagnostic": "node dist-server/storage-diagnostic.js",
     "start": "node dist-server/index.js"
   },
   "dependencies": {

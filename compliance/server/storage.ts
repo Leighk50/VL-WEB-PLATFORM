@@ -1,8 +1,7 @@
 import { mkdirSync, createReadStream } from "node:fs";
-import { writeFile, stat } from "node:fs/promises";
+import { writeFile, stat, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { Readable } from "node:stream";
 import { DefaultAzureCredential } from "@azure/identity";
 import { BlobServiceClient } from "@azure/storage-blob";
 import { config } from "./config.js";
@@ -20,6 +19,21 @@ export interface ObjectStorage {
     contentType?: string,
   ): Promise<string>;
   get(key: string): Promise<StoredObject>;
+  exists(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
+}
+
+export function storedObjectFromAzureDownload(response: {
+  readableStreamBody?: NodeJS.ReadableStream;
+  contentType?: string;
+  contentLength?: number;
+}): StoredObject {
+  if (!response.readableStreamBody) throw new Error("Blob content unavailable");
+  return {
+    stream: response.readableStreamBody,
+    contentType: response.contentType,
+    length: response.contentLength,
+  };
 }
 
 const safeKey = (key: string) => {
@@ -50,6 +64,24 @@ export class LocalStorage implements ObjectStorage {
     if (!path.startsWith(this.root)) throw new Error("Invalid object key");
     const info = await stat(path);
     return { stream: createReadStream(path), length: info.size };
+  }
+  async delete(key: string) {
+    const path = resolve(this.root, safeKey(key));
+    if (!path.startsWith(this.root)) throw new Error("Invalid object key");
+    await unlink(path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+  async exists(key: string) {
+    const path = resolve(this.root, safeKey(key));
+    if (!path.startsWith(this.root)) throw new Error("Invalid object key");
+    return stat(path).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      },
+    );
   }
 }
 
@@ -82,13 +114,13 @@ export class AzureBlobStorage implements ObjectStorage {
     const response = await this.container
       .getBlobClient(safeKey(key))
       .download();
-    if (!response.readableStreamBody)
-      throw new Error("Blob content unavailable");
-    return {
-      stream: Readable.fromWeb(response.readableStreamBody as any),
-      contentType: response.contentType,
-      length: response.contentLength,
-    };
+    return storedObjectFromAzureDownload(response);
+  }
+  async delete(key: string) {
+    await this.container.getBlobClient(safeKey(key)).deleteIfExists();
+  }
+  async exists(key: string) {
+    return this.container.getBlobClient(safeKey(key)).exists();
   }
 }
 

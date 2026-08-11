@@ -1006,6 +1006,44 @@ const evidenceUpload = multer({
     ),
 });
 
+function storageFailure(error: unknown) {
+  const candidate = error as {
+    code?: string;
+    statusCode?: number;
+    details?: { errorCode?: string };
+  };
+  const code = candidate.code || candidate.details?.errorCode || "Unknown";
+  const status = Number(candidate.statusCode || 0);
+  if (status === 404 || code === "BlobNotFound")
+    return { kind: "blob_not_found", code, status };
+  if (
+    status === 401 ||
+    status === 403 ||
+    ["AuthorizationPermissionMismatch", "AuthenticationFailed"].includes(code)
+  )
+    return { kind: "storage_access_denied", code, status };
+  if (/credential/i.test(code))
+    return { kind: "azure_credential_failure", code, status };
+  return { kind: "storage_service_error", code, status };
+}
+
+function logAttachmentStorageFailure(
+  attachmentId: number,
+  storageKey: unknown,
+  error: unknown,
+) {
+  const failure = storageFailure(error);
+  console.error("Document attachment storage retrieval failed", {
+    attachmentId,
+    storageKey: String(storageKey)
+      .replace(/[^a-zA-Z0-9/_-]+/g, ".")
+      .slice(0, 250),
+    provider: storage.provider,
+    ...failure,
+  });
+  return failure;
+}
+
 app.get("/api/documents/:id/attachments", async (req: AuthedRequest, res) => {
   const document = await db.get<any>(
     "SELECT venue_id FROM documents WHERE id=?",
@@ -1052,10 +1090,22 @@ app.post(
               : file.mimetype
           : file.mimetype;
       const key = await storage.put(file.buffer, originalName, mimeType);
-      const result = await db.run(
-        "INSERT INTO document_attachments(document_id,storage_key,original_name,mime_type,file_size,created_by) VALUES(?,?,?,?,?,?)",
-        [documentId, key, originalName, mimeType, file.size, req.user!.id],
-      );
+      let result;
+      try {
+        result = await db.run(
+          "INSERT INTO document_attachments(document_id,storage_key,original_name,mime_type,file_size,created_by) VALUES(?,?,?,?,?,?)",
+          [documentId, key, originalName, mimeType, file.size, req.user!.id],
+        );
+      } catch (error) {
+        await storage.delete(key).catch((cleanupError) =>
+          console.error("Attachment upload rollback failed", {
+            storageKey: key,
+            provider: storage.provider,
+            ...storageFailure(cleanupError),
+          }),
+        );
+        throw error;
+      }
       const attachment = await db.get(
         "SELECT id,document_id,original_name,mime_type,file_size,created_at FROM document_attachments WHERE id=?",
         [result.lastInsertRowid],
@@ -1082,9 +1132,21 @@ app.get(
       "SELECT a.*,d.venue_id FROM document_attachments a JOIN documents d ON d.id=a.document_id WHERE a.id=?",
       [Number(req.params.id)],
     );
-    if (!attachment) return res.status(404).end();
-    if (!venueAllowed(req, Number(attachment.venue_id)))
+    if (!attachment) {
+      console.warn("Document attachment metadata not found", {
+        attachmentId: Number(req.params.id),
+        provider: storage.provider,
+      });
+      return res.status(404).end();
+    }
+    if (!venueAllowed(req, Number(attachment.venue_id))) {
+      console.warn("Document attachment venue authorization denied", {
+        attachmentId: attachment.id,
+        userId: req.user!.id,
+        provider: storage.provider,
+      });
       return res.status(403).end();
+    }
     try {
       const object = await storage.get(attachment.storage_key);
       res.type(
@@ -1099,9 +1161,29 @@ app.get(
       );
       res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
       res.setHeader("Cache-Control", "private, no-store");
+      object.stream.on("error", (error) => {
+        logAttachmentStorageFailure(
+          attachment.id,
+          attachment.storage_key,
+          error,
+        );
+        if (!res.headersSent)
+          res
+            .status(503)
+            .json({ error: "Evidence file is temporarily unavailable" });
+        else res.destroy();
+      });
       object.stream.pipe(res);
-    } catch {
-      res.status(404).end();
+    } catch (error) {
+      const failure = logAttachmentStorageFailure(
+        attachment.id,
+        attachment.storage_key,
+        error,
+      );
+      if (failure.kind === "blob_not_found") return res.status(404).end();
+      res
+        .status(503)
+        .json({ error: "Evidence file is temporarily unavailable" });
     }
   },
 );

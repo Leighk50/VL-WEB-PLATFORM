@@ -47,6 +47,17 @@ Migration 2 adds append-only document attachments, fire-alarm call-point master 
 - Fire-alarm call points are venue/location scoped master data. Weekly tests reference an active call point and are append-only.
 - The call-point rotation warning is venue-specific master data maintained by administrators; no legal interval is hard-coded into the application.
 
+The App Service system-assigned managed identity requires **Storage Blob Data Contributor** scoped to the `compliance-private` container (preferred) or the `vlcompliancestaging` storage account. This data-plane role permits evidence upload, read/download and diagnostic cleanup; the management-plane Contributor role alone is insufficient.
+
+To verify managed-identity Blob access from App Service SSH without SQL credentials, storage keys or SAS tokens:
+
+```sh
+cd /home/site/wwwroot
+npm run storage:diagnostic
+```
+
+The command uploads a uniquely named small PDF, downloads the exact same key, verifies bytes and content type, then deletes the diagnostic Blob. It does not create database metadata.
+
 ## Azure staging architecture
 
 Already provisioned:
