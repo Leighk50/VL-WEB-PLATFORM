@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   addTwelveMonths,
   approvalDateChanged,
@@ -6,6 +6,8 @@ import {
   initialConfirmationDates,
   isoAssessmentDate,
   nextReviewDateChanged,
+  runAssessmentConfirmation,
+  submitAssessmentConfirmation,
 } from "./risk-confirmation";
 
 describe("assessment confirmation dates", () => {
@@ -58,5 +60,51 @@ describe("assessment confirmation dates", () => {
       nextReviewDate: "2027-09-01",
       nextReviewManuallySet: false,
     });
+  });
+
+  it("submits confirmation to the version-review API and returns the new version", async () => {
+    const request = vi.fn(async () => ({ id: 22, version: 2 }));
+    const result = await submitAssessmentConfirmation(10, {
+      assessor: "Leigh",
+      assessment_date: "2026-08-11",
+      reviewed_by: "Leigh",
+      approval_date: "2026-08-11",
+      next_review_date: "2027-08-11",
+      status: "Current",
+      notes: "Confirmed",
+      confirmation: true,
+    }, request);
+    expect(request).toHaveBeenCalledWith("/risk-assessments/10/review", expect.objectContaining({ method: "POST" }));
+    expect(result).toEqual({ id: 22, version: 2 });
+  });
+
+  it("exposes saving and success states around a successful API request", async () => {
+    const saving = vi.fn(), success = vi.fn(), failure = vi.fn();
+    await runAssessmentConfirmation({
+      assessmentId: 10,
+      payload: { assessor:"Leigh", assessment_date:"2026-08-11", reviewed_by:"Leigh", approval_date:"2026-08-11", next_review_date:"2027-08-11", status:"Current", notes:"", confirmation:true },
+      request: async () => ({ id:22, version:2 }),
+      setSaving: saving,
+      onSuccess: success,
+      onError: failure,
+    });
+    expect(saving.mock.calls.map(([value]) => value)).toEqual([true, false]);
+    expect(success).toHaveBeenCalledWith({ id:22, version:2 });
+    expect(failure).not.toHaveBeenCalled();
+  });
+
+  it("exposes the safe API error and always clears saving state", async () => {
+    const saving = vi.fn(), success = vi.fn(), failure = vi.fn();
+    await runAssessmentConfirmation({
+      assessmentId: 10,
+      payload: { assessor:"Leigh", assessment_date:"2026-08-11", reviewed_by:"Leigh", approval_date:"2026-08-11", next_review_date:"2027-08-11", status:"Current", notes:"", confirmation:true },
+      request: async () => { throw new Error("Assessment confirmation could not be saved"); },
+      setSaving: saving,
+      onSuccess: success,
+      onError: failure,
+    });
+    expect(failure).toHaveBeenCalledWith("Assessment confirmation could not be saved");
+    expect(success).not.toHaveBeenCalled();
+    expect(saving.mock.calls.map(([value]) => value)).toEqual([true, false]);
   });
 });

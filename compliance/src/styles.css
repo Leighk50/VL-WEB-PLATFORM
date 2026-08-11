@@ -685,8 +685,12 @@ th {
 .risk-dashboard article { background:#fff; border:1px solid #d9e1dc; border-radius:14px; padding:15px; display:flex; flex-direction:column }
 .risk-dashboard strong { font-size:1.8rem; color:#163c2b }
 .risk-filters { display:flex; gap:8px; overflow-x:auto; padding:2px 0 16px }
-.risk-filters button { white-space:nowrap }
+.risk-filters button { min-height:44px; white-space:nowrap }
 .risk-filters .active { background:#176b43; color:#fff }
+.filter-count { margin:-8px 0 16px }
+.risk-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid #d9e1dc }
+.risk-breadcrumb span { color:#52635a }
+.risk-breadcrumb small { background:#edf3ef; border-radius:999px; padding:4px 8px }
 .risk-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px }
 .risk-card,.hazard-card { background:#fff; border:1px solid #d9e1dc; border-radius:16px; padding:18px }
 .risk-card-head,.sectionhead { display:flex; justify-content:space-between; gap:12px; align-items:flex-start }
@@ -709,6 +713,10 @@ th {
 .action-form h5 { grid-column:1/-1; margin:0; font-size:1rem }
 .assessment-confirmation { border:2px solid #295d43; background:#f7faf8; border-radius:14px; margin-top:22px; padding:20px }
 .assessment-confirmation h3 { letter-spacing:.04em; color:#16442e; margin-top:0 }
+.save-feedback { min-height:24px }
+.save-feedback p { margin:0; font-weight:700 }
+.success { color:#176b43 }
+.assessment-confirmation button:disabled { cursor:wait; opacity:.72 }
 .evidence-section { border-top:1px solid #d9e1dc; border-bottom:1px solid #d9e1dc; padding:18px 0; margin:18px 0 }
 .checkbox { display:flex !important; flex-direction:row !important; align-items:center; gap:10px }
 .checkbox input { width:auto }
@@ -717,6 +725,8 @@ th {
   .risk-card-head,.assessment-detail .sectionhead { flex-direction:column }
   .assessment-detail .pageactions,.hazard-card .pageactions { width:100%; flex-direction:column }
   .assessment-detail .pageactions button,.hazard-card .pageactions button { width:100% }
+  .risk-breadcrumb { align-items:flex-start; flex-direction:column }
+  .risk-breadcrumb .link { min-height:44px; text-align:left }
 }
 @media print {
   aside,.topbar,.pageactions,.risk-filters,.risk-dashboard,button,.upload { display:none !important }

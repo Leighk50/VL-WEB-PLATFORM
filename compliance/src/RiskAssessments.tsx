@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, privateImageUrl, uploadPhoto } from "./api";
 import {
   approvalDateChanged,
@@ -8,7 +8,14 @@ import {
   initialConfirmationDates,
   localIsoDate,
   nextReviewDateChanged,
+  runAssessmentConfirmation,
 } from "./risk-confirmation";
+import {
+  assessmentFilters,
+  filterAssessments,
+  riskDetailPath,
+  riskListPath,
+} from "./risk-navigation";
 
 const statuses = ["Draft", "Requires Site Verification", "Current", "Review Due", "Action Required", "Archived"];
 const areas = ["Kitchen", "Restaurant", "Accommodation", "Bar/Cellar", "Events", "External", "General"];
@@ -16,31 +23,47 @@ const riskLabel = (score: number) => score >= 15 ? "Critical" : score >= 10 ? "H
 const assessmentStatus = (assessment:any) => assessment.site_verification_required && assessment.status === "Draft" ? "Requires Site Verification" : assessment.status;
 
 export function RiskAssessments({ boot, user }: { boot: any; user: { name:string } }) {
-  const navigate = useNavigate();
-  const [items, setItems] = useState<any[]>([]), [dashboard, setDashboard] = useState<any>(), [selected, setSelected] = useState<any>(), [filter, setFilter] = useState("All"), [editing, setEditing] = useState(false), [error, setError] = useState("");
+  const navigate = useNavigate(), { assessmentId } = useParams(), [searchParams, setSearchParams] = useSearchParams();
+  const filter = searchParams.get("category") || "All";
+  const [items, setItems] = useState<any[]>([]), [dashboard, setDashboard] = useState<any>(), [selected, setSelected] = useState<any>(), [editing, setEditing] = useState(false), [error, setError] = useState(""), [loadingDetail, setLoadingDetail] = useState(false);
   const load = async () => { setItems(await api("/risk-assessments")); setDashboard(await api("/risk-assessments/dashboard")); };
-  const open = async (id: number) => { setSelected(await api(`/risk-assessments/${id}`)); setEditing(false); };
   useEffect(() => { void load(); }, []);
-  const visible = useMemo(() => items.filter((item) => filter === "All" || item.area === filter || assessmentStatus(item) === filter), [items, filter]);
+  useEffect(() => {
+    if (!assessmentId) { setSelected(undefined); return; }
+    let active = true; setLoadingDetail(true); setError("");
+    void api(`/risk-assessments/${Number(assessmentId)}`).then(record => { if (active) { setSelected(record); setEditing(false); } }).catch(caught => { if (active) setError(caught instanceof Error ? caught.message : "Assessment could not be loaded"); }).finally(() => { if (active) setLoadingDetail(false); });
+    return () => { active = false; };
+  }, [assessmentId]);
+  const visible = useMemo(() => filterAssessments(items, filter), [items, filter]);
+  const open = (id: number) => navigate(riskDetailPath(id, filter));
+  const backToList = () => navigate(riskListPath(filter));
+  const refreshSavedVersion = async (id: number) => {
+    await load();
+    const current = await api(`/risk-assessments/${id}`);
+    setSelected(current);
+    navigate(riskDetailPath(id, filter), { replace: true });
+  };
   const saveAssessment = async (event: any) => {
     event.preventDefault(); const data: any = Object.fromEntries(new FormData(event.currentTarget)); data.venue_id = Number(data.venue_id); data.location_id = data.location_id ? Number(data.location_id) : null; data.site_verification_required = Number(data.site_verification_required || 0);
-    try { const saved = await api(selected?.id ? `/risk-assessments/${selected.id}` : "/risk-assessments", { method: selected?.id ? "PATCH" : "POST", body: JSON.stringify(data) }); await load(); await open(saved.id); setError(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Assessment could not be saved"); }
+    try { const saved:any = await api(selected?.id ? `/risk-assessments/${selected.id}` : "/risk-assessments", { method: selected?.id ? "PATCH" : "POST", body: JSON.stringify(data) }); await load(); navigate(riskDetailPath(saved.id, filter)); setError(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Assessment could not be saved"); }
   };
   return <>
-    <header className="pagehead"><div><p className="eyebrow">Compliance Hub</p><h1>Risk Assessments</h1><p>Editable, versioned working assessments. Templates require responsible-person verification.</p></div><button onClick={() => { setSelected(undefined); setEditing(true); }}>+ New assessment</button></header>
+    <header className="pagehead"><div><p className="eyebrow">Compliance Hub</p><h1>Risk Assessments</h1><p>Editable, versioned working assessments. Templates require responsible-person verification.</p></div><button onClick={() => { navigate(riskListPath(filter)); setSelected(undefined); setEditing(true); }}>+ New assessment</button></header>
     {dashboard && <section className="risk-dashboard" aria-label="Fire safety dashboard">
       {[['Current',dashboard.current],['Draft',dashboard.draft],['Review due',dashboard.reviewDue],['Overdue',dashboard.overdue],['Action required',dashboard.actionRequired],['Open fire actions',dashboard.openFireActions],['High-risk unresolved',dashboard.highRisk],['Site verification',dashboard.siteVerification]].map(([label,value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}
     </section>}
-    <div className="risk-filters" aria-label="Assessment filters">{["All", ...areas, ...statuses].map(value => <button className={filter === value ? "active" : "secondary"} onClick={() => setFilter(value)} key={value}>{value}</button>)}</div>
+    {!assessmentId && <><div className="risk-filters" aria-label="Assessment categories">{assessmentFilters.map(item => <button aria-pressed={filter === item.value} className={filter === item.value ? "active" : "secondary"} onClick={() => setSearchParams(item.value === "All" ? {} : { category:item.value })} key={item.value}>{item.label}</button>)}</div><p className="filter-count"><b>{visible.length}</b> matching assessment{visible.length === 1 ? "" : "s"}</p></>}
     {editing && <AssessmentForm assessment={selected} boot={boot} user={user} onSubmit={saveAssessment} onCancel={() => setEditing(false)} error={error} />}
-    {selected && !editing && <AssessmentDetail assessment={selected} user={user} onRefresh={() => open(selected.id)} onEdit={() => setEditing(true)} onClose={() => setSelected(undefined)} onVersion={(id: number) => open(id)} navigate={navigate} />}
-    {!selected && !editing && <section className="risk-cards">{visible.map(item => <article className="risk-card" key={item.id}>
+    {loadingDetail && <p>Loading assessment…</p>}
+    {assessmentId && error && !selected && <p className="error">{error}</p>}
+    {selected && !editing && <AssessmentDetail assessment={selected} user={user} filter={filter} onRefresh={async () => setSelected(await api(`/risk-assessments/${selected.id}`))} onSaved={refreshSavedVersion} onEdit={() => setEditing(true)} onClose={backToList} onVersion={(id: number) => navigate(riskDetailPath(id, filter))} navigate={navigate} />}
+    {!assessmentId && !selected && !editing && <section className="risk-cards">{visible.map(item => <article className="risk-card" key={item.id}>
       <div className="risk-card-head"><span className={`badge ${String(assessmentStatus(item)).toLowerCase().replaceAll(' ','-')}`}>{assessmentStatus(item)}</span><span className={`risk ${riskLabel(Number(item.high_risk_count ? 10 : 1)).toLowerCase()}`}>{item.overall_risk_rating}</span></div>
       <h2>{item.title || "Legacy risk assessment"}</h2><p>{item.category || "General"} · {item.area || item.location_name || "General"} · Version {item.version || 1}</p>
       <p><b>{item.hazard_count}</b> hazards · <b>{item.unresolved_count}</b> unresolved · <b>{item.document_count + item.photo_count}</b> evidence items</p>
       {item.site_verification_required ? <p className="verification">Requires site verification</p> : null}
-      <button onClick={() => void open(item.id)}>Open assessment</button>
-    </article>)}</section>}
+      <button onClick={() => open(item.id)}>Open assessment</button>
+    </article>)}{!visible.length && <div className="empty">No risk assessments match this category.</div>}</section>}
   </>;
 }
 
@@ -62,8 +85,8 @@ function AssessmentForm({ assessment, boot, user, onSubmit, onCancel, error }: a
   </form></section>;
 }
 
-function AssessmentDetail({ assessment, user, onRefresh, onEdit, onClose, onVersion, navigate }: any) {
-  const [addingHazard, setAddingHazard] = useState(false), [error, setError] = useState("");
+function AssessmentDetail({ assessment, user, filter, onRefresh, onSaved, onEdit, onClose, onVersion, navigate }: any) {
+  const [addingHazard, setAddingHazard] = useState(false), [error, setError] = useState(""), [success, setSuccess] = useState(""), [saving, setSaving] = useState(false);
   const [confirmationDates, setConfirmationDates] = useState(() =>
     initialConfirmationDates(localIsoDate()),
   );
@@ -71,8 +94,9 @@ function AssessmentDetail({ assessment, user, onRefresh, onEdit, onClose, onVers
     setConfirmationDates(initialConfirmationDates(localIsoDate()));
   }, [assessment.id]);
   const saveHazard = async (event: any) => { event.preventDefault(); const body:any = Object.fromEntries(new FormData(event.currentTarget)); for (const key of ["initial_likelihood","initial_severity","residual_likelihood","residual_severity"]) body[key] = Number(body[key]); try { await api(`/risk-assessments/${assessment.id}/hazards`, { method:"POST", body:JSON.stringify(body) }); setAddingHazard(false); await onRefresh(); } catch(e) { setError(e instanceof Error ? e.message : "Hazard could not be saved"); } };
-  const confirm = async (event:any) => { event.preventDefault(); const body = assessmentConfirmationPayload(event.currentTarget); try { const next:any = await api(`/risk-assessments/${assessment.id}/review`, {method:"POST", body:JSON.stringify(body)}); await onVersion(next.id); } catch(e) { setError(e instanceof Error ? e.message : "Assessment confirmation could not be saved"); } };
+  const confirm = async (event:any) => { event.preventDefault(); if (saving) return; setError(""); setSuccess(""); const body = assessmentConfirmationPayload(event.currentTarget); await runAssessmentConfirmation<any>({ assessmentId:assessment.id, payload:body, request:api, setSaving, onSuccess:async next => { await onSaved(next.id); setSuccess("Assessment saved successfully"); }, onError:setError }); };
   return <section className="assessment-detail panel">
+    <nav className="risk-breadcrumb" aria-label="Breadcrumb"><button className="link" onClick={onClose}>← Back to all risk assessments</button><span>Risk Assessments &gt; {assessment.title}</span>{filter !== "All" && <small>Return filter: {filter}</small>}</nav>
     <div className="sectionhead"><div><span className={`badge ${String(assessmentStatus(assessment)).toLowerCase().replaceAll(' ','-')}`}>{assessmentStatus(assessment)}</span><h2>{assessment.title}</h2><p>{assessment.category} · {assessment.area} · Version {assessment.version || 1}</p></div><div className="pageactions"><button className="secondary" onClick={() => window.print()}>Print / report</button>{assessment.status !== "Archived" && <button className="secondary" onClick={onEdit}>Amend controls</button>}<button className="secondary" onClick={onClose}>Close</button></div></div>
     {assessment.site_verification_required ? <p className="verification">Requires site verification — this working template is not a statement of compliance.</p> : null}
     <dl className="assessment-meta"><div><dt>Assessment date</dt><dd>{assessment.assessment_date}</dd></div><div><dt>Assessed by</dt><dd>{assessment.assessor || "Not assigned"}</dd></div><div><dt>Reviewed / approved by</dt><dd>{assessment.signed_by || "Not yet approved"}</dd></div><div><dt>Approval date</dt><dd>{assessment.signed_at ? String(assessment.signed_at).slice(0,10) : "Not set"}</dd></div><div><dt>Next review</dt><dd>{assessment.review_date || "Not set"}</dd></div><div><dt>Overall risk</dt><dd>{assessment.overall_risk_rating}</dd></div></dl>
@@ -82,7 +106,7 @@ function AssessmentDetail({ assessment, user, onRefresh, onEdit, onClose, onVers
     <section><h3>Linked actions / defects</h3>{assessment.actions.length ? assessment.actions.map((action:any) => <p key={action.id}><b>{action.priority}</b> · {action.description} · {action.status} {!["Complete","Closed"].includes(action.status) && <button className="link" onClick={async()=>{await api(`/actions/${action.id}`,{method:"PATCH",body:JSON.stringify({status:"Complete",closed_date:new Date().toISOString().slice(0,10)})});await onRefresh()}}>Complete action</button>}</p>) : <p>No linked actions.</p>}</section>
     <section className="evidence-section"><h3>Evidence / Documents</h3><div className="pageactions"><label className="upload">Take / add photograph<input type="file" accept="image/jpeg,image/png,image/heic,image/heif" capture="environment" onChange={async e => { if(e.target.files?.[0]) { await uploadPhoto("risk_assessment",assessment.id,e.target.files[0],false,"Risk assessment evidence"); await onRefresh(); } }} /></label><button className="secondary" onClick={() => navigate("/documents")}>Create evidence document</button></div><PhotoEvidence photos={assessment.photos || []} /><LinkDocument assessment={assessment} refresh={onRefresh} /><p>{assessment.documents.length ? `${assessment.documents.length} linked document(s)` : "No PDF/document evidence linked yet."}</p>{assessment.documents.map((doc:any) => <button className="report" key={doc.id} onClick={() => navigate(`/documents?document=${doc.id}`)}>{doc.title}<span>View authenticated evidence →</span></button>)}</section>
     {assessment.previous_version_id && <p><button className="link" onClick={() => onVersion(assessment.previous_version_id)}>View previous version</button></p>}
-    {assessment.status !== "Archived" && <section className="assessment-confirmation"><h3>ASSESSMENT CONFIRMATION</h3><p>Confirm the assessment once as a whole. Saving creates a new version and retains this version unchanged.</p><form className="gridform" onSubmit={confirm}><label>Assessed by<input name="assessor" defaultValue={assessment.assessor || user.name} required /></label><label>Assessment date<input name="assessment_date" type="date" value={confirmationDates.assessmentDate} onChange={event => setConfirmationDates(current => assessmentDateChanged(current, event.target.value))} required /></label><label>Reviewed / approved by<input name="reviewed_by" defaultValue={assessment.signed_by || user.name} required /></label><label>Review / approval date<input name="approval_date" type="date" value={confirmationDates.approvalDate} onChange={event => setConfirmationDates(current => approvalDateChanged(current, event.target.value))} required /></label><label>Next review date<input name="next_review_date" type="date" value={confirmationDates.nextReviewDate} onChange={event => setConfirmationDates(current => nextReviewDateChanged(current, event.target.value))} required /></label><label>Overall assessment status<select name="status" defaultValue={assessment.site_verification_required ? "Requires Site Verification" : assessment.status}>{statuses.filter(value => value !== "Archived").map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Overall notes<textarea name="notes" defaultValue={assessment.notes || ""} /></label><label className="wide checkbox"><input name="confirmation" type="checkbox" required /> I confirm this assessment version records the review undertaken and the decisions made.</label>{error && <p className="error">{error}</p>}<button>Confirm / Save assessment</button></form></section>}
+    {assessment.status !== "Archived" && <section className="assessment-confirmation"><h3>ASSESSMENT CONFIRMATION</h3><p>Confirm the assessment once as a whole. Saving creates a new version and retains this version unchanged.</p><form className="gridform" onSubmit={confirm}><label>Assessed by<input name="assessor" defaultValue={assessment.assessor || user.name} required /></label><label>Assessment date<input name="assessment_date" type="date" value={confirmationDates.assessmentDate} onChange={event => setConfirmationDates(current => assessmentDateChanged(current, event.target.value))} required /></label><label>Reviewed / approved by<input name="reviewed_by" defaultValue={assessment.signed_by || user.name} required /></label><label>Review / approval date<input name="approval_date" type="date" value={confirmationDates.approvalDate} onChange={event => setConfirmationDates(current => approvalDateChanged(current, event.target.value))} required /></label><label>Next review date<input name="next_review_date" type="date" value={confirmationDates.nextReviewDate} onChange={event => setConfirmationDates(current => nextReviewDateChanged(current, event.target.value))} required /></label><label>Overall assessment status<select name="status" defaultValue={assessment.site_verification_required ? "Requires Site Verification" : assessment.status}>{statuses.filter(value => value !== "Archived").map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Overall notes<textarea name="notes" defaultValue={assessment.notes || ""} /></label><label className="wide checkbox"><input name="confirmation" type="checkbox" required /> I confirm this assessment version records the review undertaken and the decisions made.</label><div className="save-feedback wide" aria-live="polite">{saving && <p>Saving assessment…</p>}{success && <p className="success">{success}</p>}{error && <p className="error">{error}</p>}</div><button type="submit" disabled={saving}>{saving ? "Saving assessment…" : "Confirm / Save assessment"}</button></form></section>}
   </section>;
 }
 

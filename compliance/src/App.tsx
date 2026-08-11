@@ -181,6 +181,10 @@ export default function App() {
             element={<RiskAssessments boot={boot} user={user} />}
           />
           <Route
+            path="/risk/:assessmentId"
+            element={<RiskAssessments boot={boot} user={user} />}
+          />
+          <Route
             path="/furnishings"
             element={
               <Register

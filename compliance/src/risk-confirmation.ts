@@ -81,3 +81,43 @@ export function nextReviewDateChanged(
 ): ConfirmationDates {
   return { ...state, nextReviewDate, nextReviewManuallySet: true };
 }
+
+export async function submitAssessmentConfirmation<T>(
+  assessmentId: number,
+  payload: ReturnType<typeof assessmentConfirmationPayload>,
+  request: (path: string, options: RequestInit) => Promise<unknown>,
+) {
+  return request(`/risk-assessments/${assessmentId}/review`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }) as Promise<T>;
+}
+
+export async function runAssessmentConfirmation<T>(options: {
+  assessmentId: number;
+  payload: ReturnType<typeof assessmentConfirmationPayload>;
+  request: (path: string, requestOptions: RequestInit) => Promise<unknown>;
+  setSaving: (saving: boolean) => void;
+  onSuccess: (result: T) => void | Promise<void>;
+  onError: (message: string) => void;
+}) {
+  options.setSaving(true);
+  try {
+    const result = await submitAssessmentConfirmation<T>(
+      options.assessmentId,
+      options.payload,
+      options.request,
+    );
+    await options.onSuccess(result);
+    return result;
+  } catch (error) {
+    options.onError(
+      error instanceof Error
+        ? error.message
+        : "Assessment confirmation could not be saved",
+    );
+    return undefined;
+  } finally {
+    options.setSaving(false);
+  }
+}
