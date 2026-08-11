@@ -36,7 +36,7 @@ Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm a
 npm run migrate
 ```
 
-The command obtains managed-identity credentials in Azure, creates `schema_migrations` if required, and applies only unapplied versions. It is safe to rerun. Production application startup does not create tables ad hoc: it checks the current migration version and fails with a migration-required message when the database is not ready.
+The command obtains managed-identity credentials in Azure, creates `schema_migrations` if required, and applies only unapplied versions. It is safe to rerun. Application startup runs the same deterministic migration runner before Express begins accepting traffic, allowing a completely empty staging database to bootstrap under the App Service managed identity. Azure SQL migrations run inside a serializable transaction guarded by `sp_getapplock`, so repeated or concurrent starts cannot apply the same migration twice. A migration failure is logged with its underlying error and terminates startup.
 
 ## Azure staging architecture
 
@@ -81,7 +81,7 @@ Managed identity handles authentication, not firewall routing. Before migration/
 - Preferred: integrate the App Service with a VNet, use an Azure SQL private endpoint and private DNS for `privatelink.database.windows.net`.
 - Staging alternative: enable Azure SQL public networking and add every App Service outbound IP to the SQL firewall (or temporarily allow Azure services only if that broader posture is explicitly accepted).
 
-Verify from the App Service/Kudu environment that port 1433 and DNS resolution reach the SQL server. After the first reviewed deployment and settings configuration, run `npm run migrate` once from the App Service SSH/Kudu console in `/home/site/wwwroot`; reruns are safe.
+Verify from the App Service/Kudu environment that port 1433 and DNS resolution reach the SQL server. The normal `npm start` command now migrates before starting the server, so SSH bootstrap is not required. `npm run migrate` remains available as an explicit, safe-to-rerun administrative command.
 
 ## GitHub Actions staging workflow
 
@@ -110,7 +110,7 @@ No publish profile or client secret should be created.
 
 1. Confirm App Settings, startup command, Node 22 stack and `/health` health check.
 2. Confirm SQL DNS/firewall/private connectivity from App Service.
-3. After the reviewed first deployment, run `npm run migrate` through App Service SSH/Kudu and restart.
+3. Confirm startup logs show the initial migration completing before the server begins listening; no SSH bootstrap command is required.
 4. Verify `/health` returns HTTP 200 and identifies `azure-sql`/`azure-blob` without sensitive data.
 5. Create non-demo administrator and venue-scoped test users through an approved bootstrap/admin process before disabling any temporary setup access.
 6. Test role/venue isolation, login throttling, asset barcode scanning, PAT history, extinguisher checks, photo upload/main-photo history and authenticated downloads on phones.

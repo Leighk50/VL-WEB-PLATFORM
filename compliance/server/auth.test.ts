@@ -7,7 +7,7 @@ process.env.SQLITE_PATH = `.data/test-${process.pid}.db`;
 process.env.DEMO_SEED = "true";
 process.env.LOGIN_RATE_LIMIT = "100";
 const { default: app } = await import("./index.js");
-const { db } = await import("./db.js");
+const { db, migrateDatabase } = await import("./db.js");
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 describe("venue security, current authorization and immutable history", () => {
@@ -19,6 +19,20 @@ describe("venue security, current authorization and immutable history", () => {
     asset2 = 0,
     extinguisher1 = 0;
   const tokens: Record<string, string> = {};
+
+  it("bootstraps an empty database before serving and safely reruns migrations", async () => {
+    const before = await db.all<{ version: number }>(
+      "SELECT version FROM schema_migrations",
+    );
+    expect(before.map((row) => row.version)).toEqual([1]);
+    await migrateDatabase();
+    await migrateDatabase();
+    const after = await db.all<{ version: number }>(
+      "SELECT version FROM schema_migrations",
+    );
+    expect(after.map((row) => row.version)).toEqual([1]);
+    expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
+  });
 
   beforeAll(async () => {
     venue1 = Number(

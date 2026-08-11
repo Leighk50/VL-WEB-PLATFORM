@@ -134,6 +134,45 @@ class AzureSqlAdapter implements DatabaseAdapter {
     const pool = await this.pool();
     await pool.request().batch(statement);
   }
+  async migrateVersioned() {
+    const transaction = new sql.Transaction(await this.pool());
+    await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+    try {
+      const lock = await new sql.Request(transaction).query(`
+        DECLARE @lockResult INT;
+        EXEC @lockResult = sp_getapplock
+          @Resource = 'vl-compliance-schema-migrations',
+          @LockMode = 'Exclusive',
+          @LockOwner = 'Transaction',
+          @LockTimeout = 60000;
+        SELECT @lockResult AS lockResult;`);
+      if (Number(lock.recordset?.[0]?.lockResult) < 0)
+        throw new Error("Could not acquire the Azure SQL migration lock");
+      await new sql.Request(transaction).batch(
+        "IF OBJECT_ID('schema_migrations','U') IS NULL CREATE TABLE schema_migrations(version INT PRIMARY KEY,name NVARCHAR(250) NOT NULL,applied_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())",
+      );
+      const appliedRows = await new sql.Request(transaction).query<{
+        version: number;
+      }>("SELECT version FROM schema_migrations");
+      const applied = new Set(
+        appliedRows.recordset.map((row) => Number(row.version)),
+      );
+      for (const migration of migrations) {
+        if (applied.has(migration.version)) continue;
+        await new sql.Request(transaction).batch(migration.azure);
+        const request = new sql.Request(transaction);
+        request.input("version", sql.Int, migration.version);
+        request.input("name", sql.NVarChar(250), migration.name);
+        await request.query(
+          "INSERT INTO schema_migrations(version,name) VALUES(@version,@name)",
+        );
+      }
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  }
 }
 
 export function createDatabase(): DatabaseAdapter {
@@ -144,41 +183,32 @@ export function createDatabase(): DatabaseAdapter {
 export const db = createDatabase();
 
 export async function migrateDatabase() {
-  const create =
-    db.provider === "sqlite"
-      ? "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT DEFAULT CURRENT_TIMESTAMP)"
-      : "IF OBJECT_ID('schema_migrations','U') IS NULL CREATE TABLE schema_migrations(version INT PRIMARY KEY,name NVARCHAR(250) NOT NULL,applied_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())";
-  await db.exec(create);
-  const applied = new Set(
-    (
-      await db.all<{ version: number }>("SELECT version FROM schema_migrations")
-    ).map((row) => Number(row.version)),
-  );
-  for (const migration of migrations) {
-    if (applied.has(migration.version)) continue;
-    await db.exec(
-      db.provider === "sqlite" ? migration.sqlite : migration.azure,
-    );
-    await db.run("INSERT INTO schema_migrations(version,name) VALUES(?,?)", [
-      migration.version,
-      migration.name,
-    ]);
-  }
-  if (db.provider === "sqlite" && demoSeedEnabled()) await seedDemo();
-}
-
-export async function assertDatabaseReady() {
-  const latest = migrations.at(-1)!.version;
+  if (db instanceof AzureSqlAdapter) return db.migrateVersioned();
+  await db.exec("BEGIN IMMEDIATE");
   try {
-    const row = await db.get<{ version: number }>(
-      "SELECT MAX(version) version FROM schema_migrations",
+    await db.exec(
+      "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT DEFAULT CURRENT_TIMESTAMP)",
     );
-    if (Number(row?.version || 0) < latest)
-      throw new Error("Database migrations are pending; run npm run migrate");
+    const applied = new Set(
+      (
+        await db.all<{ version: number }>(
+          "SELECT version FROM schema_migrations",
+        )
+      ).map((row) => Number(row.version)),
+    );
+    for (const migration of migrations) {
+      if (applied.has(migration.version)) continue;
+      await db.exec(migration.sqlite);
+      await db.run("INSERT INTO schema_migrations(version,name) VALUES(?,?)", [
+        migration.version,
+        migration.name,
+      ]);
+    }
+    if (demoSeedEnabled()) await seedDemo();
+    await db.exec("COMMIT");
   } catch (error) {
-    if (error instanceof Error && error.message.includes("pending"))
-      throw error;
-    throw new Error("Database is not initialised; run npm run migrate", { cause: error });
+    await db.exec("ROLLBACK").catch(() => undefined);
+    throw error;
   }
 }
 

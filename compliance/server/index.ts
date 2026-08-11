@@ -11,7 +11,7 @@ import helmet from "helmet";
 import multer from "multer";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { db, migrateDatabase, assertDatabaseReady, rows, audit } from "./db.js";
+import { db, migrateDatabase, rows, audit } from "./db.js";
 import { config } from "./config.js";
 import {
   authenticate,
@@ -30,8 +30,13 @@ import {
   resourceSchemas,
 } from "./validation.js";
 
-if (db.provider === "sqlite") await migrateDatabase();
-else await assertDatabaseReady();
+try {
+  await migrateDatabase();
+  console.log(`Compliance database migrations complete (${db.provider}).`);
+} catch (error) {
+  console.error("Compliance database migration failed during startup.", error);
+  throw error;
+}
 const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173" }));

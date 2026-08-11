@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "./config.js";
+import { demoSeedEnabled, loadConfig } from "./config.js";
 
 const production = {
   NODE_ENV: "production",
@@ -37,5 +37,8 @@ describe("production configuration", () => {
     expect(() =>
       loadConfig({ ...production, STORAGE_PROVIDER: "local" }),
     ).toThrow(/Azure Blob/);
+  });
+  it("never enables demo seeding in production", () => {
+    expect(demoSeedEnabled(loadConfig({ ...production, DEMO_SEED: "true" }))).toBe(false);
   });
 });
