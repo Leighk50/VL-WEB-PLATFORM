@@ -68,7 +68,7 @@ export async function bootstrapRiskLibrary(database: DatabaseAdapter) {
       if (marker) continue;
       let result;
       try {
-        result = await database.run("INSERT INTO risk_assessments(venue_id,title,category,area,assessment_date,status,overall_risk_rating,version,template_key,site_verification_required,notes) VALUES(?,?,?,?,?,'Draft','Requires site verification',1,?,1,?)", [venue.id, template.title, template.category, template.area, new Date().toISOString().slice(0, 10), template.key, "Working template for the responsible person to verify against actual site conditions. No control is confirmed merely because it appears here."]);
+        result = await database.run("INSERT INTO risk_assessments(venue_id,title,category,area,assessment_date,status,overall_risk_rating,version,template_key,site_verification_required,notes) VALUES(?,?,?,?,?,'Requires Site Verification','Requires site verification',1,?,1,?)", [venue.id, template.title, template.category, template.area, new Date().toISOString().slice(0, 10), template.key, "Working template for the responsible person to verify against actual site conditions. No control is confirmed merely because it appears here."]);
       } catch (error) {
         if (await database.get("SELECT id FROM risk_assessments WHERE venue_id=? AND template_key=?", [venue.id, template.key])) continue;
         throw error;

@@ -75,6 +75,7 @@ describe("administrator bootstrap", () => {
     }
     expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_assessments"))?.count)).toBe(37);
     expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_hazards"))?.count)).toBe(155);
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_assessments WHERE site_verification_required=1"))?.count)).toBe(37);
     expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM fire_alarm_call_points"))?.count)).toBe(5);
     await migrateDatabase();
     expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_assessments"))?.count)).toBe(37);

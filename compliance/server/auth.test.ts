@@ -536,20 +536,23 @@ describe("venue security, current authorization and immutable history", () => {
       hazard: "Hot oil", who_may_be_harmed: "Kitchen staff", how_harmed: "Burns",
       existing_controls: "Requires site verification", initial_likelihood: 4, initial_severity: 5,
       further_action: "Verify high-limit thermostat", residual_likelihood: 3, residual_severity: 5,
-      status: "Requires site verification", site_verification_required: 1,
     }).expect(201);
     expect(hazard.body.initial_score).toBe(20);
+    expect(hazard.body.responsible_person).toBeNull();
+    expect(hazard.body.target_date).toBeNull();
     const photo = await request(app).post(`/api/risk_assessment/${assessment.body.id}/photos`).set(auth(tokens.staff)).attach("file", Buffer.from("risk-photo"), { filename: "risk.jpg", contentType: "image/jpeg" }).field("is_main", "0").expect(201);
     await request(app).get(`/files/${photo.body.storage_key}`).expect(401);
     await request(app).get(`/files/${photo.body.storage_key}`).set(auth(tokens.staff)).expect(200).expect("Content-Type", /image\/jpeg/);
     const action = await request(app).post(`/api/risk-hazards/${hazard.body.id}/action`).set(auth(tokens.staff)).send({}).expect(201);
     expect(action.body.related_type).toBe("risk_assessment_hazard");
     const reviewed = await request(app).post(`/api/risk-assessments/${assessment.body.id}/review`).set(auth(tokens.staff)).send({
-      assessor: "Test assessor", responsible_person: "Responsible person", review_date: "2027-08-11",
-      status: "Action Required", confirm_controls: true, signoff_notes: "Site review completed",
+      assessor: "Test assessor", assessment_date: "2026-08-11", reviewed_by: "Responsible person",
+      approval_date: "2026-08-11", next_review_date: "2027-08-11",
+      status: "Action Required", confirmation: true, notes: "Site review completed",
     }).expect(201);
     expect(reviewed.body.previous_version_id).toBe(assessment.body.id);
     expect(reviewed.body.version).toBe(2);
+    expect(reviewed.body.signed_by).toBe("Responsible person");
     const detail = await request(app).get(`/api/risk-assessments/${reviewed.body.id}`).set(auth(tokens.staff)).expect(200);
     expect(detail.body.hazards).toHaveLength(1);
     await request(app).patch(`/api/risk-assessments/${assessment.body.id}`).set(auth(tokens.staff)).send({ notes: "silent overwrite" }).expect(409);

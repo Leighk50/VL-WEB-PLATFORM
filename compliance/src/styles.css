@@ -703,6 +703,12 @@ th {
 .hazard-list { display:grid; gap:14px; margin:14px 0 22px }
 .hazard-card h4 { margin-top:0 }
 .hazard-form { border:1px dashed #8ca296; padding:14px; border-radius:12px }
+.risk-summary { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 }
+.risk-summary span { background:#f1f5f2; border-radius:8px; padding:8px 10px }
+.action-form { margin-top:14px; border-top:1px solid #d9e1dc; padding-top:14px }
+.action-form h5 { grid-column:1/-1; margin:0; font-size:1rem }
+.assessment-confirmation { border:2px solid #295d43; background:#f7faf8; border-radius:14px; margin-top:22px; padding:20px }
+.assessment-confirmation h3 { letter-spacing:.04em; color:#16442e; margin-top:0 }
 .evidence-section { border-top:1px solid #d9e1dc; border-bottom:1px solid #d9e1dc; padding:18px 0; margin:18px 0 }
 .checkbox { display:flex !important; flex-direction:row !important; align-items:center; gap:10px }
 .checkbox input { width:auto }

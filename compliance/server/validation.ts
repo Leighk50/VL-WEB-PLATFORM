@@ -272,7 +272,7 @@ export const riskAssessmentSchema = z.object({
   assessor: optional(text),
   responsible_person: optional(text),
   review_date: optional(date),
-  status: z.enum(["Draft", "Current", "Review Due", "Action Required", "Archived"]),
+  status: z.enum(["Draft", "Requires Site Verification", "Current", "Review Due", "Action Required", "Archived"]),
   overall_risk_rating: z.enum(["Low", "Medium", "High", "Critical", "Requires site verification"]),
   notes: optional(longText),
   site_verification_required: booleanFlag.default(1),
@@ -290,16 +290,18 @@ export const riskHazardSchema = z.object({
   target_date: optional(date),
   residual_likelihood: z.coerce.number().int().min(1).max(5),
   residual_severity: z.coerce.number().int().min(1).max(5),
-  status: z.enum(["Open", "In Progress", "Complete", "Requires site verification"]),
+  status: z.enum(["Open", "In Progress", "Complete", "Requires site verification"]).default("Requires site verification"),
   completion_document_id: optional(id),
   site_verification_required: booleanFlag.default(1),
 }).strict();
 
 export const riskReviewSchema = z.object({
   assessor: text.min(1),
-  responsible_person: text.min(1),
-  review_date: date,
-  status: z.enum(["Current", "Action Required", "Review Due"]),
-  signoff_notes: optional(longText),
-  confirm_controls: z.literal(true),
+  assessment_date: date,
+  reviewed_by: text.min(1),
+  approval_date: date,
+  next_review_date: date,
+  status: z.enum(["Draft", "Requires Site Verification", "Current", "Review Due", "Action Required"]),
+  notes: optional(longText),
+  confirmation: z.literal(true),
 }).strict();

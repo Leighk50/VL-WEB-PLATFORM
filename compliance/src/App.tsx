@@ -178,7 +178,7 @@ export default function App() {
           />
           <Route
             path="/risk"
-            element={<RiskAssessments boot={boot} />}
+            element={<RiskAssessments boot={boot} user={user} />}
           />
           <Route
             path="/furnishings"
