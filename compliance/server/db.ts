@@ -5,7 +5,7 @@ import sql from "mssql";
 import { DefaultAzureCredential } from "@azure/identity";
 import bcrypt from "bcryptjs";
 import { config, demoSeedEnabled } from "./config.js";
-import { migrations } from "./migrations.js";
+import { executeAndMarkMigration, migrations } from "./migrations.js";
 
 export type RunResult = { lastInsertRowid: number; changes?: number };
 export interface DatabaseAdapter {
@@ -159,12 +159,16 @@ class AzureSqlAdapter implements DatabaseAdapter {
       );
       for (const migration of migrations) {
         if (applied.has(migration.version)) continue;
-        await new sql.Request(transaction).batch(migration.azure);
-        const request = new sql.Request(transaction);
-        request.input("version", sql.Int, migration.version);
-        request.input("name", sql.NVarChar(250), migration.name);
-        await request.query(
-          "INSERT INTO schema_migrations(version,name) VALUES(@version,@name)",
+        await executeAndMarkMigration(
+          migration,
+          "azure-sql",
+          (statement) => new sql.Request(transaction).batch(statement),
+          async () => {
+            const request = new sql.Request(transaction);
+            request.input("version", sql.Int, migration.version);
+            request.input("name", sql.NVarChar(250), migration.name);
+            await request.query("INSERT INTO schema_migrations(version,name) VALUES(@version,@name)");
+          },
         );
       }
       await transaction.commit();
@@ -199,11 +203,12 @@ export async function migrateDatabase() {
     );
     for (const migration of migrations) {
       if (applied.has(migration.version)) continue;
-      await db.exec(migration.sqlite);
-      await db.run("INSERT INTO schema_migrations(version,name) VALUES(?,?)", [
-        migration.version,
-        migration.name,
-      ]);
+      await executeAndMarkMigration(
+        migration,
+        "sqlite",
+        (statement) => db.exec(statement),
+        () => db.run("INSERT INTO schema_migrations(version,name) VALUES(?,?)", [migration.version, migration.name]),
+      );
     }
     if (demoSeedEnabled()) await seedDemo();
       await db.exec("COMMIT");

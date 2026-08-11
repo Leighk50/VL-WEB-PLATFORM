@@ -2,8 +2,31 @@ export type Migration = {
   version: number;
   name: string;
   sqlite: string;
-  azure: string;
+  azure: string | readonly string[];
 };
+
+export function sqlBatches(migration: Migration, provider: "sqlite" | "azure-sql") {
+  const sql = provider === "sqlite" ? migration.sqlite : migration.azure;
+  return Array.isArray(sql) ? [...sql] : [sql as string];
+}
+
+export async function executeMigrationBatches(
+  migration: Migration,
+  provider: "sqlite" | "azure-sql",
+  execute: (statement: string) => Promise<unknown>,
+) {
+  for (const statement of sqlBatches(migration, provider)) await execute(statement);
+}
+
+export async function executeAndMarkMigration(
+  migration: Migration,
+  provider: "sqlite" | "azure-sql",
+  execute: (statement: string) => Promise<unknown>,
+  markApplied: () => Promise<unknown>,
+) {
+  await executeMigrationBatches(migration, provider, execute);
+  await markApplied();
+}
 const sqlite = `
 CREATE TABLE IF NOT EXISTS venues(id INTEGER PRIMARY KEY,name TEXT NOT NULL,is_demo INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS locations(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER DEFAULT 1,UNIQUE(venue_id,name));
@@ -107,7 +130,7 @@ CREATE TABLE risk_assessment_history(id INTEGER PRIMARY KEY,assessment_id INTEGE
 CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
 CREATE TABLE risk_template_registry(venue_id INTEGER NOT NULL REFERENCES venues(id),template_key TEXT NOT NULL,assessment_id INTEGER REFERENCES risk_assessments(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(venue_id,template_key));
 CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
-    azure: `
+    azure: [`
 IF COL_LENGTH('risk_assessments','title') IS NULL ALTER TABLE risk_assessments ADD title NVARCHAR(500) NULL;
 IF COL_LENGTH('risk_assessments','category') IS NULL ALTER TABLE risk_assessments ADD category NVARCHAR(100) NULL;
 IF COL_LENGTH('risk_assessments','area') IS NULL ALTER TABLE risk_assessments ADD area NVARCHAR(100) NULL;
@@ -127,7 +150,8 @@ IF OBJECT_ID('risk_hazards','U') IS NULL CREATE TABLE risk_hazards(id BIGINT IDE
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_hazards_assessment') CREATE INDEX idx_risk_hazards_assessment ON risk_hazards(assessment_id);
 IF OBJECT_ID('risk_assessment_history','U') IS NULL CREATE TABLE risk_assessment_history(id BIGINT IDENTITY PRIMARY KEY,assessment_id BIGINT NOT NULL REFERENCES risk_assessments(id),version INT NOT NULL,snapshot_json NVARCHAR(MAX) NOT NULL,reason NVARCHAR(500) NOT NULL,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_history_assessment') CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
-IF OBJECT_ID('risk_template_registry','U') IS NULL CREATE TABLE risk_template_registry(venue_id BIGINT NOT NULL REFERENCES venues(id),template_key NVARCHAR(150) NOT NULL,assessment_id BIGINT NULL REFERENCES risk_assessments(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT pk_risk_template_registry PRIMARY KEY(venue_id,template_key));
-IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_risk_template_assessment') CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+IF OBJECT_ID('risk_template_registry','U') IS NULL CREATE TABLE risk_template_registry(venue_id BIGINT NOT NULL REFERENCES venues(id),template_key NVARCHAR(150) NOT NULL,assessment_id BIGINT NULL REFERENCES risk_assessments(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT pk_risk_template_registry PRIMARY KEY(venue_id,template_key));`,
+      `IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_risk_template_assessment' AND object_id=OBJECT_ID('risk_assessments')) CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+    ],
   },
 ];
