@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useSearchParams } from "react-router-dom";
 import {
   api,
+  createEvidenceObjectUrl,
   downloadPrivateAttachment,
-  openPrivateAttachment,
+  evidencePreviewKind,
+  fetchPrivateAttachment,
   privateAttachmentUrl,
   privateImageUrl,
   uploadDocumentEvidence,
@@ -846,6 +848,7 @@ function DocumentEvidence({
   onRenewed: (renewed: any) => void;
   onChanged: () => void;
 }) {
+  const thumbnailUrls = useRef<string[]>([]);
   const [attachments, setAttachments] = useState<any[]>([]),
     [urls, setUrls] = useState<Record<number, string>>({}),
     [links, setLinks] = useState<any[]>([]),
@@ -863,11 +866,16 @@ function DocumentEvidence({
         async (item) => [item.id, await privateAttachmentUrl(item.id)] as const,
       ),
     );
+    thumbnailUrls.current.forEach(URL.revokeObjectURL);
+    thumbnailUrls.current = pairs.map(([, url]) => url);
     setUrls(Object.fromEntries(pairs));
   };
   useEffect(() => {
     void load();
-    return () => Object.values(urls).forEach(URL.revokeObjectURL);
+    return () => {
+      thumbnailUrls.current.forEach(URL.revokeObjectURL);
+      thumbnailUrls.current = [];
+    };
   }, [document.id]);
   async function upload(files: FileList | null) {
     if (!files?.length) return;
@@ -993,7 +1001,7 @@ function DocumentEvidence({
                 type="button"
                 className="link"
                 onClick={async () => {
-                  await openPrivateAttachment(item.id);
+                  setPreview(item);
                 }}
               >
                 {urls[item.id] ? "Open full size" : "View / Open"}
@@ -1002,7 +1010,19 @@ function DocumentEvidence({
                 type="button"
                 className="link"
                 onClick={async () => {
-                  await downloadPrivateAttachment(item.id, item.original_name);
+                  try {
+                    await downloadPrivateAttachment(
+                      item.id,
+                      item.original_name,
+                    );
+                    setMessage("");
+                  } catch (error) {
+                    setMessage(
+                      error instanceof Error
+                        ? error.message
+                        : "Evidence download failed",
+                    );
+                  }
                 }}
               >
                 Download
@@ -1011,17 +1031,11 @@ function DocumentEvidence({
           </article>
         ))}
       </div>
-      {preview && urls[preview.id] && (
-        <div className="image-preview" role="dialog" aria-modal="true">
-          <button
-            className="preview-close"
-            onClick={() => setPreview(undefined)}
-          >
-            Close preview
-          </button>
-          <img src={urls[preview.id]} alt={preview.original_name} />
-          <strong>{preview.original_name}</strong>
-        </div>
+      {preview && (
+        <EvidenceViewer
+          attachment={preview}
+          onClose={() => setPreview(undefined)}
+        />
       )}
       <h3>Linked compliance registers</h3>
       <form
@@ -1068,6 +1082,106 @@ function DocumentEvidence({
         Evidence is append-only. Renewals and replacements retain earlier
         records and files.
       </small>
+    </div>
+  );
+}
+
+function EvidenceViewer({
+  attachment,
+  onClose,
+}: {
+  attachment: any;
+  onClose: () => void;
+}) {
+  const [state, setState] = useState<{
+    loading: boolean;
+    url?: string;
+    kind?: "pdf" | "image" | "unavailable";
+    error?: string;
+  }>({ loading: true });
+  const [downloadError, setDownloadError] = useState("");
+  useEffect(() => {
+    let active = true;
+    let release: (() => void) | undefined;
+    setState({ loading: true });
+    void fetchPrivateAttachment(attachment.id)
+      .then(({ blob, contentType }) => {
+        if (!active) return;
+        const objectUrl = createEvidenceObjectUrl(blob);
+        release = objectUrl.revoke;
+        setState({
+          loading: false,
+          url: objectUrl.url,
+          kind: evidencePreviewKind(contentType || attachment.mime_type),
+        });
+      })
+      .catch((error) => {
+        if (active)
+          setState({
+            loading: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Evidence could not be loaded",
+          });
+      });
+    return () => {
+      active = false;
+      release?.();
+    };
+  }, [attachment.id]);
+  async function download() {
+    try {
+      setDownloadError("");
+      await downloadPrivateAttachment(attachment.id, attachment.original_name);
+    } catch (error) {
+      setDownloadError(
+        error instanceof Error ? error.message : "Evidence download failed",
+      );
+    }
+  }
+  return (
+    <div className="evidence-viewer" role="dialog" aria-modal="true">
+      <section>
+        <header className="sectionhead">
+          <div>
+            <h2>{attachment.original_name}</h2>
+            <p>{attachment.mime_type}</p>
+          </div>
+          <button className="secondary" onClick={onClose}>
+            Close
+          </button>
+        </header>
+        <div className="viewer-body">
+          {state.loading && <p className="viewer-message">Loading evidence…</p>}
+          {state.error && <p className="error">{state.error}</p>}
+          {state.url && state.kind === "pdf" && (
+            <iframe src={state.url} title={attachment.original_name} />
+          )}
+          {state.url && state.kind === "image" && (
+            <img
+              src={state.url}
+              alt={attachment.original_name}
+              onError={() =>
+                setState((current) => ({ ...current, kind: "unavailable" }))
+              }
+            />
+          )}
+          {state.kind === "unavailable" && (
+            <div className="viewer-message">
+              <b>{attachment.original_name}</b>
+              <p>Preview unavailable for this file type</p>
+            </div>
+          )}
+        </div>
+        <footer className="evidence-actions">
+          <button onClick={() => void download()}>Download</button>
+          <button className="secondary" onClick={onClose}>
+            Close
+          </button>
+          {downloadError && <p className="error">{downloadError}</p>}
+        </footer>
+      </section>
     </div>
   );
 }

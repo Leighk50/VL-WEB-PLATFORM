@@ -84,18 +84,18 @@ export async function fetchPrivateAttachment(attachmentId: number) {
   };
 }
 
-export async function openPrivateAttachment(attachmentId: number) {
-  const popup = window.open("about:blank", "_blank");
-  try {
-    const { blob } = await fetchPrivateAttachment(attachmentId);
-    const url = URL.createObjectURL(blob);
-    if (popup) popup.location.href = url;
-    else window.location.assign(url);
-    window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
-  } catch (error) {
-    popup?.close();
-    throw error;
-  }
+export type EvidencePreviewKind = "pdf" | "image" | "unavailable";
+
+export function evidencePreviewKind(contentType: string): EvidencePreviewKind {
+  const normalized = contentType.toLowerCase().split(";")[0].trim();
+  if (normalized === "application/pdf") return "pdf";
+  if (normalized.startsWith("image/")) return "image";
+  return "unavailable";
+}
+
+export function createEvidenceObjectUrl(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  return { url, revoke: () => URL.revokeObjectURL(url) };
 }
 
 export async function downloadPrivateAttachment(
@@ -107,6 +107,12 @@ export async function downloadPrivateAttachment(
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename || fallbackName;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
 }

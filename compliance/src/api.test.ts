@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchPrivateAttachment } from "./api";
+import {
+  createEvidenceObjectUrl,
+  downloadPrivateAttachment,
+  evidencePreviewKind,
+  fetchPrivateAttachment,
+} from "./api";
 
 describe("authenticated attachment retrieval", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -40,5 +45,67 @@ describe("authenticated attachment retrieval", () => {
     await expect(fetchPrivateAttachment(42)).rejects.toThrow(
       "Evidence file could not be loaded",
     );
+  });
+
+  it("classifies PDF, image and unavailable viewer states", () => {
+    expect(evidencePreviewKind("application/pdf")).toBe("pdf");
+    expect(evidencePreviewKind("image/jpeg")).toBe("image");
+    expect(evidencePreviewKind("image/heic")).toBe("image");
+    expect(evidencePreviewKind("application/octet-stream")).toBe("unavailable");
+  });
+
+  it("keeps an object URL until the viewer cleanup callback runs", () => {
+    const createObjectURL = vi.fn().mockReturnValue("blob:viewer-file");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    const resource = createEvidenceObjectUrl(new Blob(["content"]));
+    expect(resource.url).toBe("blob:viewer-file");
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    resource.revoke();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:viewer-file");
+  });
+
+  it("downloads through an attached temporary anchor and preserves the filename", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "download-token" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(new Blob(["image"], { type: "image/png" }), {
+          status: 200,
+          headers: {
+            "Content-Type": "image/png",
+            "Content-Disposition": 'inline; filename="original.png"',
+          },
+        }),
+      ),
+    );
+    const anchor = {
+      href: "",
+      download: "",
+      style: { display: "" },
+      click: vi.fn(),
+      remove: vi.fn(),
+    };
+    const appendChild = vi.fn();
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("document", {
+      createElement: vi.fn().mockReturnValue(anchor),
+      body: { appendChild },
+    });
+    vi.stubGlobal("window", {
+      setTimeout: (callback: () => void) => callback(),
+    });
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn().mockReturnValue("blob:download"),
+      revokeObjectURL,
+    });
+
+    await downloadPrivateAttachment(7, "fallback.png");
+
+    expect(appendChild).toHaveBeenCalledWith(anchor);
+    expect(anchor.download).toBe("original.png");
+    expect(anchor.click).toHaveBeenCalledOnce();
+    expect(anchor.remove).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:download");
   });
 });
