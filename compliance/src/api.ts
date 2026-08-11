@@ -3,6 +3,18 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly issues?: unknown,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function api<T = any>(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
@@ -13,7 +25,13 @@ export async function api<T = any>(path: string, options: RequestInit = {}) {
     headers,
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || "Request failed");
+  if (!response.ok)
+    throw new ApiError(
+      body.error || "Request failed",
+      response.status,
+      body.code,
+      body.issues,
+    );
   return body as T;
 }
 

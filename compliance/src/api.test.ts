@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  api,
+  ApiError,
   createEvidenceObjectUrl,
   downloadPrivateAttachment,
   evidencePreviewKind,
@@ -52,6 +54,18 @@ describe("authenticated attachment retrieval", () => {
     expect(evidencePreviewKind("image/jpeg")).toBe("image");
     expect(evidencePreviewKind("image/heic")).toBe("image");
     expect(evidencePreviewKind("application/octet-stream")).toBe("unavailable");
+  });
+
+  it("preserves safe validation/server error metadata", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "token" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "Invalid assessment confirmation",
+      code: "VALIDATION_FAILED",
+      issues: { fieldErrors: { assessment_date: ["Invalid"] } },
+    }), { status: 400, headers: { "Content-Type": "application/json" } })));
+    const caught = await api("/risk-assessments/1/review", { method: "POST", body: "{}" }).catch(error => error);
+    expect(caught).toBeInstanceOf(ApiError);
+    expect(caught).toMatchObject({ status: 400, code: "VALIDATION_FAILED" });
   });
 
   it("keeps an object URL until the viewer cleanup callback runs", () => {

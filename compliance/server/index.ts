@@ -792,6 +792,17 @@ async function riskSnapshot(assessment: any, reason: string, userId: number) {
   const hazards = await rows("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY id", assessment.id);
   await db.run("INSERT INTO risk_assessment_history(assessment_id,version,snapshot_json,reason,created_by) VALUES(?,?,?,?,?)", [assessment.id, assessment.version || 1, JSON.stringify({ assessment, hazards }), reason, userId]);
 }
+function sanitizedRiskConfirmationError(error: unknown) {
+  const value = error as { name?: string; code?: string; number?: number; message?: string };
+  return {
+    name: value?.name || "Error",
+    code: value?.code || value?.number || "unknown",
+    message: String(value?.message || "Unknown database error")
+      .replace(/https?:\/\/\S+/gi, "[url]")
+      .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+      .slice(0, 500),
+  };
+}
 
 app.get("/api/risk-assessments", async (req: AuthedRequest, res) => {
   const scope = isAdmin(req) ? { sql: "", params: [] } : { sql: " WHERE r.venue_id=?", params: [req.user!.venueId] };
@@ -808,7 +819,15 @@ app.get("/api/risk-assessments/dashboard", async (req: AuthedRequest, res) => {
 });
 app.get("/api/risk-assessments/:id", async (req: AuthedRequest, res) => {
   const assessment = await riskAssessmentFor(req, res, Number(req.params.id)); if (!assessment) return;
-  res.json({ ...assessment, hazards: await rows("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY residual_score DESC,id", assessment.id), history: await rows("SELECT id,assessment_id,version,reason,created_at,created_by FROM risk_assessment_history WHERE assessment_id=? ORDER BY id DESC", assessment.id), documents: await rows("SELECT d.* FROM documents d JOIN document_links l ON l.document_id=d.id WHERE l.entity_type='risk_assessment' AND l.entity_id=? ORDER BY d.created_at DESC", assessment.id), photos: await rows("SELECT * FROM photos WHERE entity_type='risk_assessment' AND entity_id=? ORDER BY created_at DESC", assessment.id), actions: await rows("SELECT * FROM actions WHERE (related_type='risk_assessment' AND related_id=?) OR (related_type='risk_assessment_hazard' AND related_id IN (SELECT id FROM risk_hazards WHERE assessment_id=?)) ORDER BY id DESC", assessment.id, assessment.id) });
+  const lineage = [Number(assessment.id)];
+  let previousId = assessment.previous_version_id ? Number(assessment.previous_version_id) : 0;
+  while (previousId && lineage.length < 100 && !lineage.includes(previousId)) {
+    lineage.push(previousId);
+    const previous = await db.get<{ previous_version_id?: number }>("SELECT previous_version_id FROM risk_assessments WHERE id=? AND venue_id=?", [previousId, assessment.venue_id]);
+    previousId = previous?.previous_version_id ? Number(previous.previous_version_id) : 0;
+  }
+  const slots = lineage.map(() => "?").join(",");
+  res.json({ ...assessment, hazards: await rows("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY residual_score DESC,id", assessment.id), history: await rows(`SELECT id,assessment_id,version,reason,created_at,created_by FROM risk_assessment_history WHERE assessment_id IN (${slots}) ORDER BY id DESC`, ...lineage), documents: await rows(`SELECT d.* FROM documents d JOIN document_links l ON l.document_id=d.id WHERE l.entity_type='risk_assessment' AND l.entity_id IN (${slots}) ORDER BY d.created_at DESC`, ...lineage), photos: await rows(`SELECT * FROM photos WHERE entity_type='risk_assessment' AND entity_id IN (${slots}) ORDER BY created_at DESC`, ...lineage), actions: await rows(`SELECT * FROM actions WHERE (related_type='risk_assessment' AND related_id IN (${slots})) OR (related_type='risk_assessment_hazard' AND related_id IN (SELECT id FROM risk_hazards WHERE assessment_id IN (${slots}))) ORDER BY id DESC`, ...lineage, ...lineage) });
 });
 app.post("/api/risk-assessments", canWrite, async (req: AuthedRequest, res) => {
   const parsed = riskAssessmentSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid risk assessment", issues: parsed.error.flatten() });
@@ -848,10 +867,15 @@ app.post("/api/risk-hazards/:id/action", canWrite, async (req: AuthedRequest, re
   const body = { description: parsed.data.description || hazard.further_action || `Risk assessment action: ${hazard.hazard}`, venue_id: hazard.venue_id, location_id: hazard.location_id, related_type: "risk_assessment_hazard", related_id: hazard.id, priority: hazard.residual_score >= 15 ? "Critical" : hazard.residual_score >= 10 ? "High" : "Medium", responsible_person: parsed.data.responsible_person || null, due_date: parsed.data.due_date || null, status: "Open" }; const result = await db.run("INSERT INTO actions(description,venue_id,location_id,related_type,related_id,priority,responsible_person,due_date,status,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)", [...Object.values(body), req.user!.id]); const after = await db.get("SELECT * FROM actions WHERE id=?", [result.lastInsertRowid]); await audit("actions", Number(result.lastInsertRowid), "create_from_risk", null, after, req.user!.id, req.ip); res.status(201).json(after);
 });
 app.post("/api/risk-assessments/:id/review", canWrite, async (req: AuthedRequest, res) => {
-  const old = await riskAssessmentFor(req, res, Number(req.params.id)); if (!old) return; if (old.status === "Archived") return res.status(409).json({ error: "This version is already archived" }); const parsed = riskReviewSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid assessment confirmation", issues: parsed.error.flatten() });
-  await riskSnapshot(old, "Version closed for review", req.user!.id); const cols = ["venue_id","title","category","area","location_id","assessment_date","assessor","responsible_person","review_date","status","overall_risk_rating","notes","site_verification_required","version","previous_version_id","template_key","signed_by","signed_at","signoff_notes"];
-  const next: any = { ...old, assessor: parsed.data.assessor, assessment_date: parsed.data.assessment_date, signed_by: parsed.data.reviewed_by, signed_at: `${parsed.data.approval_date}T00:00:00.000Z`, review_date: parsed.data.next_review_date, status: parsed.data.status, notes: parsed.data.notes ?? old.notes, signoff_notes: parsed.data.notes ?? null, version: Number(old.version || 1)+1, previous_version_id: old.id, site_verification_required: parsed.data.status === "Requires Site Verification" ? 1 : 0 };
-  const result = await db.run(`INSERT INTO risk_assessments(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`, [...cols.map((c) => next[c] ?? null), req.user!.id]); const newId = Number(result.lastInsertRowid); const hazards = await rows<any>("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY id", old.id); for (const hazard of hazards) { const hcols = ["hazard","who_may_be_harmed","how_harmed","existing_controls","initial_likelihood","initial_severity","initial_score","further_action","responsible_person","target_date","residual_likelihood","residual_severity","residual_score","status","completion_document_id","site_verification_required"]; await db.run(`INSERT INTO risk_hazards(assessment_id,${hcols.join(",")},created_by) VALUES(?,${hcols.map(() => "?").join(",")},?)`, [newId, ...hcols.map((c) => hazard[c] ?? null), req.user!.id]); } await db.run("UPDATE risk_assessments SET status='Archived',archived_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?", [req.user!.id, old.id]); const created = await db.get("SELECT * FROM risk_assessments WHERE id=?", [newId]); await audit("risk_assessments", newId, "review_new_version", old, created, req.user!.id, req.ip); res.status(201).json(created);
+  const old = await riskAssessmentFor(req, res, Number(req.params.id)); if (!old) return; if (old.status === "Archived") return res.status(409).json({ error: "This version is already archived" }); const parsed = riskReviewSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid assessment confirmation", code: "VALIDATION_FAILED", issues: parsed.error.flatten() });
+  try {
+    await riskSnapshot(old, "Version closed for review", req.user!.id); const cols = ["venue_id","title","category","area","location_id","assessment_date","assessor","responsible_person","review_date","status","overall_risk_rating","notes","site_verification_required","version","previous_version_id","template_key","signed_by","signed_at","signoff_notes"];
+    const next: any = { ...old, assessor: parsed.data.assessor, assessment_date: parsed.data.assessment_date, signed_by: parsed.data.reviewed_by, signed_at: `${parsed.data.approval_date}T00:00:00`, review_date: parsed.data.next_review_date, status: parsed.data.status, notes: parsed.data.notes ?? old.notes, signoff_notes: parsed.data.notes ?? null, version: Number(old.version || 1)+1, previous_version_id: old.id, template_key: null, site_verification_required: parsed.data.status === "Requires Site Verification" ? 1 : 0 };
+    const result = await db.run(`INSERT INTO risk_assessments(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`, [...cols.map((c) => next[c] ?? null), req.user!.id]); const newId = Number(result.lastInsertRowid); const hazards = await rows<any>("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY id", old.id); for (const hazard of hazards) { const hcols = ["hazard","who_may_be_harmed","how_harmed","existing_controls","initial_likelihood","initial_severity","initial_score","further_action","responsible_person","target_date","residual_likelihood","residual_severity","residual_score","status","completion_document_id","site_verification_required"]; await db.run(`INSERT INTO risk_hazards(assessment_id,${hcols.join(",")},created_by) VALUES(?,${hcols.map(() => "?").join(",")},?)`, [newId, ...hcols.map((c) => hazard[c] ?? null), req.user!.id]); } await db.run("UPDATE risk_assessments SET status='Archived',archived_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?", [req.user!.id, old.id]); const created = await db.get("SELECT * FROM risk_assessments WHERE id=?", [newId]); await audit("risk_assessments", newId, "review_new_version", old, created, req.user!.id, req.ip); res.status(201).json(created);
+  } catch (error) {
+    console.error("Risk assessment confirmation failed", { assessmentId: old.id, userId: req.user!.id, provider: db.provider, ...sanitizedRiskConfirmationError(error) });
+    res.status(500).json({ error: "Assessment confirmation could not be saved", code: "ASSESSMENT_CONFIRMATION_FAILED" });
+  }
 });
 
 for (const [route, cfg] of Object.entries(resources)) {

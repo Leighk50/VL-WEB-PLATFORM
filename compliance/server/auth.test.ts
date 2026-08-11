@@ -525,9 +525,11 @@ describe("venue security, current authorization and immutable history", () => {
   it("versions risk assessments, links actions and protects historical versions", async () => {
     const assessment = await request(app).post("/api/risk-assessments").set(auth(tokens.staff)).send({
       venue_id: venue1, title: "Test kitchen risk", category: "Fire Safety", area: "Kitchen",
-      location_id: location1, assessment_date: "2026-08-11", status: "Draft",
+      location_id: location1, assessment_date: "2026-06-01", status: "Requires Site Verification",
       overall_risk_rating: "Requires site verification", site_verification_required: 1,
     }).expect(201);
+    await db.run("UPDATE risk_assessments SET template_key=? WHERE id=?", ["test-confirm-template", assessment.body.id]);
+    await db.run("INSERT INTO risk_template_registry(venue_id,template_key,assessment_id) VALUES(?,?,?)", [venue1, "test-confirm-template", assessment.body.id]);
     await request(app).post("/api/risk-assessments").set(auth(tokens.staff)).send({
       venue_id: venue2, title: "Denied", category: "General", area: "General",
       assessment_date: "2026-08-11", status: "Draft", overall_risk_rating: "Low", site_verification_required: 1,
@@ -546,15 +548,38 @@ describe("venue security, current authorization and immutable history", () => {
     const action = await request(app).post(`/api/risk-hazards/${hazard.body.id}/action`).set(auth(tokens.staff)).send({}).expect(201);
     expect(action.body.related_type).toBe("risk_assessment_hazard");
     const reviewed = await request(app).post(`/api/risk-assessments/${assessment.body.id}/review`).set(auth(tokens.staff)).send({
-      assessor: "Test assessor", assessment_date: "2026-08-11", reviewed_by: "Responsible person",
-      approval_date: "2026-08-11", next_review_date: "2027-08-11",
-      status: "Action Required", confirmation: true, notes: "Site review completed",
+      assessor: "Leigh", assessment_date: "2026-06-01", reviewed_by: "Leigh",
+      approval_date: "2026-08-11", next_review_date: "2027-06-01",
+      status: "Current", confirmation: true, notes: "Site review completed",
     }).expect(201);
     expect(reviewed.body.previous_version_id).toBe(assessment.body.id);
     expect(reviewed.body.version).toBe(2);
-    expect(reviewed.body.signed_by).toBe("Responsible person");
+    expect(reviewed.body.signed_by).toBe("Leigh");
+    expect(reviewed.body.assessment_date).toBe("2026-06-01");
+    expect(reviewed.body.review_date).toBe("2027-06-01");
+    expect(reviewed.body.status).toBe("Current");
+    expect(reviewed.body.template_key).toBeNull();
     const detail = await request(app).get(`/api/risk-assessments/${reviewed.body.id}`).set(auth(tokens.staff)).expect(200);
     expect(detail.body.hazards).toHaveLength(1);
+    expect(detail.body.photos).toHaveLength(1);
+    expect(detail.body.actions).toHaveLength(1);
+    expect(Number((await db.get<any>("SELECT count(*) n FROM risk_assessments WHERE venue_id=? AND template_key=?", [venue1, "test-confirm-template"]))!.n)).toBe(1);
+    expect(Number((await db.get<any>("SELECT count(*) n FROM photos WHERE entity_type='risk_assessment' AND entity_id=?", [assessment.body.id]))!.n)).toBe(1);
+    expect(Number((await db.get<any>("SELECT count(*) n FROM actions WHERE related_type='risk_assessment_hazard' AND related_id=?", [hazard.body.id]))!.n)).toBe(1);
+    const secondReview = await request(app).post(`/api/risk-assessments/${reviewed.body.id}/review`).set(auth(tokens.staff)).send({
+      assessor: "Leigh", assessment_date: "2027-06-01", reviewed_by: "Leigh",
+      approval_date: "2027-06-01", next_review_date: "2028-06-01",
+      status: "Current", confirmation: true, notes: "Second whole-assessment review",
+    }).expect(201);
+    expect(secondReview.body.version).toBe(3);
+    expect(secondReview.body.previous_version_id).toBe(reviewed.body.id);
+    expect(secondReview.body.template_key).toBeNull();
+    const secondDetail = await request(app).get(`/api/risk-assessments/${secondReview.body.id}`).set(auth(tokens.staff)).expect(200);
+    expect(secondDetail.body.hazards).toHaveLength(1);
+    expect(secondDetail.body.photos).toHaveLength(1);
+    expect(secondDetail.body.actions).toHaveLength(1);
+    expect(await db.get("SELECT assessment_date,review_date,status FROM risk_assessments WHERE id=?", [assessment.body.id])).toMatchObject({ assessment_date: "2026-06-01", review_date: null, status: "Archived" });
+    expect(await db.get("SELECT assessment_date,review_date,status FROM risk_assessments WHERE id=?", [reviewed.body.id])).toMatchObject({ assessment_date: "2026-06-01", review_date: "2027-06-01", status: "Archived" });
     await request(app).patch(`/api/risk-assessments/${assessment.body.id}`).set(auth(tokens.staff)).send({ notes: "silent overwrite" }).expect(409);
     const history = await db.all("SELECT * FROM risk_assessment_history WHERE assessment_id=?", [assessment.body.id]);
     expect(history.length).toBeGreaterThan(0);
