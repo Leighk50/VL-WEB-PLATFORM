@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
-import { api, privateImageUrl, uploadPhoto } from "./api";
+import {
+  api,
+  privateAttachmentUrl,
+  privateImageUrl,
+  uploadDocumentEvidence,
+  uploadPhoto,
+} from "./api";
 type User = { name: string; role: string };
-type Boot = { venues: any[]; locations: any[] };
+type Boot = {
+  venues: any[];
+  locations: any[];
+  documentTypes: any[];
+  demoMode: boolean;
+};
 const nav = [
   ["/", "Dashboard"],
   ["/assets", "Assets"],
@@ -18,8 +29,8 @@ const nav = [
   ["/settings", "Settings"],
 ];
 function Login({ done }: { done: (u: User) => void }) {
-  const [email, setEmail] = useState("admin@demo.local"),
-    [password, setPassword] = useState("ChangeMe!123"),
+  const [email, setEmail] = useState(""),
+    [password, setPassword] = useState(""),
     [error, setError] = useState("");
   async function submit(e: any) {
     e.preventDefault();
@@ -61,10 +72,7 @@ function Login({ done }: { done: (u: User) => void }) {
           {error && <p className="error">{error}</p>}
           <button>Sign in securely</button>
         </form>
-        <small>
-          Demo account only — change this password before any shared
-          environment.
-        </small>
+        <small>Authorized Village Limits users only.</small>
       </section>
     </main>
   );
@@ -124,9 +132,7 @@ export default function App() {
           <button className="menu" onClick={() => setMenu(!menu)}>
             ☰
           </button>
-          <span>
-            Village Limits <b>• DEMO DATA</b>
-          </span>
+          <span>Village Limits {boot?.demoMode && <b>• DEMO DATA</b>}</span>
         </div>
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -148,14 +154,7 @@ export default function App() {
           />
           <Route
             path="/alarm"
-            element={
-              <Register
-                kind="fire-alarm-tests"
-                title="Weekly Fire Alarm Tests"
-                boot={boot}
-                fields={alarmFields}
-              />
-            }
+            element={<FireAlarm boot={boot} user={user} />}
           />
           <Route
             path="/risk"
@@ -203,7 +202,10 @@ export default function App() {
           />
           <Route path="/locations" element={<Locations boot={boot} />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route
+            path="/settings"
+            element={<Settings boot={boot} user={user} />}
+          />
         </Routes>
       </main>
     </div>
@@ -220,6 +222,7 @@ function Dashboard() {
     ["PAT due soon", d.patDueSoon, "amber"],
     ["Open actions", d.openActions, d.openActions ? "amber" : "green"],
     ["Expired certificates", d.expiredDocuments, "red"],
+    ["Certificates due soon", d.documentsDueSoon, "amber"],
     ["PAT required", d.patRequired, "green"],
     ["Extinguishers", d.extinguishers, "green"],
     ["Furnishing evidence", d.furnishingEvidence, "amber"],
@@ -296,7 +299,9 @@ function Register({
           body: JSON.stringify(body),
         },
       );
-      setEditing(["assets", "furnishings"].includes(kind) ? saved : null);
+      setEditing(
+        ["assets", "furnishings", "documents"].includes(kind) ? saved : null,
+      );
       setError("");
       load();
     } catch (e: any) {
@@ -370,6 +375,9 @@ function Register({
           {editing.id && ["assets", "furnishings"].includes(kind) && (
             <PhotoManager entityType={kind} entityId={editing.id} />
           )}
+          {editing.id && kind === "documents" && (
+            <DocumentEvidence document={editing} onRenewed={load} />
+          )}
         </section>
       )}
       <section className="panel tablewrap">
@@ -420,6 +428,8 @@ function FieldInput({
   let opts = f.options;
   if (f.key === "venue_id") opts = boot?.venues.map((v) => String(v.id));
   if (f.key === "location_id") opts = boot?.locations.map((l) => String(l.id));
+  if (f.key === "type" && boot?.documentTypes?.length)
+    opts = boot.documentTypes.map((item) => item.name);
   return (
     <label>
       {f.label}
@@ -549,6 +559,470 @@ function BarcodeScanner({
         <button>Find asset</button>
       </form>
     </section>
+  );
+}
+
+function DocumentEvidence({
+  document,
+  onRenewed,
+}: {
+  document: any;
+  onRenewed: () => void;
+}) {
+  const [attachments, setAttachments] = useState<any[]>([]),
+    [urls, setUrls] = useState<Record<number, string>>({}),
+    [links, setLinks] = useState<any[]>([]),
+    [message, setMessage] = useState("");
+  const load = async () => {
+    const list = await api<any[]>(`/documents/${document.id}/attachments`);
+    setAttachments(list);
+    setLinks(await api<any[]>(`/documents/${document.id}/links`));
+    const imageFiles = list.filter((item) =>
+      item.mime_type.startsWith("image/"),
+    );
+    const pairs = await Promise.all(
+      imageFiles.map(
+        async (item) => [item.id, await privateAttachmentUrl(item.id)] as const,
+      ),
+    );
+    setUrls(Object.fromEntries(pairs));
+  };
+  useEffect(() => {
+    void load();
+    return () => Object.values(urls).forEach(URL.revokeObjectURL);
+  }, [document.id]);
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    try {
+      await uploadDocumentEvidence(document.id, Array.from(files));
+      setMessage("Evidence uploaded securely.");
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed");
+    }
+  }
+  async function renew() {
+    const body = {
+      venue_id: document.venue_id,
+      location_id: document.location_id || null,
+      type: document.type,
+      title: document.title,
+      reference: document.reference || null,
+      issue_date: document.issue_date || null,
+      review_date: document.review_date || null,
+      issuer: document.issuer || null,
+      notes: document.notes || null,
+      version: Number(document.version || 1) + 1,
+      previous_version_id: document.id,
+    };
+    await api("/documents", { method: "POST", body: JSON.stringify(body) });
+    setMessage(
+      "Renewal created as a new record; previous evidence was retained.",
+    );
+    onRenewed();
+  }
+  return (
+    <div className="photos">
+      <div className="sectionhead">
+        <h3>Private evidence files</h3>
+        <button type="button" className="secondary" onClick={renew}>
+          Renew as new version
+        </button>
+      </div>
+      <div className="photoactions">
+        <label className="upload">
+          Upload evidence files
+          <input
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+            onChange={(event) => void upload(event.target.files)}
+          />
+        </label>
+        <label className="upload secondary">
+          Take evidence photo
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => void upload(event.target.files)}
+          />
+        </label>
+      </div>
+      {message && <p>{message}</p>}
+      <div className="evidencegrid">
+        {attachments.map((item) => (
+          <article key={item.id}>
+            {urls[item.id] && (
+              <img src={urls[item.id]} alt={item.original_name} />
+            )}
+            <strong>{item.original_name}</strong>
+            <small>
+              {item.mime_type} · {(Number(item.file_size) / 1024).toFixed(1)} KB
+              · {new Date(item.created_at).toLocaleString()} ·{" "}
+              {item.uploaded_by || "Unknown user"}
+            </small>
+            <button
+              type="button"
+              className="link"
+              onClick={async () => {
+                const url = await privateAttachmentUrl(item.id);
+                window.open(url, "_blank", "noopener,noreferrer");
+                window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              }}
+            >
+              {item.mime_type === "application/pdf"
+                ? "Open PDF"
+                : "Open / download"}
+            </button>
+          </article>
+        ))}
+      </div>
+      <h3>Linked compliance registers</h3>
+      <form
+        className="inlineform"
+        onSubmit={async (event: any) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const values = Object.fromEntries(new FormData(form));
+          await api(`/documents/${document.id}/links`, {
+            method: "POST",
+            body: JSON.stringify({
+              entity_type: values.entity_type,
+              entity_id: Number(values.entity_id),
+            }),
+          });
+          form.reset();
+          await load();
+        }}
+      >
+        <label>
+          Register
+          <select name="entity_type" required>
+            <option value="pat_test">PAT Testing</option>
+            <option value="extinguisher">Fire Extinguishers</option>
+            <option value="fire_alarm_test">Fire Alarm</option>
+            <option value="risk_assessment">Fire Risk Assessment</option>
+            <option value="furnishing">Soft Furnishings</option>
+          </select>
+        </label>
+        <label>
+          Record ID
+          <input name="entity_id" type="number" min="1" required />
+        </label>
+        <button>Link record</button>
+      </form>
+      <div className="list">
+        {links.map((link) => (
+          <span key={link.id}>
+            {String(link.entity_type).replaceAll("_", " ")} #{link.entity_id}
+          </span>
+        ))}
+      </div>
+      <small>
+        Evidence is append-only. Renewals and replacements retain earlier
+        records and files.
+      </small>
+    </div>
+  );
+}
+
+function FireAlarm({ boot, user }: { boot: Boot | null; user: User }) {
+  const [points, setPoints] = useState<any[]>([]),
+    [tests, setTests] = useState<any[]>([]),
+    [rotation, setRotation] = useState<any>(),
+    [editingPoint, setEditingPoint] = useState<any>(),
+    [error, setError] = useState("");
+  const venueId = boot?.venues[0]?.id;
+  const load = async () => {
+    const [pointRows, testRows] = await Promise.all([
+      api<any[]>("/fire-alarm-call-points"),
+      api<any[]>("/fire-alarm-tests"),
+    ]);
+    setPoints(pointRows);
+    setTests(testRows);
+    if (venueId)
+      setRotation(await api(`/fire-alarm-rotation?venue_id=${venueId}`));
+  };
+  useEffect(() => {
+    void load();
+  }, [venueId]);
+  async function savePoint(event: any) {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(event.currentTarget));
+    await api(
+      `/fire-alarm-call-points${editingPoint?.id ? `/${editingPoint.id}` : ""}`,
+      {
+        method: editingPoint?.id ? "PATCH" : "POST",
+        body: JSON.stringify({
+          ...body,
+          venue_id: Number(body.venue_id),
+          location_id: Number(body.location_id),
+          active: Number(body.active),
+        }),
+      },
+    );
+    setEditingPoint(undefined);
+    await load();
+  }
+  async function saveTest(event: any) {
+    event.preventDefault();
+    const form = event.currentTarget,
+      data = new FormData(form),
+      photo = data.get("photo") as File;
+    const raiseAction = data.get("raise_action") === "on";
+    data.delete("photo");
+    data.delete("raise_action");
+    const body: any = Object.fromEntries(data);
+    body.venue_id = Number(body.venue_id);
+    body.call_point_id = Number(body.call_point_id);
+    for (const key of [
+      "alarm_operated",
+      "sounders_activated",
+      "panel_indication_correct",
+      "reset_successful",
+    ])
+      body[key] = Number(body[key]);
+    try {
+      const test = await api<any>("/fire-alarm-tests", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (photo?.size)
+        await uploadPhoto("fire-alarm-tests", test.id, photo, false);
+      if (body.result === "Fail" && raiseAction) {
+        const point = points.find((item) => item.id === body.call_point_id);
+        await api("/actions", {
+          method: "POST",
+          body: JSON.stringify({
+            description: `Failed weekly fire alarm test at ${point?.code || "call point"}: ${body.faults || "investigation required"}`,
+            venue_id: body.venue_id,
+            location_id: point?.location_id,
+            related_type: "fire_alarm_test",
+            related_id: test.id,
+            priority: "High",
+            status: "Open",
+          }),
+        });
+      }
+      form.reset();
+      setError("");
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Test could not be saved",
+      );
+    }
+  }
+  const flag = (name: string, label: string, optional = false) => (
+    <label>
+      {label}
+      <select name={name} required={!optional}>
+        <option value="1">Yes / correct</option>
+        <option value="0">No / defect</option>
+        {optional && <option value="">Not applicable</option>}
+      </select>
+    </label>
+  );
+  return (
+    <Page
+      title="Fire Alarm"
+      subtitle="Call-point register, immutable weekly tests and rotation"
+    >
+      {rotation && (
+        <section className="panel">
+          <h2>Call-point rotation</h2>
+          <p>
+            Suggested next:{" "}
+            <b>
+              {rotation.nextCallPoint
+                ? `${rotation.nextCallPoint.code} — ${rotation.nextCallPoint.description}`
+                : "Add an active call point"}
+            </b>
+          </p>
+          <p>
+            Warning after {rotation.warningDays} days (configurable in
+            Settings).
+          </p>
+        </section>
+      )}
+      <section className="panel">
+        <h2>Weekly fire alarm test</h2>
+        <form className="gridform" onSubmit={saveTest}>
+          <input type="hidden" name="venue_id" value={venueId || ""} />
+          <label>
+            Date / time
+            <input name="test_datetime" type="datetime-local" required />
+          </label>
+          <label>
+            Call point
+            <select name="call_point_id" required>
+              <option value="">Select active call point…</option>
+              {points
+                .filter((point) => point.active)
+                .map((point) => (
+                  <option key={point.id} value={point.id}>
+                    {point.code} — {point.description} — {point.location_name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Result
+            <select name="result">
+              <option>Pass</option>
+              <option>Fail</option>
+            </select>
+          </label>
+          {flag("alarm_operated", "Alarm operated correctly")}
+          {flag("sounders_activated", "Sounders activated", true)}
+          {flag("panel_indication_correct", "Panel indication correct", true)}
+          {flag("reset_successful", "Reset successful")}
+          <label className="wide">
+            Faults / comments
+            <textarea name="faults" />
+          </label>
+          <label>
+            Evidence photo
+            <input
+              name="photo"
+              type="file"
+              accept="image/*"
+              capture="environment"
+            />
+          </label>
+          <label className="check">
+            <input name="raise_action" type="checkbox" /> Raise an Action/Defect
+            if this test fails
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button>Save immutable test</button>
+        </form>
+      </section>
+      <section className="panel tablewrap">
+        <h2>Call points</h2>
+        {user.role === "administrator" && (
+          <button
+            onClick={() => setEditingPoint({ venue_id: venueId, active: 1 })}
+          >
+            + Add call point
+          </button>
+        )}
+        {editingPoint && (
+          <>
+            <form className="gridform" onSubmit={savePoint}>
+              <input
+                type="hidden"
+                name="venue_id"
+                value={editingPoint.venue_id}
+              />
+              <label>
+                Code
+                <input name="code" defaultValue={editingPoint.code} required />
+              </label>
+              <label>
+                Description
+                <input
+                  name="description"
+                  defaultValue={editingPoint.description}
+                  required
+                />
+              </label>
+              <label>
+                Location
+                <select
+                  name="location_id"
+                  defaultValue={editingPoint.location_id || ""}
+                  required
+                >
+                  <option value="">Select…</option>
+                  {boot?.locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Panel zone
+                <input
+                  name="panel_zone"
+                  defaultValue={editingPoint.panel_zone}
+                />
+              </label>
+              <label>
+                Status
+                <select name="active" defaultValue={editingPoint.active ?? 1}>
+                  <option value="1">Active</option>
+                  <option value="0">Inactive</option>
+                </select>
+              </label>
+              <label>
+                Notes
+                <textarea name="notes" defaultValue={editingPoint.notes} />
+              </label>
+              <button>Save call point</button>
+            </form>
+            {editingPoint.id && (
+              <PhotoManager
+                entityType="fire-alarm-call-points"
+                entityId={editingPoint.id}
+              />
+            )}
+          </>
+        )}
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Description</th>
+              <th>Location</th>
+              <th>Last tested</th>
+              <th>Tests</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.id}>
+                <td>{point.code}</td>
+                <td>{point.description}</td>
+                <td>{point.location_name}</td>
+                <td>
+                  {point.last_tested_at
+                    ? new Date(point.last_tested_at).toLocaleString()
+                    : "Never"}
+                </td>
+                <td>{point.test_count}</td>
+                <td>{point.active ? "Active" : "Inactive"}</td>
+                <td>
+                  {user.role === "administrator" && (
+                    <button
+                      className="link"
+                      onClick={() => setEditingPoint(point)}
+                    >
+                      Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <section className="panel">
+        <h2>Weekly test history</h2>
+        {tests.map((test) => (
+          <p key={test.id}>
+            <b className={test.result === "Fail" ? "bad" : ""}>{test.result}</b>{" "}
+            · {new Date(test.test_datetime).toLocaleString()} ·{" "}
+            {points.find((point) => point.id === test.call_point_id)?.code ||
+              "Legacy call point"}
+          </p>
+        ))}
+      </section>
+    </Page>
   );
 }
 
@@ -908,19 +1382,150 @@ function Reports() {
     </Page>
   );
 }
-function Settings() {
+function Settings({ boot, user }: { boot: Boot | null; user: User }) {
+  const venueId = boot?.venues[0]?.id;
+  const [data, setData] = useState<any>();
+  const load = () =>
+    venueId && api(`/settings/master-data?venue_id=${venueId}`).then(setData);
+  useEffect(() => {
+    if (user.role === "administrator") void load();
+  }, [venueId, user.role]);
+  if (user.role !== "administrator")
+    return (
+      <Page title="Settings" subtitle="Administrator access required">
+        <section className="panel">
+          Master data is restricted to administrators.
+        </section>
+      </Page>
+    );
   return (
-    <Page title="Settings" subtitle="Security and service configuration">
+    <Page
+      title="Settings"
+      subtitle="Venue master data and operational configuration"
+    >
       <section className="panel">
-        <h2>Environment-backed configuration</h2>
+        <h2>Fire-alarm rotation</h2>
+        <form
+          onSubmit={async (event: any) => {
+            event.preventDefault();
+            const value = Number(new FormData(event.currentTarget).get("days"));
+            await api(`/settings/venues/${venueId}`, {
+              method: "PUT",
+              body: JSON.stringify({ call_point_warning_days: value }),
+            });
+            await load();
+          }}
+        >
+          <label>
+            Warn when an active call point has not been tested for this many
+            days
+            <input
+              name="days"
+              type="number"
+              min="1"
+              max="365"
+              defaultValue={data?.settings.call_point_warning_days || 28}
+            />
+          </label>
+          <button>Save interval</button>
+        </form>
+      </section>
+      <section className="panel">
+        <h2>Document types</h2>
+        <form
+          className="inlineform"
+          onSubmit={async (event: any) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            await api("/document-types", {
+              method: "POST",
+              body: JSON.stringify({
+                venue_id: venueId,
+                name: new FormData(form).get("name"),
+                active: 1,
+              }),
+            });
+            form.reset();
+            await load();
+          }}
+        >
+          <label>
+            New document type
+            <input name="name" required />
+          </label>
+          <button>Add</button>
+        </form>
+        <div className="list">
+          {data?.documentTypes.map((item: any) => (
+            <span key={item.id}>
+              {item.name}{" "}
+              <button
+                className="link"
+                onClick={async () => {
+                  await api(`/document-types/${item.id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ active: item.active ? 0 : 1 }),
+                  });
+                  await load();
+                }}
+              >
+                {item.active ? "Deactivate" : "Activate"}
+              </button>
+            </span>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Locations</h2>
+        <form
+          className="inlineform"
+          onSubmit={async (event: any) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            await api("/locations", {
+              method: "POST",
+              body: JSON.stringify({
+                venue_id: venueId,
+                name: new FormData(form).get("name"),
+                active: 1,
+              }),
+            });
+            form.reset();
+            await load();
+          }}
+        >
+          <label>
+            New location
+            <input name="name" required />
+          </label>
+          <button>Add</button>
+        </form>
+        <div className="list">
+          {data?.locations.map((location: any) => (
+            <span key={location.id}>
+              {location.name}{" "}
+              <button
+                className="link"
+                onClick={async () => {
+                  await api(`/locations/${location.id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ active: location.active ? 0 : 1 }),
+                  });
+                  await load();
+                }}
+              >
+                {location.active ? "Deactivate" : "Activate"}
+              </button>
+            </span>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Security configuration</h2>
         <p>
-          Database, object storage, JWT signing and CORS are configured outside
-          source control. User and role administration is restricted to
-          administrators.
-        </p>
-        <p>
-          <b>Roles:</b> Administrator · Venue Manager · Staff · Contractor /
-          Tester · Read-only Auditor
+          Database, private object storage, JWT signing and CORS remain
+          environment-backed. Roles and venue authorization are enforced on
+          every request.
         </p>
       </section>
     </Page>
@@ -999,18 +1604,6 @@ const extFields: Field[] = [
   { key: "next_service_date", label: "Next service", type: "date" },
   { key: "notes", label: "Notes", type: "textarea" },
 ];
-const alarmFields: Field[] = [
-  { key: "test_datetime", label: "Date / time", type: "datetime-local" },
-  { key: "call_point", label: "Call point" },
-  { key: "zone", label: "Zone" },
-  { key: "result", label: "Result", options: ["Pass", "Fail"] },
-  { key: "venue_id", label: "Venue" },
-  { key: "sounder_result", label: "Sounder result" },
-  { key: "equipment_result", label: "Connected equipment" },
-  { key: "completed_by", label: "Completed by" },
-  { key: "faults", label: "Faults", type: "textarea" },
-  { key: "notes", label: "Notes", type: "textarea" },
-];
 const riskFields: Field[] = [
   { key: "assessment_date", label: "Assessment date", type: "date" },
   { key: "assessor", label: "Assessor" },
@@ -1059,22 +1652,10 @@ const furnFields: Field[] = [
 ];
 const docFields: Field[] = [
   { key: "title", label: "Title" },
-  {
-    key: "type",
-    label: "Type",
-    options: [
-      "Fire alarm service certificate",
-      "Fire extinguisher certificate",
-      "Emergency lighting certificate",
-      "Fire risk assessment",
-      "Fire-retardant treatment certificate",
-      "Fire door report",
-      "PAT certificate",
-      "Other",
-    ],
-  },
+  { key: "type", label: "Document type" },
   { key: "reference", label: "Reference" },
   { key: "venue_id", label: "Venue" },
+  { key: "location_id", label: "Location" },
   { key: "issue_date", label: "Issue date", type: "date" },
   { key: "review_date", label: "Expiry / review", type: "date" },
   { key: "issuer", label: "Contractor / issuer" },

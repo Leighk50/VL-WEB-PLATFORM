@@ -46,4 +46,40 @@ IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_audit_entity') CREATE IN
 
 export const migrations: Migration[] = [
   { version: 1, name: "initial_compliance_schema", sqlite, azure },
+  {
+    version: 2,
+    name: "document_evidence_and_fire_alarm_call_points",
+    sqlite: `
+ALTER TABLE documents ADD COLUMN location_id INTEGER REFERENCES locations(id);
+ALTER TABLE documents ADD COLUMN updated_at TEXT;
+ALTER TABLE documents ADD COLUMN updated_by INTEGER;
+CREATE TABLE document_attachments(id INTEGER PRIMARY KEY,document_id INTEGER NOT NULL REFERENCES documents(id),storage_key TEXT NOT NULL,original_name TEXT NOT NULL,mime_type TEXT NOT NULL,file_size INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER NOT NULL REFERENCES users(id));
+CREATE INDEX idx_document_attachments_document ON document_attachments(document_id);
+CREATE TABLE fire_alarm_call_points(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),code TEXT NOT NULL,description TEXT NOT NULL,location_id INTEGER NOT NULL REFERENCES locations(id),panel_zone TEXT,active INTEGER NOT NULL DEFAULT 1,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,code));
+CREATE INDEX idx_call_points_venue_active ON fire_alarm_call_points(venue_id,active);
+ALTER TABLE fire_alarm_tests ADD COLUMN call_point_id INTEGER REFERENCES fire_alarm_call_points(id);
+ALTER TABLE fire_alarm_tests ADD COLUMN alarm_operated INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN sounders_activated INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN panel_indication_correct INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN reset_successful INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN action_id INTEGER REFERENCES actions(id);
+CREATE TABLE document_types(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,name));
+CREATE TABLE venue_settings(venue_id INTEGER PRIMARY KEY REFERENCES venues(id),call_point_warning_days INTEGER NOT NULL DEFAULT 28,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);`,
+    azure: `
+IF COL_LENGTH('documents','location_id') IS NULL ALTER TABLE documents ADD location_id BIGINT NULL REFERENCES locations(id);
+IF COL_LENGTH('documents','updated_at') IS NULL ALTER TABLE documents ADD updated_at DATETIME2 NULL DEFAULT SYSUTCDATETIME();
+IF COL_LENGTH('documents','updated_by') IS NULL ALTER TABLE documents ADD updated_by BIGINT NULL;
+IF OBJECT_ID('document_attachments','U') IS NULL CREATE TABLE document_attachments(id BIGINT IDENTITY PRIMARY KEY,document_id BIGINT NOT NULL REFERENCES documents(id),storage_key NVARCHAR(1000) NOT NULL,original_name NVARCHAR(500) NOT NULL,mime_type NVARCHAR(150) NOT NULL,file_size BIGINT NOT NULL,created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),created_by BIGINT NOT NULL REFERENCES users(id));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_document_attachments_document') CREATE INDEX idx_document_attachments_document ON document_attachments(document_id);
+IF OBJECT_ID('fire_alarm_call_points','U') IS NULL CREATE TABLE fire_alarm_call_points(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),code NVARCHAR(100) NOT NULL,description NVARCHAR(500) NOT NULL,location_id BIGINT NOT NULL REFERENCES locations(id),panel_zone NVARCHAR(250),active BIT NOT NULL DEFAULT 1,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_call_points_venue_code UNIQUE(venue_id,code));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_call_points_venue_active') CREATE INDEX idx_call_points_venue_active ON fire_alarm_call_points(venue_id,active);
+IF COL_LENGTH('fire_alarm_tests','call_point_id') IS NULL ALTER TABLE fire_alarm_tests ADD call_point_id BIGINT NULL REFERENCES fire_alarm_call_points(id);
+IF COL_LENGTH('fire_alarm_tests','alarm_operated') IS NULL ALTER TABLE fire_alarm_tests ADD alarm_operated BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','sounders_activated') IS NULL ALTER TABLE fire_alarm_tests ADD sounders_activated BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','panel_indication_correct') IS NULL ALTER TABLE fire_alarm_tests ADD panel_indication_correct BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','reset_successful') IS NULL ALTER TABLE fire_alarm_tests ADD reset_successful BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','action_id') IS NULL ALTER TABLE fire_alarm_tests ADD action_id BIGINT NULL REFERENCES actions(id);
+IF OBJECT_ID('document_types','U') IS NULL CREATE TABLE document_types(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(250) NOT NULL,active BIT NOT NULL DEFAULT 1,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_document_types_venue_name UNIQUE(venue_id,name));
+IF OBJECT_ID('venue_settings','U') IS NULL CREATE TABLE venue_settings(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),call_point_warning_days INT NOT NULL DEFAULT 28,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);`,
+  },
 ];

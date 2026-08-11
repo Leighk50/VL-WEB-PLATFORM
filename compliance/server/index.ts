@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import express, {
   type NextFunction,
   type Request,
@@ -12,7 +12,7 @@ import multer from "multer";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db, migrateDatabase, rows, audit } from "./db.js";
-import { config } from "./config.js";
+import { config, demoDataMode } from "./config.js";
 import {
   authenticate,
   allow,
@@ -23,11 +23,14 @@ import {
 } from "./auth.js";
 import { storage } from "./storage.js";
 import {
+  callPointSchema,
   documentLinkSchema,
+  documentTypeSchema,
   extinguisherCheckSchema,
   patSchema,
   photoMetadataSchema,
   resourceSchemas,
+  venueSettingsSchema,
 } from "./validation.js";
 
 try {
@@ -193,6 +196,7 @@ const entityTables: Record<string, { table: string; via?: string }> = {
   furnishing: { table: "furnishings" },
   risk_assessment: { table: "risk_assessments" },
   fire_alarm_test: { table: "fire_alarm_tests" },
+  fire_alarm_call_point: { table: "fire_alarm_call_points" },
   pat_test: { table: "pat_tests", via: "assets" },
   extinguisher_check: { table: "extinguisher_checks", via: "extinguishers" },
 };
@@ -269,6 +273,10 @@ app.get("/api/bootstrap", async (req: AuthedRequest, res) => {
       locations: await rows(
         "SELECT * FROM locations WHERE active=1 ORDER BY name",
       ),
+      documentTypes: await rows(
+        "SELECT * FROM document_types WHERE active=1 ORDER BY name",
+      ),
+      demoMode: demoDataMode(),
     });
   res.json({
     venues: await rows("SELECT * FROM venues WHERE id=?", req.user!.venueId),
@@ -276,6 +284,11 @@ app.get("/api/bootstrap", async (req: AuthedRequest, res) => {
       "SELECT * FROM locations WHERE active=1 AND venue_id=? ORDER BY name",
       req.user!.venueId,
     ),
+    documentTypes: await rows(
+      "SELECT * FROM document_types WHERE active=1 AND venue_id=? ORDER BY name",
+      req.user!.venueId,
+    ),
+    demoMode: demoDataMode(),
   });
 });
 
@@ -319,6 +332,12 @@ app.get("/api/dashboard", async (req: AuthedRequest, res) => {
       `SELECT count(*) n FROM documents${where}${where ? " AND" : " WHERE"} review_date<?`,
       ...v,
       today,
+    ),
+    documentsDueSoon: await one(
+      `SELECT count(*) n FROM documents${where}${where ? " AND" : " WHERE"} review_date BETWEEN ? AND ?`,
+      ...v,
+      today,
+      soon,
     ),
     furnishingEvidence: await one(
       `SELECT count(*) n FROM furnishings${where}${where ? " AND" : " WHERE"} fire_status IN ('Evidence required','Requires assessment')`,
@@ -400,6 +419,19 @@ async function validateReferences(
     ))
   )
     return false;
+  if (route === "fire-alarm-tests") {
+    const point = await db.get<{ venueId: number; active: number }>(
+      "SELECT venue_id venueId,active FROM fire_alarm_call_points WHERE id=?",
+      [body.call_point_id],
+    );
+    if (!point || point.venueId !== venueId || !point.active) {
+      res.status(400).json({
+        error:
+          "Call point is invalid, inactive or outside the authorised venue",
+      });
+      return false;
+    }
+  }
   for (const key of [
     "document_id",
     "completion_document_id",
@@ -413,6 +445,340 @@ async function validateReferences(
   }
   return true;
 }
+
+app.get("/api/fire-alarm-call-points", async (req: AuthedRequest, res) => {
+  const scope = isAdmin(req)
+    ? { sql: "", values: [] }
+    : { sql: " WHERE c.venue_id=?", values: [req.user!.venueId] };
+  res.json(
+    await rows(
+      `SELECT c.*,l.name location_name,v.name venue_name,(SELECT max(t.test_datetime) FROM fire_alarm_tests t WHERE t.call_point_id=c.id) last_tested_at,(SELECT count(*) FROM fire_alarm_tests t WHERE t.call_point_id=c.id) test_count FROM fire_alarm_call_points c JOIN locations l ON l.id=c.location_id JOIN venues v ON v.id=c.venue_id${scope.sql} ORDER BY c.active DESC,c.code`,
+      ...scope.values,
+    ),
+  );
+});
+app.post(
+  "/api/fire-alarm-call-points",
+  canAdmin,
+  async (req: AuthedRequest, res) => {
+    const parsed = callPointSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ error: "Invalid call point", issues: parsed.error.flatten() });
+    if (
+      !(await assertVenue(req, res, parsed.data.venue_id)) ||
+      !(await assertLocation(
+        res,
+        parsed.data.venue_id,
+        parsed.data.location_id,
+      ))
+    )
+      return;
+    try {
+      const values = parsed.data;
+      const result = await db.run(
+        "INSERT INTO fire_alarm_call_points(venue_id,code,description,location_id,panel_zone,active,notes,created_by) VALUES(?,?,?,?,?,?,?,?)",
+        [
+          values.venue_id,
+          values.code,
+          values.description,
+          values.location_id,
+          values.panel_zone ?? null,
+          values.active,
+          values.notes ?? null,
+          req.user!.id,
+        ],
+      );
+      const after = await db.get(
+        "SELECT * FROM fire_alarm_call_points WHERE id=?",
+        [result.lastInsertRowid],
+      );
+      await audit(
+        "fire_alarm_call_points",
+        result.lastInsertRowid,
+        "create",
+        null,
+        after,
+        req.user!.id,
+        req.ip,
+      );
+      res.status(201).json(after);
+    } catch {
+      res.status(400).json({ error: "Call point could not be saved" });
+    }
+  },
+);
+app.patch(
+  "/api/fire-alarm-call-points/:id",
+  canAdmin,
+  async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id),
+      before = await db.get<any>(
+        "SELECT * FROM fire_alarm_call_points WHERE id=?",
+        [id],
+      );
+    if (!before) return res.status(404).json({ error: "Call point not found" });
+    const parsed = callPointSchema.partial().safeParse(req.body);
+    if (!parsed.success || !Object.keys(parsed.data).length)
+      return res.status(400).json({ error: "Invalid call point" });
+    const afterValues = { ...before, ...parsed.data };
+    if (
+      !(await assertVenue(req, res, Number(afterValues.venue_id))) ||
+      !(await assertLocation(
+        res,
+        Number(afterValues.venue_id),
+        Number(afterValues.location_id),
+      ))
+    )
+      return;
+    const cols = Object.keys(parsed.data);
+    try {
+      await db.run(
+        `UPDATE fire_alarm_call_points SET ${cols.map((key) => `${key}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`,
+        [...Object.values(parsed.data), req.user!.id, id],
+      );
+      const after = await db.get(
+        "SELECT * FROM fire_alarm_call_points WHERE id=?",
+        [id],
+      );
+      await audit(
+        "fire_alarm_call_points",
+        id,
+        "update",
+        before,
+        after,
+        req.user!.id,
+        req.ip,
+      );
+      res.json(after);
+    } catch {
+      res.status(400).json({ error: "Call point could not be saved" });
+    }
+  },
+);
+
+app.get("/api/fire-alarm-rotation", async (req: AuthedRequest, res) => {
+  const venueId = isAdmin(req)
+    ? Number(req.query.venue_id || 0)
+    : Number(req.user!.venueId);
+  if (!venueId || !(await assertVenue(req, res, venueId))) return;
+  const setting = await db.get<{ warningDays: number }>(
+    "SELECT call_point_warning_days warningDays FROM venue_settings WHERE venue_id=?",
+    [venueId],
+  );
+  const warningDays = Number(setting?.warningDays || 28);
+  const points = await rows<any>(
+    "SELECT c.id,c.code,c.description,l.name location_name,(SELECT max(t.test_datetime) FROM fire_alarm_tests t WHERE t.call_point_id=c.id) last_tested_at,(SELECT count(*) FROM fire_alarm_tests t WHERE t.call_point_id=c.id) test_count FROM fire_alarm_call_points c JOIN locations l ON l.id=c.location_id WHERE c.venue_id=? AND c.active=1 ORDER BY CASE WHEN (SELECT max(t.test_datetime) FROM fire_alarm_tests t WHERE t.call_point_id=c.id) IS NULL THEN 0 ELSE 1 END,(SELECT max(t.test_datetime) FROM fire_alarm_tests t WHERE t.call_point_id=c.id),c.code",
+    venueId,
+  );
+  const cutoff = Date.now() - warningDays * 864e5;
+  res.json({
+    warningDays,
+    points: points.map((point) => ({
+      ...point,
+      overdue:
+        !point.last_tested_at ||
+        new Date(point.last_tested_at).getTime() < cutoff,
+    })),
+    nextCallPoint: points[0] || null,
+  });
+});
+
+app.get(
+  "/api/settings/master-data",
+  canAdmin,
+  async (req: AuthedRequest, res) => {
+    const venueId = Number(req.query.venue_id);
+    if (!(await assertVenue(req, res, venueId))) return;
+    const setting = await db.get<any>(
+      "SELECT * FROM venue_settings WHERE venue_id=?",
+      [venueId],
+    );
+    res.json({
+      settings: setting || { venue_id: venueId, call_point_warning_days: 28 },
+      documentTypes: await rows(
+        "SELECT * FROM document_types WHERE venue_id=? ORDER BY active DESC,name",
+        venueId,
+      ),
+      locations: await rows(
+        "SELECT * FROM locations WHERE venue_id=? ORDER BY active DESC,name",
+        venueId,
+      ),
+    });
+  },
+);
+app.put(
+  "/api/settings/venues/:venueId",
+  canAdmin,
+  async (req: AuthedRequest, res) => {
+    const venueId = Number(req.params.venueId),
+      parsed = venueSettingsSchema.safeParse(req.body);
+    if (!parsed.success || !(await assertVenue(req, res, venueId)))
+      return parsed.success
+        ? undefined
+        : res.status(400).json({ error: "Invalid settings" });
+    const existing = await db.get(
+      "SELECT venue_id FROM venue_settings WHERE venue_id=?",
+      [venueId],
+    );
+    if (existing)
+      await db.run(
+        "UPDATE venue_settings SET call_point_warning_days=?,updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE venue_id=?",
+        [parsed.data.call_point_warning_days, req.user!.id, venueId],
+      );
+    else
+      await db.run(
+        "INSERT INTO venue_settings(venue_id,call_point_warning_days,updated_by) VALUES(?,?,?)",
+        [venueId, parsed.data.call_point_warning_days, req.user!.id],
+      );
+    await audit(
+      "venue_settings",
+      venueId,
+      "update",
+      existing,
+      parsed.data,
+      req.user!.id,
+      req.ip,
+    );
+    res.json({ venue_id: venueId, ...parsed.data });
+  },
+);
+app.post("/api/document-types", canAdmin, async (req: AuthedRequest, res) => {
+  const parsed = documentTypeSchema.safeParse(req.body);
+  if (
+    !parsed.success ||
+    !(await assertVenue(req, res, parsed.success ? parsed.data.venue_id : 0))
+  )
+    return parsed.success
+      ? undefined
+      : res.status(400).json({ error: "Invalid document type" });
+  try {
+    const result = await db.run(
+      "INSERT INTO document_types(venue_id,name,active,created_by) VALUES(?,?,?,?)",
+      [
+        parsed.data.venue_id,
+        parsed.data.name,
+        parsed.data.active,
+        req.user!.id,
+      ],
+    );
+    const after = await db.get("SELECT * FROM document_types WHERE id=?", [
+      result.lastInsertRowid,
+    ]);
+    await audit(
+      "document_types",
+      result.lastInsertRowid,
+      "create",
+      null,
+      after,
+      req.user!.id,
+      req.ip,
+    );
+    res.status(201).json(after);
+  } catch {
+    res.status(400).json({ error: "Document type could not be saved" });
+  }
+});
+app.patch(
+  "/api/document-types/:id",
+  canAdmin,
+  async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id),
+      before = await db.get<any>("SELECT * FROM document_types WHERE id=?", [
+        id,
+      ]);
+    if (!before)
+      return res.status(404).json({ error: "Document type not found" });
+    const parsed = documentTypeSchema.partial().safeParse(req.body);
+    if (!parsed.success || !Object.keys(parsed.data).length)
+      return res.status(400).json({ error: "Invalid document type" });
+    const targetVenue = Number(parsed.data.venue_id ?? before.venue_id);
+    if (!(await assertVenue(req, res, targetVenue))) return;
+    const cols = Object.keys(parsed.data);
+    try {
+      await db.run(
+        `UPDATE document_types SET ${cols.map((key) => `${key}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`,
+        [...Object.values(parsed.data), req.user!.id, id],
+      );
+      const after = await db.get("SELECT * FROM document_types WHERE id=?", [
+        id,
+      ]);
+      await audit(
+        "document_types",
+        id,
+        "update",
+        before,
+        after,
+        req.user!.id,
+        req.ip,
+      );
+      res.json(after);
+    } catch {
+      res.status(400).json({ error: "Document type could not be saved" });
+    }
+  },
+);
+const locationBody = z
+  .object({
+    venue_id: z.coerce.number().int().positive(),
+    name: z.string().trim().min(1).max(250),
+    active: z.coerce.number().int().min(0).max(1).default(1),
+  })
+  .strict();
+app.post("/api/locations", canAdmin, async (req: AuthedRequest, res) => {
+  const parsed = locationBody.safeParse(req.body);
+  if (
+    !parsed.success ||
+    !(await assertVenue(req, res, parsed.success ? parsed.data.venue_id : 0))
+  )
+    return parsed.success
+      ? undefined
+      : res.status(400).json({ error: "Invalid location" });
+  try {
+    const result = await db.run(
+      "INSERT INTO locations(venue_id,name,active) VALUES(?,?,?)",
+      [parsed.data.venue_id, parsed.data.name, parsed.data.active],
+    );
+    const after = await db.get("SELECT * FROM locations WHERE id=?", [
+      result.lastInsertRowid,
+    ]);
+    await audit(
+      "locations",
+      result.lastInsertRowid,
+      "create",
+      null,
+      after,
+      req.user!.id,
+      req.ip,
+    );
+    res.status(201).json(after);
+  } catch {
+    res.status(400).json({ error: "Location could not be saved" });
+  }
+});
+app.patch("/api/locations/:id", canAdmin, async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id),
+    before = await db.get<any>("SELECT * FROM locations WHERE id=?", [id]);
+  if (!before) return res.status(404).json({ error: "Location not found" });
+  const parsed = locationBody.partial().safeParse(req.body);
+  if (!parsed.success || !Object.keys(parsed.data).length)
+    return res.status(400).json({ error: "Invalid location" });
+  const targetVenue = Number(parsed.data.venue_id ?? before.venue_id);
+  if (!(await assertVenue(req, res, targetVenue))) return;
+  const cols = Object.keys(parsed.data);
+  try {
+    await db.run(
+      `UPDATE locations SET ${cols.map((key) => `${key}=?`).join(",")} WHERE id=?`,
+      [...Object.values(parsed.data), id],
+    );
+    const after = await db.get("SELECT * FROM locations WHERE id=?", [id]);
+    await audit("locations", id, "update", before, after, req.user!.id, req.ip);
+    res.json(after);
+  } catch {
+    res.status(400).json({ error: "Location could not be saved" });
+  }
+});
 
 for (const [route, cfg] of Object.entries(resources)) {
   app.get(`/api/${route}`, async (req: AuthedRequest, res) => {
@@ -464,6 +830,10 @@ for (const [route, cfg] of Object.entries(resources)) {
     }
   });
   app.patch(`/api/${route}/:id`, canWrite, async (req: AuthedRequest, res) => {
+    if (route === "fire-alarm-tests")
+      return res
+        .status(405)
+        .json({ error: "Weekly test history is append-only" });
     const id = Number(req.params.id),
       before = await db.get<any>(`SELECT * FROM ${cfg.table} WHERE id=?`, [id]);
     if (!before) return res.status(404).json({ error: "Not found" });
@@ -615,6 +985,112 @@ const upload = multer({
   fileFilter: (_req, file, cb) =>
     cb(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)),
 });
+const evidenceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 10 },
+  fileFilter: (_req, file, cb) =>
+    cb(
+      null,
+      [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/heic",
+        "image/heif",
+      ].includes(file.mimetype),
+    ),
+});
+
+app.get("/api/documents/:id/attachments", async (req: AuthedRequest, res) => {
+  const document = await db.get<any>(
+    "SELECT venue_id FROM documents WHERE id=?",
+    [Number(req.params.id)],
+  );
+  if (!document) return res.status(404).json({ error: "Document not found" });
+  if (!venueAllowed(req, Number(document.venue_id)))
+    return res.status(403).json({ error: "Venue access denied" });
+  res.json(
+    await rows(
+      "SELECT a.id,a.document_id,a.original_name,a.mime_type,a.file_size,a.created_at,u.name uploaded_by FROM document_attachments a LEFT JOIN users u ON u.id=a.created_by WHERE a.document_id=? ORDER BY a.created_at DESC,a.id DESC",
+      Number(req.params.id),
+    ),
+  );
+});
+app.post(
+  "/api/documents/:id/attachments",
+  canWrite,
+  evidenceUpload.array("files", 10),
+  async (req: AuthedRequest, res) => {
+    const documentId = Number(req.params.id);
+    const document = await db.get<any>(
+      "SELECT venue_id FROM documents WHERE id=?",
+      [documentId],
+    );
+    if (!document) return res.status(404).json({ error: "Document not found" });
+    if (!venueAllowed(req, Number(document.venue_id)))
+      return res.status(403).json({ error: "Venue access denied" });
+    const files = (req.files || []) as Express.Multer.File[];
+    if (!files.length)
+      return res.status(400).json({
+        error: "Select PDF, JPEG, PNG, HEIC or HEIF evidence files",
+      });
+    const created = [];
+    for (const file of files) {
+      const originalName = basename(file.originalname).slice(0, 500);
+      const key = await storage.put(file.buffer, originalName, file.mimetype);
+      const result = await db.run(
+        "INSERT INTO document_attachments(document_id,storage_key,original_name,mime_type,file_size,created_by) VALUES(?,?,?,?,?,?)",
+        [documentId, key, originalName, file.mimetype, file.size, req.user!.id],
+      );
+      const attachment = await db.get(
+        "SELECT id,document_id,original_name,mime_type,file_size,created_at FROM document_attachments WHERE id=?",
+        [result.lastInsertRowid],
+      );
+      await audit(
+        "document_attachments",
+        result.lastInsertRowid,
+        "create",
+        null,
+        attachment,
+        req.user!.id,
+        req.ip,
+      );
+      created.push(attachment);
+    }
+    res.status(201).json(created);
+  },
+);
+
+app.get(
+  "/api/document-attachments/:id/file",
+  async (req: AuthedRequest, res) => {
+    const attachment = await db.get<any>(
+      "SELECT a.*,d.venue_id FROM document_attachments a JOIN documents d ON d.id=a.document_id WHERE a.id=?",
+      [Number(req.params.id)],
+    );
+    if (!attachment) return res.status(404).end();
+    if (!venueAllowed(req, Number(attachment.venue_id)))
+      return res.status(403).end();
+    try {
+      const object = await storage.get(attachment.storage_key);
+      res.type(
+        attachment.mime_type ||
+          object.contentType ||
+          "application/octet-stream",
+      );
+      if (object.length) res.setHeader("Content-Length", String(object.length));
+      const safeName = String(attachment.original_name).replace(
+        /["\r\n]/g,
+        "_",
+      );
+      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      res.setHeader("Cache-Control", "private, no-store");
+      object.stream.pipe(res);
+    } catch {
+      res.status(404).end();
+    }
+  },
+);
 app.get("/api/:entityType/:id/photos", async (req: AuthedRequest, res) => {
   const type = String(req.params.entityType).replace(/s$/, ""),
     id = Number(req.params.id),
@@ -637,7 +1113,15 @@ app.post(
   async (req: AuthedRequest, res) => {
     const type = String(req.params.entityType).replace(/s$/, ""),
       id = Number(req.params.id);
-    if (!["asset", "furnishing", "extinguisher_check"].includes(type))
+    if (
+      ![
+        "asset",
+        "furnishing",
+        "extinguisher_check",
+        "fire_alarm_call_point",
+        "fire_alarm_test",
+      ].includes(type)
+    )
       return res.status(400).json({ error: "Unsupported photo target" });
     const venue = await entityVenue(type, id);
     if (!venue) return res.status(404).json({ error: "Record not found" });
@@ -744,6 +1228,21 @@ app.post(
     res.status(201).json(parsed.data);
   },
 );
+app.get("/api/documents/:id/links", async (req: AuthedRequest, res) => {
+  const document = await db.get<any>(
+    "SELECT venue_id FROM documents WHERE id=?",
+    [Number(req.params.id)],
+  );
+  if (!document) return res.status(404).json({ error: "Document not found" });
+  if (!venueAllowed(req, Number(document.venue_id)))
+    return res.status(403).json({ error: "Venue access denied" });
+  res.json(
+    await rows(
+      "SELECT id,entity_type,entity_id FROM document_links WHERE document_id=? ORDER BY id",
+      Number(req.params.id),
+    ),
+  );
+});
 
 app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
   const key = String(req.params[0]);
@@ -755,9 +1254,13 @@ app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
     "SELECT venue_id venueId FROM documents WHERE storage_key=?",
     [key],
   );
+  const attachment = await db.get<{ venueId: number }>(
+    "SELECT d.venue_id venueId FROM document_attachments a JOIN documents d ON d.id=a.document_id WHERE a.storage_key=?",
+    [key],
+  );
   const venue = photo
     ? await entityVenue(photo.entityType, photo.entityId)
-    : document?.venueId;
+    : (document?.venueId ?? attachment?.venueId);
   if (!venue) return res.status(404).end();
   if (!venueAllowed(req, venue)) return res.status(403).end();
   try {
@@ -786,6 +1289,10 @@ app.get("/api/users", canAdmin, async (_req, res) =>
   ),
 );
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError)
+    return res.status(400).json({
+      error: "Upload exceeds the 15 MB per-file limit or 10-file limit",
+    });
   console.error(error);
   res.status(500).json({ error: "Unexpected server error" });
 });

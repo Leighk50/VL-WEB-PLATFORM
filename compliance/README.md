@@ -38,6 +38,15 @@ npm run migrate
 
 The command obtains managed-identity credentials in Azure, creates `schema_migrations` if required, and applies only unapplied versions. It is safe to rerun. Application startup runs the same deterministic migration runner before Express begins accepting traffic, allowing a completely empty staging database to bootstrap under the App Service managed identity. Azure SQL migrations run inside a serializable transaction guarded by `sp_getapplock`, so repeated or concurrent starts cannot apply the same migration twice. A migration failure is logged with its underlying error and terminates startup.
 
+Migration 2 adds append-only document attachments, fire-alarm call-point master data, structured weekly-test fields, venue rotation settings and configurable document types. It preserves all existing document and weekly-test rows. The normal `npm start` sequence applies it before the application accepts traffic.
+
+## Evidence and fire-alarm records
+
+- Certificate evidence accepts up to 10 PDF, JPEG, PNG, HEIC or HEIF files per request, with a 15 MB limit per file. Attachments are retained independently of later certificate renewals.
+- Production evidence remains in the private Azure Blob container. The browser receives only authenticated application endpoints, never Blob URLs, SAS tokens or storage credentials.
+- Fire-alarm call points are venue/location scoped master data. Weekly tests reference an active call point and are append-only.
+- The call-point rotation warning is venue-specific master data maintained by administrators; no legal interval is hard-coded into the application.
+
 ## Azure staging architecture
 
 Already provisioned:

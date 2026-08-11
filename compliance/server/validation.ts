@@ -11,6 +11,7 @@ const dateTime = z
 const optional = <T extends z.ZodTypeAny>(schema: T) =>
   schema.optional().nullable();
 const venueLocation = { venue_id: id, location_id: optional(id) };
+const booleanFlag = z.coerce.number().int().min(0).max(1);
 
 export const resourceSchemas = {
   assets: z
@@ -64,14 +65,14 @@ export const resourceSchemas = {
     .object({
       venue_id: id,
       test_datetime: dateTime,
-      call_point: optional(text),
+      call_point_id: id,
       zone: optional(text),
-      sounder_result: optional(text),
-      equipment_result: optional(text),
+      alarm_operated: booleanFlag,
+      sounders_activated: optional(booleanFlag),
+      panel_indication_correct: optional(booleanFlag),
+      reset_successful: booleanFlag,
       result: z.enum(["Pass", "Fail"]),
       faults: optional(longText),
-      completed_by: optional(text),
-      confirmed: z.coerce.number().int().min(0).max(1).default(0),
       notes: optional(longText),
     })
     .strict(),
@@ -141,16 +142,8 @@ export const resourceSchemas = {
   documents: z
     .object({
       venue_id: id,
-      type: z.enum([
-        "Fire alarm service certificate",
-        "Fire extinguisher certificate",
-        "Emergency lighting certificate",
-        "Fire risk assessment",
-        "Fire-retardant treatment certificate",
-        "Fire door report",
-        "PAT certificate",
-        "Other",
-      ]),
+      location_id: optional(id),
+      type: text.min(1),
       title: text.min(1),
       reference: optional(text),
       issue_date: optional(date),
@@ -189,6 +182,30 @@ export const resourceSchemas = {
     })
     .strict(),
 } as const;
+
+export const callPointSchema = z
+  .object({
+    venue_id: id,
+    code: z.string().trim().min(1).max(100),
+    description: text.min(1),
+    location_id: id,
+    panel_zone: optional(text),
+    active: booleanFlag.default(1),
+    notes: optional(longText),
+  })
+  .strict();
+
+export const venueSettingsSchema = z
+  .object({ call_point_warning_days: z.coerce.number().int().min(1).max(365) })
+  .strict();
+
+export const documentTypeSchema = z
+  .object({
+    venue_id: id,
+    name: z.string().trim().min(1).max(250),
+    active: booleanFlag.default(1),
+  })
+  .strict();
 
 export const patSchema = z
   .object({
@@ -237,6 +254,7 @@ export const documentLinkSchema = z
       "extinguisher_check",
       "risk_assessment",
       "fire_alarm_test",
+      "fire_alarm_call_point",
     ]),
     entity_id: id,
   })

@@ -53,3 +53,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 export const config = loadConfig();
 export const demoSeedEnabled = (value: AppConfig = config) =>
   value.NODE_ENV !== "production" && value.DEMO_SEED === "true";
+export const demoDataMode = (value: AppConfig = config) =>
+  demoSeedEnabled(value);

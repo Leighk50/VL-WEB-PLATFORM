@@ -24,13 +24,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1]);
+    expect(before.map((row) => row.version)).toEqual([1, 2]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1]);
+    expect(after.map((row) => row.version)).toEqual([1, 2]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -295,5 +295,200 @@ describe("venue security, current authorization and immutable history", () => {
       .set(auth(tokens.contractor))
       .expect(200);
     expect(history.body.length).toBe(2);
+  });
+
+  it("enforces call-point administration, venue isolation and inactive status", async () => {
+    await request(app)
+      .post("/api/fire-alarm-call-points")
+      .set(auth(tokens.staff))
+      .send({
+        venue_id: venue1,
+        code: "DENIED",
+        description: "Denied",
+        location_id: location1,
+      })
+      .expect(403);
+    const point = await request(app)
+      .post("/api/fire-alarm-call-points")
+      .set(auth(tokens.admin))
+      .send({
+        venue_id: venue1,
+        code: "CP01",
+        description: "Main entrance",
+        location_id: location1,
+        active: 1,
+      })
+      .expect(201);
+    const otherPoint = await request(app)
+      .post("/api/fire-alarm-call-points")
+      .set(auth(tokens.admin))
+      .send({
+        venue_id: venue2,
+        code: "CP01",
+        description: "Other venue",
+        location_id: location2,
+        active: 1,
+      })
+      .expect(201);
+    const list = await request(app)
+      .get("/api/fire-alarm-call-points")
+      .set(auth(tokens.staff))
+      .expect(200);
+    expect(list.body.every((row: any) => row.venue_id === venue1)).toBe(true);
+    await request(app)
+      .post("/api/fire-alarm-tests")
+      .set(auth(tokens.staff))
+      .send({
+        venue_id: venue1,
+        call_point_id: otherPoint.body.id,
+        test_datetime: "2026-08-11T09:00",
+        result: "Pass",
+        alarm_operated: 1,
+        reset_successful: 1,
+      })
+      .expect(400);
+    await request(app)
+      .patch(`/api/fire-alarm-call-points/${point.body.id}`)
+      .set(auth(tokens.admin))
+      .send({ active: 0 })
+      .expect(200);
+    await request(app)
+      .post("/api/fire-alarm-tests")
+      .set(auth(tokens.staff))
+      .send({
+        venue_id: venue1,
+        call_point_id: point.body.id,
+        test_datetime: "2026-08-11T09:00",
+        result: "Pass",
+        alarm_operated: 1,
+        reset_successful: 1,
+      })
+      .expect(400);
+  });
+
+  it("records append-only weekly tests and calculates call-point rotation", async () => {
+    const point = await request(app)
+      .post("/api/fire-alarm-call-points")
+      .set(auth(tokens.admin))
+      .send({
+        venue_id: venue1,
+        code: "CP02",
+        description: "Kitchen exit",
+        location_id: location1,
+        active: 1,
+      })
+      .expect(201);
+    const test = await request(app)
+      .post("/api/fire-alarm-tests")
+      .set(auth(tokens.contractor))
+      .send({
+        venue_id: venue1,
+        call_point_id: point.body.id,
+        test_datetime: "2026-08-01T09:00",
+        result: "Pass",
+        alarm_operated: 1,
+        sounders_activated: 1,
+        panel_indication_correct: 1,
+        reset_successful: 1,
+      })
+      .expect(201);
+    await request(app)
+      .patch(`/api/fire-alarm-tests/${test.body.id}`)
+      .set(auth(tokens.admin))
+      .send({ result: "Fail" })
+      .expect(405);
+    await request(app)
+      .put(`/api/settings/venues/${venue1}`)
+      .set(auth(tokens.admin))
+      .send({ call_point_warning_days: 7 })
+      .expect(200);
+    const report = await request(app)
+      .get(`/api/fire-alarm-rotation?venue_id=${venue1}`)
+      .set(auth(tokens.staff))
+      .expect(200);
+    expect(report.body.warningDays).toBe(7);
+    expect(
+      report.body.points.find((row: any) => row.id === point.body.id),
+    ).toMatchObject({ test_count: 1, overdue: true });
+  });
+
+  it("keeps multiple document attachments private, venue-scoped and historical", async () => {
+    const document = await request(app)
+      .post("/api/documents")
+      .set(auth(tokens.staff))
+      .send({
+        venue_id: venue1,
+        location_id: location1,
+        type: "PAT certificate",
+        title: "Annual PAT evidence",
+        issue_date: "2026-08-11",
+      })
+      .expect(201);
+    await request(app)
+      .post(`/api/documents/${document.body.id}/attachments`)
+      .set(auth(tokens.staff))
+      .attach("files", Buffer.from("%PDF-test-one"), {
+        filename: "certificate.pdf",
+        contentType: "application/pdf",
+      })
+      .attach("files", Buffer.from("image-test"), {
+        filename: "photo.jpg",
+        contentType: "image/jpeg",
+      })
+      .expect(201);
+    const attachments = await request(app)
+      .get(`/api/documents/${document.body.id}/attachments`)
+      .set(auth(tokens.staff))
+      .expect(200);
+    expect(attachments.body).toHaveLength(2);
+    await request(app)
+      .get(`/api/document-attachments/${attachments.body[0].id}/file`)
+      .expect(401);
+    const renewed = await request(app)
+      .post("/api/documents")
+      .set(auth(tokens.staff))
+      .send({
+        venue_id: venue1,
+        type: "PAT certificate",
+        title: "Annual PAT evidence",
+        version: 2,
+        previous_version_id: document.body.id,
+      })
+      .expect(201);
+    expect(renewed.body.previous_version_id).toBe(document.body.id);
+    const history = await request(app)
+      .get(`/api/documents/${document.body.id}/attachments`)
+      .set(auth(tokens.staff))
+      .expect(200);
+    expect(history.body).toHaveLength(2);
+    const otherDocument = await request(app)
+      .post("/api/documents")
+      .set(auth(tokens.admin))
+      .send({ venue_id: venue2, type: "Other", title: "Other venue document" })
+      .expect(201);
+    const otherAttachment = await request(app)
+      .post(`/api/documents/${otherDocument.body.id}/attachments`)
+      .set(auth(tokens.admin))
+      .attach("files", Buffer.from("private-other-venue"), {
+        filename: "other.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(201);
+    await request(app)
+      .get(`/api/documents/${otherDocument.body.id}/attachments`)
+      .set(auth(tokens.staff))
+      .expect(403);
+    await request(app)
+      .get(`/api/document-attachments/${otherAttachment.body[0].id}/file`)
+      .set(auth(tokens.staff))
+      .expect(403);
+    await request(app)
+      .post(`/api/documents/${otherDocument.body.id}/attachments`)
+      .set(auth(tokens.staff))
+      .attach("files", Buffer.from("denied"), {
+        filename: "denied.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(403);
   });
 });

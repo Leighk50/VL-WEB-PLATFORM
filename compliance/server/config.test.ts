@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { demoSeedEnabled, loadConfig } from "./config.js";
+import { demoDataMode, demoSeedEnabled, loadConfig } from "./config.js";
 
 const production = {
   NODE_ENV: "production",
@@ -39,6 +39,19 @@ describe("production configuration", () => {
     ).toThrow(/Azure Blob/);
   });
   it("never enables demo seeding in production", () => {
-    expect(demoSeedEnabled(loadConfig({ ...production, DEMO_SEED: "true" }))).toBe(false);
+    expect(
+      demoSeedEnabled(loadConfig({ ...production, DEMO_SEED: "true" })),
+    ).toBe(false);
+  });
+  it("shows the demo label only when local demo data is genuinely enabled", () => {
+    expect(
+      demoDataMode(loadConfig({ NODE_ENV: "development", DEMO_SEED: "true" })),
+    ).toBe(true);
+    expect(
+      demoDataMode(loadConfig({ NODE_ENV: "development", DEMO_SEED: "false" })),
+    ).toBe(false);
+    expect(demoDataMode(loadConfig({ ...production, DEMO_SEED: "true" }))).toBe(
+      false,
+    );
   });
 });

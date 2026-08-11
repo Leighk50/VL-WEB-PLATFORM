@@ -6,7 +6,8 @@ const authHeaders = (): Record<string, string> => {
 export async function api<T = any>(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
-  for (const [key, value] of Object.entries(authHeaders())) headers.set(key, value);
+  for (const [key, value] of Object.entries(authHeaders()))
+    headers.set(key, value);
   const response = await fetch("/api" + path, {
     ...options,
     headers,
@@ -42,5 +43,32 @@ export async function privateImageUrl(storageKey: string) {
     headers: new Headers(authHeaders()),
   });
   if (!response.ok) throw new Error("Photo could not be loaded");
+  return URL.createObjectURL(await response.blob());
+}
+
+export async function uploadDocumentEvidence(
+  documentId: number,
+  files: File[],
+) {
+  const data = new FormData();
+  files.forEach((file) => data.append("files", file));
+  const response = await fetch(`/api/documents/${documentId}/attachments`, {
+    method: "POST",
+    headers: new Headers(authHeaders()),
+    body: data,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || "Evidence upload failed");
+  return body;
+}
+
+export async function privateAttachmentUrl(attachmentId: number) {
+  const response = await fetch(
+    `/api/document-attachments/${attachmentId}/file`,
+    {
+      headers: new Headers(authHeaders()),
+    },
+  );
+  if (!response.ok) throw new Error("Evidence file could not be loaded");
   return URL.createObjectURL(await response.blob());
 }
