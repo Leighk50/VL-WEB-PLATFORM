@@ -82,4 +82,52 @@ IF COL_LENGTH('fire_alarm_tests','action_id') IS NULL ALTER TABLE fire_alarm_tes
 IF OBJECT_ID('document_types','U') IS NULL CREATE TABLE document_types(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(250) NOT NULL,active BIT NOT NULL DEFAULT 1,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_document_types_venue_name UNIQUE(venue_id,name));
 IF OBJECT_ID('venue_settings','U') IS NULL CREATE TABLE venue_settings(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),call_point_warning_days INT NOT NULL DEFAULT 28,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);`,
   },
+  {
+    version: 3,
+    name: "versioned_risk_assessment_library",
+    sqlite: `
+ALTER TABLE risk_assessments ADD COLUMN title TEXT;
+ALTER TABLE risk_assessments ADD COLUMN category TEXT;
+ALTER TABLE risk_assessments ADD COLUMN area TEXT;
+ALTER TABLE risk_assessments ADD COLUMN location_id INTEGER REFERENCES locations(id);
+ALTER TABLE risk_assessments ADD COLUMN responsible_person TEXT;
+ALTER TABLE risk_assessments ADD COLUMN status TEXT NOT NULL DEFAULT 'Draft';
+ALTER TABLE risk_assessments ADD COLUMN overall_risk_rating TEXT;
+ALTER TABLE risk_assessments ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE risk_assessments ADD COLUMN previous_version_id INTEGER REFERENCES risk_assessments(id);
+ALTER TABLE risk_assessments ADD COLUMN template_key TEXT;
+ALTER TABLE risk_assessments ADD COLUMN site_verification_required INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE risk_assessments ADD COLUMN signed_by TEXT;
+ALTER TABLE risk_assessments ADD COLUMN signed_at TEXT;
+ALTER TABLE risk_assessments ADD COLUMN signoff_notes TEXT;
+ALTER TABLE risk_assessments ADD COLUMN archived_at TEXT;
+CREATE TABLE risk_hazards(id INTEGER PRIMARY KEY,assessment_id INTEGER NOT NULL REFERENCES risk_assessments(id),hazard TEXT NOT NULL,who_may_be_harmed TEXT NOT NULL,how_harmed TEXT NOT NULL,existing_controls TEXT NOT NULL,initial_likelihood INTEGER NOT NULL,initial_severity INTEGER NOT NULL,initial_score INTEGER NOT NULL,further_action TEXT,responsible_person TEXT,target_date TEXT,residual_likelihood INTEGER NOT NULL,residual_severity INTEGER NOT NULL,residual_score INTEGER NOT NULL,status TEXT NOT NULL,completion_document_id INTEGER REFERENCES documents(id),site_verification_required INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);
+CREATE INDEX idx_risk_hazards_assessment ON risk_hazards(assessment_id);
+CREATE TABLE risk_assessment_history(id INTEGER PRIMARY KEY,assessment_id INTEGER NOT NULL REFERENCES risk_assessments(id),version INTEGER NOT NULL,snapshot_json TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
+CREATE TABLE risk_template_registry(venue_id INTEGER NOT NULL REFERENCES venues(id),template_key TEXT NOT NULL,assessment_id INTEGER REFERENCES risk_assessments(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(venue_id,template_key));
+CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+    azure: `
+IF COL_LENGTH('risk_assessments','title') IS NULL ALTER TABLE risk_assessments ADD title NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','category') IS NULL ALTER TABLE risk_assessments ADD category NVARCHAR(100) NULL;
+IF COL_LENGTH('risk_assessments','area') IS NULL ALTER TABLE risk_assessments ADD area NVARCHAR(100) NULL;
+IF COL_LENGTH('risk_assessments','location_id') IS NULL ALTER TABLE risk_assessments ADD location_id BIGINT NULL REFERENCES locations(id);
+IF COL_LENGTH('risk_assessments','responsible_person') IS NULL ALTER TABLE risk_assessments ADD responsible_person NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','status') IS NULL ALTER TABLE risk_assessments ADD status NVARCHAR(40) NOT NULL CONSTRAINT df_risk_status DEFAULT 'Draft';
+IF COL_LENGTH('risk_assessments','overall_risk_rating') IS NULL ALTER TABLE risk_assessments ADD overall_risk_rating NVARCHAR(80) NULL;
+IF COL_LENGTH('risk_assessments','version') IS NULL ALTER TABLE risk_assessments ADD version INT NOT NULL CONSTRAINT df_risk_version DEFAULT 1;
+IF COL_LENGTH('risk_assessments','previous_version_id') IS NULL ALTER TABLE risk_assessments ADD previous_version_id BIGINT NULL REFERENCES risk_assessments(id);
+IF COL_LENGTH('risk_assessments','template_key') IS NULL ALTER TABLE risk_assessments ADD template_key NVARCHAR(150) NULL;
+IF COL_LENGTH('risk_assessments','site_verification_required') IS NULL ALTER TABLE risk_assessments ADD site_verification_required BIT NOT NULL CONSTRAINT df_risk_verify DEFAULT 0;
+IF COL_LENGTH('risk_assessments','signed_by') IS NULL ALTER TABLE risk_assessments ADD signed_by NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','signed_at') IS NULL ALTER TABLE risk_assessments ADD signed_at DATETIME2 NULL;
+IF COL_LENGTH('risk_assessments','signoff_notes') IS NULL ALTER TABLE risk_assessments ADD signoff_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('risk_assessments','archived_at') IS NULL ALTER TABLE risk_assessments ADD archived_at DATETIME2 NULL;
+IF OBJECT_ID('risk_hazards','U') IS NULL CREATE TABLE risk_hazards(id BIGINT IDENTITY PRIMARY KEY,assessment_id BIGINT NOT NULL REFERENCES risk_assessments(id),hazard NVARCHAR(500) NOT NULL,who_may_be_harmed NVARCHAR(MAX) NOT NULL,how_harmed NVARCHAR(MAX) NOT NULL,existing_controls NVARCHAR(MAX) NOT NULL,initial_likelihood INT NOT NULL,initial_severity INT NOT NULL,initial_score INT NOT NULL,further_action NVARCHAR(MAX),responsible_person NVARCHAR(500),target_date DATE,residual_likelihood INT NOT NULL,residual_severity INT NOT NULL,residual_score INT NOT NULL,status NVARCHAR(50) NOT NULL,completion_document_id BIGINT NULL REFERENCES documents(id),site_verification_required BIT NOT NULL DEFAULT 0,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_hazards_assessment') CREATE INDEX idx_risk_hazards_assessment ON risk_hazards(assessment_id);
+IF OBJECT_ID('risk_assessment_history','U') IS NULL CREATE TABLE risk_assessment_history(id BIGINT IDENTITY PRIMARY KEY,assessment_id BIGINT NOT NULL REFERENCES risk_assessments(id),version INT NOT NULL,snapshot_json NVARCHAR(MAX) NOT NULL,reason NVARCHAR(500) NOT NULL,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_history_assessment') CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
+IF OBJECT_ID('risk_template_registry','U') IS NULL CREATE TABLE risk_template_registry(venue_id BIGINT NOT NULL REFERENCES venues(id),template_key NVARCHAR(150) NOT NULL,assessment_id BIGINT NULL REFERENCES risk_assessments(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT pk_risk_template_registry PRIMARY KEY(venue_id,template_key));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_risk_template_assessment') CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+  },
 ];

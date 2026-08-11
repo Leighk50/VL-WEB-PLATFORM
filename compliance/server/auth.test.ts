@@ -24,13 +24,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -520,5 +520,40 @@ describe("venue security, current authorization and immutable history", () => {
         contentType: "application/pdf",
       })
       .expect(403);
+  });
+
+  it("versions risk assessments, links actions and protects historical versions", async () => {
+    const assessment = await request(app).post("/api/risk-assessments").set(auth(tokens.staff)).send({
+      venue_id: venue1, title: "Test kitchen risk", category: "Fire Safety", area: "Kitchen",
+      location_id: location1, assessment_date: "2026-08-11", status: "Draft",
+      overall_risk_rating: "Requires site verification", site_verification_required: 1,
+    }).expect(201);
+    await request(app).post("/api/risk-assessments").set(auth(tokens.staff)).send({
+      venue_id: venue2, title: "Denied", category: "General", area: "General",
+      assessment_date: "2026-08-11", status: "Draft", overall_risk_rating: "Low", site_verification_required: 1,
+    }).expect(403);
+    const hazard = await request(app).post(`/api/risk-assessments/${assessment.body.id}/hazards`).set(auth(tokens.staff)).send({
+      hazard: "Hot oil", who_may_be_harmed: "Kitchen staff", how_harmed: "Burns",
+      existing_controls: "Requires site verification", initial_likelihood: 4, initial_severity: 5,
+      further_action: "Verify high-limit thermostat", residual_likelihood: 3, residual_severity: 5,
+      status: "Requires site verification", site_verification_required: 1,
+    }).expect(201);
+    expect(hazard.body.initial_score).toBe(20);
+    const photo = await request(app).post(`/api/risk_assessment/${assessment.body.id}/photos`).set(auth(tokens.staff)).attach("file", Buffer.from("risk-photo"), { filename: "risk.jpg", contentType: "image/jpeg" }).field("is_main", "0").expect(201);
+    await request(app).get(`/files/${photo.body.storage_key}`).expect(401);
+    await request(app).get(`/files/${photo.body.storage_key}`).set(auth(tokens.staff)).expect(200).expect("Content-Type", /image\/jpeg/);
+    const action = await request(app).post(`/api/risk-hazards/${hazard.body.id}/action`).set(auth(tokens.staff)).send({}).expect(201);
+    expect(action.body.related_type).toBe("risk_assessment_hazard");
+    const reviewed = await request(app).post(`/api/risk-assessments/${assessment.body.id}/review`).set(auth(tokens.staff)).send({
+      assessor: "Test assessor", responsible_person: "Responsible person", review_date: "2027-08-11",
+      status: "Action Required", confirm_controls: true, signoff_notes: "Site review completed",
+    }).expect(201);
+    expect(reviewed.body.previous_version_id).toBe(assessment.body.id);
+    expect(reviewed.body.version).toBe(2);
+    const detail = await request(app).get(`/api/risk-assessments/${reviewed.body.id}`).set(auth(tokens.staff)).expect(200);
+    expect(detail.body.hazards).toHaveLength(1);
+    await request(app).patch(`/api/risk-assessments/${assessment.body.id}`).set(auth(tokens.staff)).send({ notes: "silent overwrite" }).expect(409);
+    const history = await db.all("SELECT * FROM risk_assessment_history WHERE assessment_id=?", [assessment.body.id]);
+    expect(history.length).toBeGreaterThan(0);
   });
 });

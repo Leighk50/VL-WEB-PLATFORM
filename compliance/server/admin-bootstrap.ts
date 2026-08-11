@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db, type DatabaseAdapter } from "./db.js";
+import { bootstrapRiskLibrary } from "./risk-library.js";
 
 export const INITIAL_VENUE_NAME = "Village Limits";
 export const INITIAL_LOCATION_NAMES = [
@@ -116,6 +117,7 @@ export async function createAdministrator(
         locationName,
       ]);
   }
+  await bootstrapRiskLibrary(database);
 
   const passwordHash = await bcrypt.hash(parsed.password, 12);
   const result = await database.run(

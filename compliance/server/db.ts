@@ -183,9 +183,10 @@ export function createDatabase(): DatabaseAdapter {
 export const db = createDatabase();
 
 export async function migrateDatabase() {
-  if (db instanceof AzureSqlAdapter) return db.migrateVersioned();
-  await db.exec("BEGIN IMMEDIATE");
-  try {
+  if (db instanceof AzureSqlAdapter) await db.migrateVersioned();
+  else {
+    await db.exec("BEGIN IMMEDIATE");
+    try {
     await db.exec(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT DEFAULT CURRENT_TIMESTAMP)",
     );
@@ -205,11 +206,14 @@ export async function migrateDatabase() {
       ]);
     }
     if (demoSeedEnabled()) await seedDemo();
-    await db.exec("COMMIT");
-  } catch (error) {
-    await db.exec("ROLLBACK").catch(() => undefined);
-    throw error;
+      await db.exec("COMMIT");
+    } catch (error) {
+      await db.exec("ROLLBACK").catch(() => undefined);
+      throw error;
+    }
   }
+  const { bootstrapRiskLibrary } = await import("./risk-library.js");
+  await bootstrapRiskLibrary(db);
 }
 
 async function seedDemo() {

@@ -163,6 +163,7 @@ export const resourceSchemas = {
           "asset",
           "extinguisher",
           "risk_assessment",
+          "risk_assessment_hazard",
           "fire_alarm_test",
           "furnishing",
           "pat_test",
@@ -253,9 +254,52 @@ export const documentLinkSchema = z
       "pat_test",
       "extinguisher_check",
       "risk_assessment",
+      "risk_assessment_hazard",
       "fire_alarm_test",
       "fire_alarm_call_point",
     ]),
     entity_id: id,
   })
   .strict();
+
+export const riskAssessmentSchema = z.object({
+  venue_id: id,
+  title: text.min(1),
+  category: z.enum(["General", "Fire Safety"]),
+  area: z.enum(["Kitchen", "Restaurant", "Accommodation", "Bar/Cellar", "Events", "External", "General"]),
+  location_id: optional(id),
+  assessment_date: date,
+  assessor: optional(text),
+  responsible_person: optional(text),
+  review_date: optional(date),
+  status: z.enum(["Draft", "Current", "Review Due", "Action Required", "Archived"]),
+  overall_risk_rating: z.enum(["Low", "Medium", "High", "Critical", "Requires site verification"]),
+  notes: optional(longText),
+  site_verification_required: booleanFlag.default(1),
+}).strict();
+
+export const riskHazardSchema = z.object({
+  hazard: text.min(1),
+  who_may_be_harmed: longText.min(1),
+  how_harmed: longText.min(1),
+  existing_controls: longText.min(1),
+  initial_likelihood: z.coerce.number().int().min(1).max(5),
+  initial_severity: z.coerce.number().int().min(1).max(5),
+  further_action: optional(longText),
+  responsible_person: optional(text),
+  target_date: optional(date),
+  residual_likelihood: z.coerce.number().int().min(1).max(5),
+  residual_severity: z.coerce.number().int().min(1).max(5),
+  status: z.enum(["Open", "In Progress", "Complete", "Requires site verification"]),
+  completion_document_id: optional(id),
+  site_verification_required: booleanFlag.default(1),
+}).strict();
+
+export const riskReviewSchema = z.object({
+  assessor: text.min(1),
+  responsible_person: text.min(1),
+  review_date: date,
+  status: z.enum(["Current", "Action Required", "Review Due"]),
+  signoff_notes: optional(longText),
+  confirm_controls: z.literal(true),
+}).strict();

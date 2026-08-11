@@ -30,8 +30,12 @@ import {
   patSchema,
   photoMetadataSchema,
   resourceSchemas,
+  riskAssessmentSchema,
+  riskHazardSchema,
+  riskReviewSchema,
   venueSettingsSchema,
 } from "./validation.js";
+import { riskLevel, riskScore } from "./risk-library.js";
 
 try {
   await migrateDatabase();
@@ -204,6 +208,8 @@ async function entityVenue(
   type: string,
   id: number,
 ): Promise<number | undefined> {
+  if (type === "risk_assessment_hazard")
+    return (await db.get<{ venueId: number }>("SELECT r.venue_id venueId FROM risk_hazards h JOIN risk_assessments r ON r.id=h.assessment_id WHERE h.id=?", [id]))?.venueId;
   const cfg = entityTables[type];
   if (!cfg) return undefined;
   if (!cfg.via)
@@ -379,10 +385,6 @@ const resources: Record<
   "fire-alarm-services": {
     table: "fire_alarm_services",
     schema: resourceSchemas["fire-alarm-services"],
-  },
-  "risk-assessments": {
-    table: "risk_assessments",
-    schema: resourceSchemas["risk-assessments"],
   },
   furnishings: {
     table: "furnishings",
@@ -780,6 +782,72 @@ app.patch("/api/locations/:id", canAdmin, async (req: AuthedRequest, res) => {
   }
 });
 
+async function riskAssessmentFor(req: AuthedRequest, res: Response, id: number) {
+  const assessment = await db.get<any>("SELECT * FROM risk_assessments WHERE id=?", [id]);
+  if (!assessment) { res.status(404).json({ error: "Risk assessment not found" }); return; }
+  if (!venueAllowed(req, Number(assessment.venue_id))) { res.status(403).json({ error: "Venue access denied" }); return; }
+  return assessment;
+}
+async function riskSnapshot(assessment: any, reason: string, userId: number) {
+  const hazards = await rows("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY id", assessment.id);
+  await db.run("INSERT INTO risk_assessment_history(assessment_id,version,snapshot_json,reason,created_by) VALUES(?,?,?,?,?)", [assessment.id, assessment.version || 1, JSON.stringify({ assessment, hazards }), reason, userId]);
+}
+
+app.get("/api/risk-assessments", async (req: AuthedRequest, res) => {
+  const scope = isAdmin(req) ? { sql: "", params: [] } : { sql: " WHERE r.venue_id=?", params: [req.user!.venueId] };
+  res.json(await rows(`SELECT r.*,v.name venue_name,l.name location_name,(SELECT count(*) FROM risk_hazards h WHERE h.assessment_id=r.id) hazard_count,(SELECT count(*) FROM risk_hazards h WHERE h.assessment_id=r.id AND h.status NOT IN ('Complete')) unresolved_count,(SELECT count(*) FROM risk_hazards h WHERE h.assessment_id=r.id AND h.residual_score>=10 AND h.status NOT IN ('Complete')) high_risk_count,(SELECT count(*) FROM document_links dl WHERE dl.entity_type='risk_assessment' AND dl.entity_id=r.id) document_count,(SELECT count(*) FROM photos p WHERE p.entity_type='risk_assessment' AND p.entity_id=r.id) photo_count FROM risk_assessments r JOIN venues v ON v.id=r.venue_id LEFT JOIN locations l ON l.id=r.location_id${scope.sql} ORDER BY CASE r.status WHEN 'Action Required' THEN 0 WHEN 'Review Due' THEN 1 WHEN 'Draft' THEN 2 ELSE 3 END,r.title`, ...scope.params));
+});
+app.get("/api/risk-assessments/dashboard", async (req: AuthedRequest, res) => {
+  const where = isAdmin(req) ? "" : " WHERE venue_id=?", params = isAdmin(req) ? [] : [req.user!.venueId];
+  const assessments = await rows<any>(`SELECT * FROM risk_assessments${where}`, ...params), today = new Date().toISOString().slice(0, 10);
+  const ids = assessments.map((item) => Number(item.id));
+  const high = ids.length ? await rows<any>(`SELECT h.*,r.title,r.area FROM risk_hazards h JOIN risk_assessments r ON r.id=h.assessment_id WHERE h.assessment_id IN (${ids.map(() => "?").join(",")}) AND h.residual_score>=10 AND h.status<>'Complete'`, ...ids) : [];
+  const fireIds = assessments.filter((a) => a.category === "Fire Safety").map((a) => Number(a.id));
+  const openFireActions = fireIds.length ? Number((await db.get<any>(`SELECT count(*) n FROM actions a WHERE a.status NOT IN ('Complete','Closed') AND ((a.related_type='risk_assessment' AND a.related_id IN (${fireIds.map(() => "?").join(",")})) OR (a.related_type='risk_assessment_hazard' AND a.related_id IN (SELECT h.id FROM risk_hazards h WHERE h.assessment_id IN (${fireIds.map(() => "?").join(",")}))))`, [...fireIds, ...fireIds]))?.n || 0) : 0;
+  res.json({ current: assessments.filter((a) => a.status === "Current").length, draft: assessments.filter((a) => a.status === "Draft").length, reviewDue: assessments.filter((a) => a.status === "Review Due" || (a.review_date && a.review_date <= today)).length, overdue: assessments.filter((a) => a.review_date && a.review_date < today && a.status !== "Archived").length, actionRequired: assessments.filter((a) => a.status === "Action Required").length, openFireActions, highRisk: high.length, siteVerification: assessments.filter((a) => a.site_verification_required).length });
+});
+app.get("/api/risk-assessments/:id", async (req: AuthedRequest, res) => {
+  const assessment = await riskAssessmentFor(req, res, Number(req.params.id)); if (!assessment) return;
+  res.json({ ...assessment, hazards: await rows("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY residual_score DESC,id", assessment.id), history: await rows("SELECT id,assessment_id,version,reason,created_at,created_by FROM risk_assessment_history WHERE assessment_id=? ORDER BY id DESC", assessment.id), documents: await rows("SELECT d.* FROM documents d JOIN document_links l ON l.document_id=d.id WHERE l.entity_type='risk_assessment' AND l.entity_id=? ORDER BY d.created_at DESC", assessment.id), photos: await rows("SELECT * FROM photos WHERE entity_type='risk_assessment' AND entity_id=? ORDER BY created_at DESC", assessment.id), actions: await rows("SELECT * FROM actions WHERE (related_type='risk_assessment' AND related_id=?) OR (related_type='risk_assessment_hazard' AND related_id IN (SELECT id FROM risk_hazards WHERE assessment_id=?)) ORDER BY id DESC", assessment.id, assessment.id) });
+});
+app.post("/api/risk-assessments", canWrite, async (req: AuthedRequest, res) => {
+  const parsed = riskAssessmentSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid risk assessment", issues: parsed.error.flatten() });
+  if (!(await assertVenue(req, res, parsed.data.venue_id)) || !(await assertLocation(res, parsed.data.venue_id, parsed.data.location_id))) return;
+  const body = parsed.data, cols = Object.keys(body), result = await db.run(`INSERT INTO risk_assessments(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`, [...Object.values(body), req.user!.id]);
+  const after = await db.get("SELECT * FROM risk_assessments WHERE id=?", [result.lastInsertRowid]); await audit("risk_assessments", Number(result.lastInsertRowid), "create", null, after, req.user!.id, req.ip); res.status(201).json(after);
+});
+app.patch("/api/risk-assessments/:id", canWrite, async (req: AuthedRequest, res) => {
+  const before = await riskAssessmentFor(req, res, Number(req.params.id)); if (!before) return;
+  if (before.status === "Archived") return res.status(409).json({ error: "Archived assessments are immutable; start a new review version" });
+  const parsed = riskAssessmentSchema.partial().safeParse(req.body); if (!parsed.success || !Object.keys(parsed.data).length) return res.status(400).json({ error: "Invalid risk assessment", issues: parsed.success ? undefined : parsed.error.flatten() });
+  const targetVenue = Number(parsed.data.venue_id ?? before.venue_id); if (!isAdmin(req) && targetVenue !== Number(before.venue_id)) return res.status(403).json({ error: "Venue access denied" });
+  if (!(await assertVenue(req, res, targetVenue)) || !(await assertLocation(res, targetVenue, parsed.data.location_id === undefined ? before.location_id : parsed.data.location_id))) return;
+  await riskSnapshot(before, "Assessment amended", req.user!.id); const cols = Object.keys(parsed.data); await db.run(`UPDATE risk_assessments SET ${cols.map((c) => `${c}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`, [...Object.values(parsed.data), req.user!.id, before.id]);
+  const after = await db.get("SELECT * FROM risk_assessments WHERE id=?", [before.id]); await audit("risk_assessments", before.id, "update", before, after, req.user!.id, req.ip); res.json(after);
+});
+app.post("/api/risk-assessments/:id/hazards", canWrite, async (req: AuthedRequest, res) => {
+  const assessment = await riskAssessmentFor(req, res, Number(req.params.id)); if (!assessment) return; if (assessment.status === "Archived") return res.status(409).json({ error: "Archived assessments are immutable" });
+  const parsed = riskHazardSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid hazard", issues: parsed.error.flatten() });
+  const body: any = { ...parsed.data, initial_score: riskScore(parsed.data.initial_likelihood, parsed.data.initial_severity), residual_score: riskScore(parsed.data.residual_likelihood, parsed.data.residual_severity) }; if (body.completion_document_id && !(await assertDocument(req, res, body.completion_document_id, assessment.venue_id))) return;
+  const cols = Object.keys(body), result = await db.run(`INSERT INTO risk_hazards(assessment_id,${cols.join(",")},created_by) VALUES(?,${cols.map(() => "?").join(",")},?)`, [assessment.id, ...Object.values(body), req.user!.id]); const after = await db.get("SELECT * FROM risk_hazards WHERE id=?", [result.lastInsertRowid]); await audit("risk_hazards", Number(result.lastInsertRowid), "create", null, after, req.user!.id, req.ip); res.status(201).json(after);
+});
+app.patch("/api/risk-hazards/:id", canWrite, async (req: AuthedRequest, res) => {
+  const before = await db.get<any>("SELECT h.*,r.venue_id,r.status assessment_status FROM risk_hazards h JOIN risk_assessments r ON r.id=h.assessment_id WHERE h.id=?", [Number(req.params.id)]); if (!before) return res.status(404).json({ error: "Hazard not found" }); if (!venueAllowed(req, Number(before.venue_id))) return res.status(403).json({ error: "Venue access denied" }); if (before.assessment_status === "Archived") return res.status(409).json({ error: "Archived assessments are immutable" });
+  const parsed = riskHazardSchema.partial().safeParse(req.body); if (!parsed.success || !Object.keys(parsed.data).length) return res.status(400).json({ error: "Invalid hazard", issues: parsed.success ? undefined : parsed.error.flatten() });
+  const assessment = await db.get<any>("SELECT * FROM risk_assessments WHERE id=?", [before.assessment_id]); await riskSnapshot(assessment, `Hazard ${before.id} amended`, req.user!.id); const body: any = { ...parsed.data }; body.initial_score = riskScore(Number(body.initial_likelihood ?? before.initial_likelihood), Number(body.initial_severity ?? before.initial_severity)); body.residual_score = riskScore(Number(body.residual_likelihood ?? before.residual_likelihood), Number(body.residual_severity ?? before.residual_severity)); if (body.completion_document_id && !(await assertDocument(req, res, body.completion_document_id, before.venue_id))) return;
+  const cols = Object.keys(body); await db.run(`UPDATE risk_hazards SET ${cols.map((c) => `${c}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`, [...Object.values(body), req.user!.id, before.id]); const after = await db.get("SELECT * FROM risk_hazards WHERE id=?", [before.id]); await audit("risk_hazards", before.id, "update", before, after, req.user!.id, req.ip); res.json({ ...after, risk_level: riskLevel(Number((after as any).residual_score)) });
+});
+app.post("/api/risk-hazards/:id/action", canWrite, async (req: AuthedRequest, res) => {
+  const hazard = await db.get<any>("SELECT h.*,r.venue_id,r.location_id FROM risk_hazards h JOIN risk_assessments r ON r.id=h.assessment_id WHERE h.id=?", [Number(req.params.id)]); if (!hazard) return res.status(404).json({ error: "Hazard not found" }); if (!venueAllowed(req, Number(hazard.venue_id))) return res.status(403).json({ error: "Venue access denied" });
+  const body = { description: req.body.description || hazard.further_action || `Risk assessment action: ${hazard.hazard}`, venue_id: hazard.venue_id, location_id: hazard.location_id, related_type: "risk_assessment_hazard", related_id: hazard.id, priority: hazard.residual_score >= 15 ? "Critical" : hazard.residual_score >= 10 ? "High" : "Medium", responsible_person: req.body.responsible_person || hazard.responsible_person || null, due_date: req.body.due_date || hazard.target_date || null, status: "Open" }; const result = await db.run("INSERT INTO actions(description,venue_id,location_id,related_type,related_id,priority,responsible_person,due_date,status,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)", [...Object.values(body), req.user!.id]); const after = await db.get("SELECT * FROM actions WHERE id=?", [result.lastInsertRowid]); await audit("actions", Number(result.lastInsertRowid), "create_from_risk", null, after, req.user!.id, req.ip); res.status(201).json(after);
+});
+app.post("/api/risk-assessments/:id/review", canWrite, async (req: AuthedRequest, res) => {
+  const old = await riskAssessmentFor(req, res, Number(req.params.id)); if (!old) return; if (old.status === "Archived") return res.status(409).json({ error: "This version is already archived" }); const parsed = riskReviewSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ error: "Invalid review confirmation", issues: parsed.error.flatten() });
+  await riskSnapshot(old, "Version closed for review", req.user!.id); const cols = ["venue_id","title","category","area","location_id","assessment_date","assessor","responsible_person","review_date","status","overall_risk_rating","notes","site_verification_required","version","previous_version_id","template_key","signed_by","signed_at","signoff_notes"];
+  const next: any = { ...old, ...parsed.data, assessment_date: new Date().toISOString().slice(0,10), version: Number(old.version || 1)+1, previous_version_id: old.id, signed_by: parsed.data.responsible_person, signed_at: new Date().toISOString(), site_verification_required: old.site_verification_required }; delete next.confirm_controls;
+  const result = await db.run(`INSERT INTO risk_assessments(${cols.join(",")},created_by) VALUES(${cols.map(() => "?").join(",")},?)`, [...cols.map((c) => next[c] ?? null), req.user!.id]); const newId = Number(result.lastInsertRowid); const hazards = await rows<any>("SELECT * FROM risk_hazards WHERE assessment_id=? ORDER BY id", old.id); for (const hazard of hazards) { const hcols = ["hazard","who_may_be_harmed","how_harmed","existing_controls","initial_likelihood","initial_severity","initial_score","further_action","responsible_person","target_date","residual_likelihood","residual_severity","residual_score","status","completion_document_id","site_verification_required"]; await db.run(`INSERT INTO risk_hazards(assessment_id,${hcols.join(",")},created_by) VALUES(?,${hcols.map(() => "?").join(",")},?)`, [newId, ...hcols.map((c) => hazard[c] ?? null), req.user!.id]); } await db.run("UPDATE risk_assessments SET status='Archived',archived_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?", [req.user!.id, old.id]); const created = await db.get("SELECT * FROM risk_assessments WHERE id=?", [newId]); await audit("risk_assessments", newId, "review_new_version", old, created, req.user!.id, req.ip); res.status(201).json(created);
+});
+
 for (const [route, cfg] of Object.entries(resources)) {
   app.get(`/api/${route}`, async (req: AuthedRequest, res) => {
     const scoped = isAdmin(req)
@@ -987,7 +1055,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) =>
-    cb(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)),
+    cb(null, ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"].includes(file.mimetype) || /\.(jpe?g|png|heic|heif)$/i.test(file.originalname)),
 });
 const evidenceUpload = multer({
   storage: multer.memoryStorage(),
@@ -1216,6 +1284,7 @@ app.post(
         "extinguisher_check",
         "fire_alarm_call_point",
         "fire_alarm_test",
+        "risk_assessment",
       ].includes(type)
     )
       return res.status(400).json({ error: "Unsupported photo target" });
@@ -1342,16 +1411,16 @@ app.get("/api/documents/:id/links", async (req: AuthedRequest, res) => {
 
 app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
   const key = String(req.params[0]);
-  const photo = await db.get<{ entityType: string; entityId: number }>(
-    "SELECT entity_type entityType,entity_id entityId FROM photos WHERE storage_key=?",
+  const photo = await db.get<{ entityType: string; entityId: number; mimeType?: string }>(
+    "SELECT entity_type entityType,entity_id entityId,mime_type mimeType FROM photos WHERE storage_key=?",
     [key],
   );
-  const document = await db.get<{ venueId: number }>(
-    "SELECT venue_id venueId FROM documents WHERE storage_key=?",
+  const document = await db.get<{ venueId: number; mimeType?: string }>(
+    "SELECT venue_id venueId,mime_type mimeType FROM documents WHERE storage_key=?",
     [key],
   );
-  const attachment = await db.get<{ venueId: number }>(
-    "SELECT d.venue_id venueId FROM document_attachments a JOIN documents d ON d.id=a.document_id WHERE a.storage_key=?",
+  const attachment = await db.get<{ venueId: number; mimeType?: string }>(
+    "SELECT d.venue_id venueId,a.mime_type mimeType FROM document_attachments a JOIN documents d ON d.id=a.document_id WHERE a.storage_key=?",
     [key],
   );
   const venue = photo
@@ -1361,7 +1430,8 @@ app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
   if (!venueAllowed(req, venue)) return res.status(403).end();
   try {
     const object = await storage.get(key);
-    if (object.contentType) res.type(object.contentType);
+    const contentType = object.contentType || photo?.mimeType || document?.mimeType || attachment?.mimeType;
+    if (contentType) res.type(contentType);
     if (object.length) res.setHeader("Content-Length", String(object.length));
     res.setHeader("Cache-Control", "private, no-store");
     object.stream.pipe(res);

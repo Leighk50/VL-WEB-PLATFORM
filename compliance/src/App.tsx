@@ -24,6 +24,7 @@ import {
   clampPdfZoom,
   sanitizePdfPreviewError,
 } from "./pdf-preview";
+import { RiskAssessments } from "./RiskAssessments";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { name: string; role: string };
@@ -39,7 +40,7 @@ const nav = [
   ["/pat", "PAT Testing"],
   ["/extinguishers", "Fire Extinguishers"],
   ["/alarm", "Fire Alarm"],
-  ["/risk", "Fire Risk Assessments"],
+  ["/risk", "Risk Assessments"],
   ["/furnishings", "Soft Furnishings"],
   ["/documents", "Certificates & Documents"],
   ["/locations", "Locations"],
@@ -177,14 +178,7 @@ export default function App() {
           />
           <Route
             path="/risk"
-            element={
-              <Register
-                kind="risk-assessments"
-                title="Fire Risk Assessments"
-                boot={boot}
-                fields={riskFields}
-              />
-            }
+            element={<RiskAssessments boot={boot} />}
           />
           <Route
             path="/furnishings"
@@ -1989,7 +1983,13 @@ function Reports() {
     "PAT failures",
     "Fire extinguisher schedule",
     "Fire alarm test history",
-    "Outstanding fire risk actions",
+    "Full risk assessment",
+    "Fire-safety assessments",
+    "Outstanding risk-assessment actions",
+    "High-risk unresolved findings",
+    "Assessments due for review",
+    "Assessments requiring site verification",
+    "Assessment version history",
     "Soft furnishings register",
     "Certificates expiring",
     "Open defects/actions",
@@ -2227,17 +2227,6 @@ const extFields: Field[] = [
   },
   { key: "last_service_date", label: "Last service", type: "date" },
   { key: "next_service_date", label: "Next service", type: "date" },
-  { key: "notes", label: "Notes", type: "textarea" },
-];
-const riskFields: Field[] = [
-  { key: "assessment_date", label: "Assessment date", type: "date" },
-  { key: "assessor", label: "Assessor" },
-  { key: "review_date", label: "Review date", type: "date" },
-  { key: "venue_id", label: "Venue" },
-  { key: "hazards", label: "Fire hazards", type: "textarea" },
-  { key: "people_at_risk", label: "People at risk", type: "textarea" },
-  { key: "escape_routes", label: "Escape routes", type: "textarea" },
-  { key: "detection_warning", label: "Detection / warning", type: "textarea" },
   { key: "notes", label: "Notes", type: "textarea" },
 ];
 const furnFields: Field[] = [

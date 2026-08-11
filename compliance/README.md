@@ -40,6 +40,10 @@ The command obtains managed-identity credentials in Azure, creates `schema_migra
 
 Migration 2 adds append-only document attachments, fire-alarm call-point master data, structured weekly-test fields, venue rotation settings and configurable document types. It preserves all existing document and weekly-test rows. The normal `npm start` sequence applies it before the application accepts traffic.
 
+Migration 3 adds the structured, versioned risk-assessment and hazard model, immutable assessment snapshots, and an idempotency registry for production templates. After schema migration, the explicit bootstrap step creates 37 editable Village Limits working assessments (12 general and 25 fire-safety) only for the real, non-demo `Village Limits` venue. Every initial control is marked `Requires site verification`; no inspection result or claim of compliance is created. The registry prevents duplicates, preserves user edits, and prevents an archived/deleted template from being recreated. It also adds CP01–CP05 only when each venue/code is absent and never overwrites existing call points.
+
+`npm start` and `npm run migrate` apply the safe migration/bootstrap under the existing SQLite or managed-identity Azure SQL connection before traffic is accepted. `DEMO_SEED=false` remains required in staging/production and no demo assets or compliance records are created.
+
 ## Evidence and fire-alarm records
 
 - Certificate evidence accepts up to 10 PDF, JPEG, PNG, HEIC or HEIF files per request, with a 15 MB limit per file. Attachments are retained independently of later certificate renewals.

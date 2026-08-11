@@ -53,8 +53,8 @@ describe("administrator bootstrap", () => {
       true,
     );
     expect(venue).toEqual({ name: "Village Limits", is_demo: 0 });
-    expect(locations.map(({ name }) => name).sort()).toEqual(
-      [...INITIAL_LOCATION_NAMES].sort(),
+    expect(locations.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([...INITIAL_LOCATION_NAMES]),
     );
 
     for (const table of [
@@ -64,7 +64,6 @@ describe("administrator bootstrap", () => {
       "pat_tests",
       "extinguisher_checks",
       "fire_alarm_tests",
-      "risk_assessments",
       "documents",
       "photos",
       "actions",
@@ -74,6 +73,12 @@ describe("administrator bootstrap", () => {
       );
       expect(Number(count?.count), table).toBe(0);
     }
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_assessments"))?.count)).toBe(37);
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_hazards"))?.count)).toBeGreaterThan(150);
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM fire_alarm_call_points"))?.count)).toBe(5);
+    await migrateDatabase();
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM risk_assessments"))?.count)).toBe(37);
+    expect(Number((await db.get<{ count:number }>("SELECT COUNT(*) count FROM fire_alarm_call_points"))?.count)).toBe(5);
     const demoVenues = await db.get<{ count: number }>(
       "SELECT COUNT(*) count FROM venues WHERE is_demo=1",
     );

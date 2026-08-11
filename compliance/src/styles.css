@@ -680,3 +680,41 @@ th {
     min-height: 44px;
   }
 }
+
+.risk-dashboard { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:12px; margin-bottom:18px }
+.risk-dashboard article { background:#fff; border:1px solid #d9e1dc; border-radius:14px; padding:15px; display:flex; flex-direction:column }
+.risk-dashboard strong { font-size:1.8rem; color:#163c2b }
+.risk-filters { display:flex; gap:8px; overflow-x:auto; padding:2px 0 16px }
+.risk-filters button { white-space:nowrap }
+.risk-filters .active { background:#176b43; color:#fff }
+.risk-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px }
+.risk-card,.hazard-card { background:#fff; border:1px solid #d9e1dc; border-radius:16px; padding:18px }
+.risk-card-head,.sectionhead { display:flex; justify-content:space-between; gap:12px; align-items:flex-start }
+.badge,.risk { display:inline-block; border-radius:999px; padding:5px 10px; font-size:.82rem; font-weight:700 }
+.badge { background:#e7eee9; color:#264c38 }
+.badge.action-required,.risk.high,.risk.critical { background:#fde2de; color:#8b1f15 }
+.badge.review-due,.badge.draft,.risk.medium { background:#fff0c7; color:#745600 }
+.risk.low { background:#dff3e6; color:#145b35 }
+.verification,.notice { border-left:4px solid #c68b00; background:#fff7df; padding:10px 12px; color:#604700 }
+.assessment-meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; padding:14px 0 }
+.assessment-meta div { background:#f5f7f5; border-radius:10px; padding:10px }
+.assessment-meta dt { color:#5a6860; font-size:.82rem }
+.assessment-meta dd { margin:4px 0 0; font-weight:700 }
+.hazard-list { display:grid; gap:14px; margin:14px 0 22px }
+.hazard-card h4 { margin-top:0 }
+.hazard-form { border:1px dashed #8ca296; padding:14px; border-radius:12px }
+.evidence-section { border-top:1px solid #d9e1dc; border-bottom:1px solid #d9e1dc; padding:18px 0; margin:18px 0 }
+.checkbox { display:flex !important; flex-direction:row !important; align-items:center; gap:10px }
+.checkbox input { width:auto }
+@media (max-width:720px) {
+  .risk-cards { grid-template-columns:1fr }
+  .risk-card-head,.assessment-detail .sectionhead { flex-direction:column }
+  .assessment-detail .pageactions,.hazard-card .pageactions { width:100%; flex-direction:column }
+  .assessment-detail .pageactions button,.hazard-card .pageactions button { width:100% }
+}
+@media print {
+  aside,.topbar,.pageactions,.risk-filters,.risk-dashboard,button,.upload { display:none !important }
+  .content { margin:0 !important }
+  .assessment-detail { box-shadow:none; border:0 }
+  .hazard-card { break-inside:avoid }
+}
