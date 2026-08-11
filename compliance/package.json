@@ -32,6 +32,7 @@
     "jsonwebtoken": "latest",
     "mssql": "^12.2.0",
     "multer": "latest",
+    "pdfjs-dist": "^5.4.624",
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "latest",

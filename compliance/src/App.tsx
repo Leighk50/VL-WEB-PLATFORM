@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useSearchParams } from "react-router-dom";
 import {
+  GlobalWorkerOptions,
+  getDocument,
+  type PDFDocumentProxy,
+  type RenderTask,
+} from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import {
   api,
   createEvidenceObjectUrl,
   downloadPrivateAttachment,
@@ -12,6 +19,13 @@ import {
   uploadPhoto,
 } from "./api";
 import { evidenceValidationError } from "./evidence";
+import {
+  clampPdfPage,
+  clampPdfZoom,
+  sanitizePdfPreviewError,
+} from "./pdf-preview";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { name: string; role: string };
 type Boot = {
   venues: any[];
@@ -1096,6 +1110,7 @@ function EvidenceViewer({
   const [state, setState] = useState<{
     loading: boolean;
     url?: string;
+    blob?: Blob;
     kind?: "pdf" | "image" | "unavailable";
     error?: string;
   }>({ loading: true });
@@ -1107,12 +1122,15 @@ function EvidenceViewer({
     void fetchPrivateAttachment(attachment.id)
       .then(({ blob, contentType }) => {
         if (!active) return;
-        const objectUrl = createEvidenceObjectUrl(blob);
-        release = objectUrl.revoke;
+        const kind = evidencePreviewKind(contentType || attachment.mime_type);
+        const objectUrl =
+          kind === "image" ? createEvidenceObjectUrl(blob) : undefined;
+        release = objectUrl?.revoke;
         setState({
           loading: false,
-          url: objectUrl.url,
-          kind: evidencePreviewKind(contentType || attachment.mime_type),
+          url: objectUrl?.url,
+          blob,
+          kind,
         });
       })
       .catch((error) => {
@@ -1153,10 +1171,16 @@ function EvidenceViewer({
           </button>
         </header>
         <div className="viewer-body">
-          {state.loading && <p className="viewer-message">Loading evidence…</p>}
+          {state.loading && (
+            <p className="viewer-message">Loading certificate…</p>
+          )}
           {state.error && <p className="error">{state.error}</p>}
-          {state.url && state.kind === "pdf" && (
-            <iframe src={state.url} title={attachment.original_name} />
+          {state.blob && state.kind === "pdf" && (
+            <PdfEvidencePreview
+              blob={state.blob}
+              attachmentId={attachment.id}
+              filename={attachment.original_name}
+            />
           )}
           {state.url && state.kind === "image" && (
             <img
@@ -1182,6 +1206,148 @@ function EvidenceViewer({
           {downloadError && <p className="error">{downloadError}</p>}
         </footer>
       </section>
+    </div>
+  );
+}
+
+function PdfEvidencePreview({
+  blob,
+  attachmentId,
+  filename,
+}: {
+  blob: Blob;
+  attachmentId: number;
+  filename: string;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [pdf, setPdf] = useState<PDFDocumentProxy>();
+  const [pageNumber, setPageNumber] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const loadingTaskPromise = blob
+      .arrayBuffer()
+      .then((bytes) => getDocument({ data: new Uint8Array(bytes) }));
+    void loadingTaskPromise
+      .then((loadingTask) => loadingTask.promise)
+      .then((document) => {
+        if (!active) return void document.destroy();
+        setPdf(document);
+        setPageNumber(1);
+        setLoading(false);
+      })
+      .catch((caught) => {
+        if (!active) return;
+        const message = sanitizePdfPreviewError(caught);
+        console.error("Certificate PDF preview failed", {
+          attachmentId,
+          filename,
+          error: message,
+        });
+        setError(message || "Unknown PDF rendering error");
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+      void loadingTaskPromise
+        .then((task) => task.destroy())
+        .catch(() => undefined);
+    };
+  }, [blob, attachmentId, filename]);
+
+  useEffect(() => {
+    if (!pdf || !canvas.current) return;
+    let active = true;
+    let renderTask: RenderTask | undefined;
+    setLoading(true);
+    setError("");
+    void pdf
+      .getPage(pageNumber)
+      .then((page) => {
+        if (!active || !canvas.current) return;
+        const viewport = page.getViewport({ scale: zoom * 1.35 });
+        canvas.current.width = Math.floor(viewport.width);
+        canvas.current.height = Math.floor(viewport.height);
+        renderTask = page.render({ canvas: canvas.current, viewport });
+        return renderTask.promise;
+      })
+      .then(() => {
+        if (active) setLoading(false);
+      })
+      .catch((caught) => {
+        if (
+          !active ||
+          (caught as { name?: string }).name === "RenderingCancelledException"
+        )
+          return;
+        const message = sanitizePdfPreviewError(caught);
+        console.error("Certificate PDF page render failed", {
+          attachmentId,
+          filename,
+          pageNumber,
+          error: message,
+        });
+        setError(message || "Unknown PDF page rendering error");
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+      renderTask?.cancel();
+    };
+  }, [pdf, pageNumber, zoom, attachmentId, filename]);
+
+  if (error)
+    return (
+      <div className="viewer-message error">
+        <b>Certificate preview failed</b>
+        <p>{error}</p>
+      </div>
+    );
+  return (
+    <div className="pdf-preview">
+      <div className="pdf-controls">
+        <button
+          className="secondary"
+          disabled={!pdf || pageNumber <= 1}
+          onClick={() =>
+            setPageNumber((page) => clampPdfPage(page - 1, pdf?.numPages || 1))
+          }
+        >
+          Previous
+        </button>
+        <span>
+          Page {pageNumber} / {pdf?.numPages || "…"}
+        </span>
+        <button
+          className="secondary"
+          disabled={!pdf || pageNumber >= pdf.numPages}
+          onClick={() =>
+            setPageNumber((page) => clampPdfPage(page + 1, pdf?.numPages || 1))
+          }
+        >
+          Next
+        </button>
+        <button
+          className="secondary"
+          onClick={() => setZoom((value) => clampPdfZoom(value - 0.25))}
+        >
+          Zoom out
+        </button>
+        <span>{Math.round(zoom * 100)}%</span>
+        <button
+          className="secondary"
+          onClick={() => setZoom((value) => clampPdfZoom(value + 0.25))}
+        >
+          Zoom in
+        </button>
+      </div>
+      {loading && <p className="viewer-message">Loading certificate…</p>}
+      <div className="pdf-canvas-wrap">
+        <canvas ref={canvas} aria-label={`Page ${pageNumber} of ${filename}`} />
+      </div>
     </div>
   );
 }
