@@ -441,6 +441,14 @@ describe("venue security, current authorization and immutable history", () => {
       .set(auth(tokens.staff))
       .expect(200);
     expect(attachments.body).toHaveLength(2);
+    const documentList = await request(app)
+      .get("/api/documents")
+      .set(auth(tokens.staff))
+      .expect(200);
+    expect(
+      documentList.body.find((row: any) => row.id === document.body.id)
+        .attachment_count,
+    ).toBe(2);
     await request(app)
       .get(`/api/document-attachments/${attachments.body[0].id}/file`)
       .expect(401);

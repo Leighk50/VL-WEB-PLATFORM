@@ -7,6 +7,7 @@ import {
   uploadDocumentEvidence,
   uploadPhoto,
 } from "./api";
+import { evidenceValidationError } from "./evidence";
 type User = { name: string; role: string };
 type Boot = {
   venues: any[];
@@ -180,14 +181,7 @@ export default function App() {
           />
           <Route
             path="/documents"
-            element={
-              <Register
-                kind="documents"
-                title="Certificates & Documents"
-                boot={boot}
-                fields={docFields}
-              />
-            }
+            element={<CertificatesDocuments boot={boot} />}
           />
           <Route
             path="/actions"
@@ -299,9 +293,7 @@ function Register({
           body: JSON.stringify(body),
         },
       );
-      setEditing(
-        ["assets", "furnishings", "documents"].includes(kind) ? saved : null,
-      );
+      setEditing(["assets", "furnishings"].includes(kind) ? saved : null);
       setError("");
       load();
     } catch (e: any) {
@@ -374,9 +366,6 @@ function Register({
           </form>
           {editing.id && ["assets", "furnishings"].includes(kind) && (
             <PhotoManager entityType={kind} entityId={editing.id} />
-          )}
-          {editing.id && kind === "documents" && (
-            <DocumentEvidence document={editing} onRenewed={load} />
           )}
         </section>
       )}
@@ -562,17 +551,241 @@ function BarcodeScanner({
   );
 }
 
+function CertificatesDocuments({ boot }: { boot: Boot | null }) {
+  const [documents, setDocuments] = useState<any[]>([]),
+    [selected, setSelected] = useState<any>(),
+    [creating, setCreating] = useState(false),
+    [venueId, setVenueId] = useState<number>(),
+    [error, setError] = useState("");
+  const load = async () => setDocuments(await api<any[]>("/documents"));
+  useEffect(() => {
+    void load();
+    if (!venueId && boot?.venues[0]?.id) setVenueId(boot.venues[0].id);
+  }, [boot]);
+  async function save(event: any) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const body: any = {
+      venue_id: Number(values.venue_id),
+      type: values.type,
+      title: values.title,
+    };
+    for (const key of [
+      "issuer",
+      "reference",
+      "issue_date",
+      "review_date",
+      "notes",
+    ])
+      if (values[key]) body[key] = values[key];
+    if (values.location_id) body.location_id = Number(values.location_id);
+    try {
+      const saved = await api<any>("/documents", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setSelected(saved);
+      setCreating(false);
+      setError("");
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Document could not be saved",
+      );
+    }
+  }
+  return (
+    <Page
+      title="Certificates & Documents"
+      subtitle={`${documents.length} certificate/document records`}
+      actions={
+        <button
+          onClick={() => {
+            setSelected(undefined);
+            setCreating(true);
+          }}
+        >
+          + Add certificate / document
+        </button>
+      }
+    >
+      {creating && (
+        <section className="panel formpanel">
+          <h2>New certificate / document</h2>
+          <form className="gridform" onSubmit={save}>
+            <label>
+              Document type
+              <select name="type" required>
+                <option value="">Select document type…</option>
+                {boot?.documentTypes.map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name}
+                  </option>
+                ))}
+                {!boot?.documentTypes.length && (
+                  <option value="Other">Other</option>
+                )}
+              </select>
+            </label>
+            <label>
+              Title
+              <input name="title" required />
+            </label>
+            <label>
+              Contractor / provider
+              <input name="issuer" />
+            </label>
+            <label>
+              Certificate / reference number
+              <input name="reference" />
+            </label>
+            <label>
+              Issue date
+              <input name="issue_date" type="date" />
+            </label>
+            <label>
+              Expiry / review date
+              <input name="review_date" type="date" />
+            </label>
+            <label>
+              Venue
+              <select
+                name="venue_id"
+                value={venueId || ""}
+                onChange={(event) => setVenueId(Number(event.target.value))}
+                required
+              >
+                <option value="">Select venue…</option>
+                {boot?.venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Location
+              <select name="location_id">
+                <option value="">No specific location</option>
+                {boot?.locations
+                  .filter((location) => location.venue_id === venueId)
+                  .map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="wide">
+              Notes
+              <textarea name="notes" />
+            </label>
+            {error && <p className="error">{error}</p>}
+            <div className="formactions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setCreating(false)}
+              >
+                Cancel
+              </button>
+              <button>Save document</button>
+            </div>
+          </form>
+        </section>
+      )}
+      {selected && (
+        <section className="panel document-detail">
+          <div className="sectionhead">
+            <div>
+              <h2>{selected.title}</h2>
+              <p>
+                {selected.type} · {selected.reference || "No reference number"}
+              </p>
+            </div>
+            <button
+              className="secondary"
+              onClick={() => setSelected(undefined)}
+            >
+              Close
+            </button>
+          </div>
+          <DocumentEvidence
+            document={selected}
+            onRenewed={(renewed) => {
+              setSelected(renewed);
+              void load();
+            }}
+            onChanged={load}
+          />
+        </section>
+      )}
+      <section className="panel tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Type / title</th>
+              <th>Provider / reference</th>
+              <th>Expiry / review</th>
+              <th>Venue</th>
+              <th>Evidence</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {documents.map((document) => (
+              <tr key={document.id}>
+                <td>
+                  <b>{document.title}</b>
+                  <br />
+                  <small>{document.type}</small>
+                </td>
+                <td>
+                  {document.issuer || "—"}
+                  <br />
+                  <small>{document.reference || "No reference"}</small>
+                </td>
+                <td>{document.review_date || "Not set"}</td>
+                <td>{document.venue_name}</td>
+                <td>
+                  <b>{Number(document.attachment_count)} attachments</b>
+                </td>
+                <td>
+                  <button
+                    className="link"
+                    onClick={() => setSelected(document)}
+                  >
+                    {Number(document.attachment_count)
+                      ? "View / Add Evidence"
+                      : "Add Evidence"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!documents.length && <Empty />}
+      </section>
+    </Page>
+  );
+}
+
 function DocumentEvidence({
   document,
   onRenewed,
+  onChanged,
 }: {
   document: any;
-  onRenewed: () => void;
+  onRenewed: (renewed: any) => void;
+  onChanged: () => void;
 }) {
   const [attachments, setAttachments] = useState<any[]>([]),
     [urls, setUrls] = useState<Record<number, string>>({}),
     [links, setLinks] = useState<any[]>([]),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [preview, setPreview] = useState<any>();
   const load = async () => {
     const list = await api<any[]>(`/documents/${document.id}/attachments`);
     setAttachments(list);
@@ -593,10 +806,14 @@ function DocumentEvidence({
   }, [document.id]);
   async function upload(files: FileList | null) {
     if (!files?.length) return;
+    const selectedFiles = Array.from(files);
+    const validationError = evidenceValidationError(selectedFiles);
+    if (validationError) return setMessage(validationError);
     try {
-      await uploadDocumentEvidence(document.id, Array.from(files));
+      await uploadDocumentEvidence(document.id, selectedFiles);
       setMessage("Evidence uploaded securely.");
       await load();
+      onChanged();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed");
     }
@@ -615,23 +832,29 @@ function DocumentEvidence({
       version: Number(document.version || 1) + 1,
       previous_version_id: document.id,
     };
-    await api("/documents", { method: "POST", body: JSON.stringify(body) });
+    const renewed = await api<any>("/documents", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
     setMessage(
       "Renewal created as a new record; previous evidence was retained.",
     );
-    onRenewed();
+    onRenewed(renewed);
   }
   return (
-    <div className="photos">
+    <div className="document-evidence">
       <div className="sectionhead">
-        <h3>Private evidence files</h3>
+        <div>
+          <p className="eyebrow">Private, authenticated storage</p>
+          <h2>Certificate / Document Evidence</h2>
+        </div>
         <button type="button" className="secondary" onClick={renew}>
           Renew as new version
         </button>
       </div>
       <div className="photoactions">
         <label className="upload">
-          Upload evidence files
+          Upload PDF or photo
           <input
             type="file"
             multiple
@@ -640,7 +863,7 @@ function DocumentEvidence({
           />
         </label>
         <label className="upload secondary">
-          Take evidence photo
+          Take Photo
           <input
             type="file"
             accept="image/*"
@@ -649,12 +872,41 @@ function DocumentEvidence({
           />
         </label>
       </div>
-      {message && <p>{message}</p>}
+      <small>
+        PDF, JPG/JPEG, PNG, HEIC or HEIF · maximum 15 MB per file · select up to
+        10 files
+      </small>
+      {message && (
+        <p
+          className={
+            message.includes("uploaded securely") ? "success" : "error"
+          }
+        >
+          {message}
+        </p>
+      )}
+      {!attachments.length && (
+        <div className="empty">
+          No certificate/document evidence uploaded yet
+        </div>
+      )}
       <div className="evidencegrid">
         {attachments.map((item) => (
           <article key={item.id}>
             {urls[item.id] && (
-              <img src={urls[item.id]} alt={item.original_name} />
+              <button
+                type="button"
+                className="evidence-thumbnail"
+                onClick={() => setPreview(item)}
+                aria-label={`Preview ${item.original_name}`}
+              >
+                <img src={urls[item.id]} alt={item.original_name} />
+              </button>
+            )}
+            {item.mime_type === "application/pdf" && (
+              <div className="pdf-label" aria-label="PDF document">
+                PDF
+              </div>
             )}
             <strong>{item.original_name}</strong>
             <small>
@@ -662,22 +914,51 @@ function DocumentEvidence({
               · {new Date(item.created_at).toLocaleString()} ·{" "}
               {item.uploaded_by || "Unknown user"}
             </small>
-            <button
-              type="button"
-              className="link"
-              onClick={async () => {
-                const url = await privateAttachmentUrl(item.id);
-                window.open(url, "_blank", "noopener,noreferrer");
-                window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-              }}
-            >
-              {item.mime_type === "application/pdf"
-                ? "Open PDF"
-                : "Open / download"}
-            </button>
+            <div className="evidence-actions">
+              <button
+                type="button"
+                className="link"
+                onClick={async () => {
+                  if (urls[item.id]) setPreview(item);
+                  else {
+                    const url = await privateAttachmentUrl(item.id);
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                  }
+                }}
+              >
+                View / Open
+              </button>
+              <button
+                type="button"
+                className="link"
+                onClick={async () => {
+                  const url = await privateAttachmentUrl(item.id);
+                  const anchor = window.document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = item.original_name;
+                  anchor.click();
+                  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                }}
+              >
+                Download
+              </button>
+            </div>
           </article>
         ))}
       </div>
+      {preview && urls[preview.id] && (
+        <div className="image-preview" role="dialog" aria-modal="true">
+          <button
+            className="preview-close"
+            onClick={() => setPreview(undefined)}
+          >
+            Close preview
+          </button>
+          <img src={urls[preview.id]} alt={preview.original_name} />
+          <strong>{preview.original_name}</strong>
+        </div>
+      )}
       <h3>Linked compliance registers</h3>
       <form
         className="inlineform"
@@ -1648,17 +1929,6 @@ const furnFields: Field[] = [
   { key: "treatment_product", label: "Treatment / product" },
   { key: "treatment_date", label: "Treatment date", type: "date" },
   { key: "next_review_date", label: "Next review", type: "date" },
-  { key: "notes", label: "Notes", type: "textarea" },
-];
-const docFields: Field[] = [
-  { key: "title", label: "Title" },
-  { key: "type", label: "Document type" },
-  { key: "reference", label: "Reference" },
-  { key: "venue_id", label: "Venue" },
-  { key: "location_id", label: "Location" },
-  { key: "issue_date", label: "Issue date", type: "date" },
-  { key: "review_date", label: "Expiry / review", type: "date" },
-  { key: "issuer", label: "Contractor / issuer" },
   { key: "notes", label: "Notes", type: "textarea" },
 ];
 const actionFields: Field[] = [

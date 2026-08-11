@@ -502,6 +502,68 @@ th {
   border-radius: 0.45rem;
 }
 
+.document-detail {
+  border: 2px solid #8cb99b;
+}
+
+.document-evidence {
+  border-top: 1px solid #dfe5de;
+  margin-top: 1rem;
+  padding-top: 1.25rem;
+}
+
+.evidence-thumbnail {
+  border: 0;
+  padding: 0;
+  min-height: 130px;
+  background: transparent;
+}
+
+.pdf-label {
+  display: grid;
+  place-items: center;
+  min-height: 130px;
+  border-radius: 0.45rem;
+  background: #f4e3e3;
+  color: #a12828;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.evidence-actions {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.image-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgb(11 22 15 / 92%);
+  color: white;
+}
+
+.image-preview img {
+  max-width: min(95vw, 1100px);
+  max-height: 78vh;
+  object-fit: contain;
+}
+
+.preview-close {
+  justify-self: end;
+  min-height: 48px;
+}
+
+.success {
+  color: #176c3a;
+  font-weight: 700;
+}
+
 .inlineform {
   display: flex;
   align-items: end;
@@ -539,5 +601,9 @@ th {
   .photoactions {
     align-items: stretch;
     flex-direction: column;
+  }
+  .document-evidence .upload,
+  .document-evidence button {
+    min-height: 48px;
   }
 }

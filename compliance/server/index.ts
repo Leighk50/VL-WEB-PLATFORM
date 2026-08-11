@@ -789,9 +789,13 @@ for (const [route, cfg] of Object.entries(resources)) {
       ? " LEFT JOIN locations l ON l.id=t.location_id"
       : "";
     const locationColumn = cfg.location ? ",l.name location_name" : "";
+    const attachmentColumn =
+      route === "documents"
+        ? ",(SELECT count(*) FROM document_attachments a WHERE a.document_id=t.id) attachment_count"
+        : "";
     res.json(
       await rows(
-        `SELECT t.*,v.name venue_name${locationColumn} FROM ${cfg.table} t LEFT JOIN venues v ON v.id=t.venue_id${joinLocation}${scoped.sql} ORDER BY t.id DESC`,
+        `SELECT t.*,v.name venue_name${locationColumn}${attachmentColumn} FROM ${cfg.table} t LEFT JOIN venues v ON v.id=t.venue_id${joinLocation}${scoped.sql} ORDER BY t.id DESC`,
         ...scoped.params,
       ),
     );
@@ -997,7 +1001,8 @@ const evidenceUpload = multer({
         "image/png",
         "image/heic",
         "image/heif",
-      ].includes(file.mimetype),
+      ].includes(file.mimetype) ||
+        /\.(pdf|jpe?g|png|heic|heif)$/i.test(file.originalname),
     ),
 });
 
@@ -1037,10 +1042,19 @@ app.post(
     const created = [];
     for (const file of files) {
       const originalName = basename(file.originalname).slice(0, 500);
-      const key = await storage.put(file.buffer, originalName, file.mimetype);
+      const extension = originalName.split(".").pop()?.toLowerCase();
+      const mimeType =
+        file.mimetype === "application/octet-stream" || !file.mimetype
+          ? extension === "heic"
+            ? "image/heic"
+            : extension === "heif"
+              ? "image/heif"
+              : file.mimetype
+          : file.mimetype;
+      const key = await storage.put(file.buffer, originalName, mimeType);
       const result = await db.run(
         "INSERT INTO document_attachments(document_id,storage_key,original_name,mime_type,file_size,created_by) VALUES(?,?,?,?,?,?)",
-        [documentId, key, originalName, file.mimetype, file.size, req.user!.id],
+        [documentId, key, originalName, mimeType, file.size, req.user!.id],
       );
       const attachment = await db.get(
         "SELECT id,document_id,original_name,mime_type,file_size,created_at FROM document_attachments WHERE id=?",
