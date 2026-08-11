@@ -63,6 +63,10 @@ export async function uploadDocumentEvidence(
 }
 
 export async function privateAttachmentUrl(attachmentId: number) {
+  return URL.createObjectURL((await fetchPrivateAttachment(attachmentId)).blob);
+}
+
+export async function fetchPrivateAttachment(attachmentId: number) {
   const response = await fetch(
     `/api/document-attachments/${attachmentId}/file`,
     {
@@ -70,5 +74,39 @@ export async function privateAttachmentUrl(attachmentId: number) {
     },
   );
   if (!response.ok) throw new Error("Evidence file could not be loaded");
-  return URL.createObjectURL(await response.blob());
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const filename = disposition.match(/filename="([^"]+)"/i)?.[1];
+  return {
+    blob: await response.blob(),
+    contentType:
+      response.headers.get("Content-Type") || "application/octet-stream",
+    filename,
+  };
+}
+
+export async function openPrivateAttachment(attachmentId: number) {
+  const popup = window.open("about:blank", "_blank");
+  try {
+    const { blob } = await fetchPrivateAttachment(attachmentId);
+    const url = URL.createObjectURL(blob);
+    if (popup) popup.location.href = url;
+    else window.location.assign(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+  } catch (error) {
+    popup?.close();
+    throw error;
+  }
+}
+
+export async function downloadPrivateAttachment(
+  attachmentId: number,
+  fallbackName: string,
+) {
+  const { blob, filename } = await fetchPrivateAttachment(attachmentId);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename || fallbackName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

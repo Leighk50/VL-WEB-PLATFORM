@@ -506,6 +506,18 @@ th {
   border: 2px solid #8cb99b;
 }
 
+.record-actions,
+.version-links {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.version-links {
+  margin-bottom: 0.75rem;
+}
+
 .document-evidence {
   border-top: 1px solid #dfe5de;
   margin-top: 1rem;

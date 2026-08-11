@@ -441,6 +441,28 @@ describe("venue security, current authorization and immutable history", () => {
       .set(auth(tokens.staff))
       .expect(200);
     expect(attachments.body).toHaveLength(2);
+    const pdfAttachment = attachments.body.find(
+      (item: any) => item.mime_type === "application/pdf",
+    );
+    const imageAttachment = attachments.body.find(
+      (item: any) => item.mime_type === "image/jpeg",
+    );
+    const pdfFile = await request(app)
+      .get(`/api/document-attachments/${pdfAttachment.id}/file`)
+      .set(auth(tokens.staff))
+      .expect(200)
+      .expect("Content-Type", /application\/pdf/);
+    expect(pdfFile.headers["content-disposition"]).toContain(
+      'inline; filename="certificate.pdf"',
+    );
+    const imageFile = await request(app)
+      .get(`/api/document-attachments/${imageAttachment.id}/file`)
+      .set(auth(tokens.staff))
+      .expect(200)
+      .expect("Content-Type", /image\/jpeg/);
+    expect(imageFile.headers["content-disposition"]).toContain(
+      'inline; filename="photo.jpg"',
+    );
     const documentList = await request(app)
       .get("/api/documents")
       .set(auth(tokens.staff))
@@ -450,7 +472,7 @@ describe("venue security, current authorization and immutable history", () => {
         .attachment_count,
     ).toBe(2);
     await request(app)
-      .get(`/api/document-attachments/${attachments.body[0].id}/file`)
+      .get(`/api/document-attachments/${pdfAttachment.id}/file`)
       .expect(401);
     const renewed = await request(app)
       .post("/api/documents")

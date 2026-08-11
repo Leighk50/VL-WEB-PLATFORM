@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useSearchParams } from "react-router-dom";
 import {
   api,
+  downloadPrivateAttachment,
+  openPrivateAttachment,
   privateAttachmentUrl,
   privateImageUrl,
   uploadDocumentEvidence,
@@ -552,16 +554,42 @@ function BarcodeScanner({
 }
 
 function CertificatesDocuments({ boot }: { boot: Boot | null }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedDocumentId = Number(
+    searchParams.get("document") ||
+      localStorage.getItem("compliance_selected_document") ||
+      0,
+  );
   const [documents, setDocuments] = useState<any[]>([]),
     [selected, setSelected] = useState<any>(),
     [creating, setCreating] = useState(false),
     [venueId, setVenueId] = useState<number>(),
     [error, setError] = useState("");
-  const load = async () => setDocuments(await api<any[]>("/documents"));
+  const openDocument = (document: any) => {
+    setSelected(document);
+    setCreating(false);
+    localStorage.setItem("compliance_selected_document", String(document.id));
+    setSearchParams({ document: String(document.id) });
+  };
+  const closeDocument = () => {
+    setSelected(undefined);
+    localStorage.removeItem("compliance_selected_document");
+    setSearchParams({});
+  };
+  const load = async () => {
+    const list = await api<any[]>("/documents");
+    setDocuments(list);
+    if (requestedDocumentId) {
+      const saved = list.find(
+        (document) => document.id === requestedDocumentId,
+      );
+      if (saved) setSelected(saved);
+    }
+  };
   useEffect(() => {
     void load();
     if (!venueId && boot?.venues[0]?.id) setVenueId(boot.venues[0].id);
-  }, [boot]);
+  }, [boot, requestedDocumentId]);
   async function save(event: any) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -584,7 +612,7 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
         method: "POST",
         body: JSON.stringify(body),
       });
-      setSelected(saved);
+      openDocument(saved);
       setCreating(false);
       setError("");
       await load();
@@ -603,7 +631,7 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
       actions={
         <button
           onClick={() => {
-            setSelected(undefined);
+            closeDocument();
             setCreating(true);
           }}
         >
@@ -707,15 +735,44 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
             </div>
             <button
               className="secondary"
-              onClick={() => setSelected(undefined)}
+              onClick={() => {
+                closeDocument();
+              }}
             >
               Close
             </button>
           </div>
+          <div className="version-links">
+            <b>Version {selected.version || 1}</b>
+            {selected.previous_version_id && (
+              <button
+                className="link"
+                onClick={() => {
+                  const previous = documents.find(
+                    (item) => item.id === selected.previous_version_id,
+                  );
+                  if (previous) openDocument(previous);
+                }}
+              >
+                View previous version and evidence
+              </button>
+            )}
+            {documents
+              .filter((item) => item.previous_version_id === selected.id)
+              .map((renewal) => (
+                <button
+                  key={renewal.id}
+                  className="link"
+                  onClick={() => openDocument(renewal)}
+                >
+                  View renewed version {renewal.version || 1}
+                </button>
+              ))}
+          </div>
           <DocumentEvidence
             document={selected}
             onRenewed={(renewed) => {
-              setSelected(renewed);
+              openDocument(renewed);
               void load();
             }}
             onChanged={load}
@@ -753,14 +810,22 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
                   <b>{Number(document.attachment_count)} attachments</b>
                 </td>
                 <td>
-                  <button
-                    className="link"
-                    onClick={() => setSelected(document)}
-                  >
-                    {Number(document.attachment_count)
-                      ? "View / Add Evidence"
-                      : "Add Evidence"}
-                  </button>
+                  <div className="record-actions">
+                    <button
+                      className="link"
+                      onClick={() => openDocument(document)}
+                    >
+                      View
+                    </button>
+                    <button
+                      className="link"
+                      onClick={() => openDocument(document)}
+                    >
+                      {Number(document.attachment_count)
+                        ? "View / Add Evidence"
+                        : "Add Evidence"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -915,30 +980,29 @@ function DocumentEvidence({
               {item.uploaded_by || "Unknown user"}
             </small>
             <div className="evidence-actions">
+              {urls[item.id] && (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => setPreview(item)}
+                >
+                  View
+                </button>
+              )}
               <button
                 type="button"
                 className="link"
                 onClick={async () => {
-                  if (urls[item.id]) setPreview(item);
-                  else {
-                    const url = await privateAttachmentUrl(item.id);
-                    window.open(url, "_blank", "noopener,noreferrer");
-                    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                  }
+                  await openPrivateAttachment(item.id);
                 }}
               >
-                View / Open
+                {urls[item.id] ? "Open full size" : "View / Open"}
               </button>
               <button
                 type="button"
                 className="link"
                 onClick={async () => {
-                  const url = await privateAttachmentUrl(item.id);
-                  const anchor = window.document.createElement("a");
-                  anchor.href = url;
-                  anchor.download = item.original_name;
-                  anchor.click();
-                  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                  await downloadPrivateAttachment(item.id, item.original_name);
                 }}
               >
                 Download
