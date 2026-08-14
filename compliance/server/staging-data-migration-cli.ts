@@ -10,12 +10,12 @@ import {
   dependencyOrder,
   destinationIsBootstrapOnly,
   qualified,
+  resolveMigrationConfig,
   sameCounts,
   sourcePredicate,
   validateMigrationConfig,
   type Column,
   type ForeignKey,
-  type MigrationConfig,
   type TableCounts,
   type TableSchema,
 } from "./staging-data-migration.js";
@@ -27,13 +27,7 @@ const knownArgs = new Set(["--dry-run", "--verify-only"]);
 for (const arg of args) if (!knownArgs.has(arg)) throw new Error(`Unknown argument: ${arg}`);
 if (dryRun && verifyOnly) throw new Error("Choose either --dry-run or --verify-only");
 
-const config: MigrationConfig = {
-  server: process.env.AZURE_SQL_SERVER || "",
-  sourceDatabase: process.env.SOURCE_AZURE_SQL_DATABASE || "",
-  destinationDatabase: process.env.AZURE_SQL_DATABASE || "",
-  storageAccount: process.env.AZURE_STORAGE_ACCOUNT,
-  storageContainer: process.env.AZURE_STORAGE_CONTAINER || "compliance-private",
-};
+const config = resolveMigrationConfig(process.env);
 validateMigrationConfig(config);
 
 console.log("Compliance Hub one-time data migration");

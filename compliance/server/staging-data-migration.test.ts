@@ -4,6 +4,7 @@ import {
   dependencyOrder,
   destinationIsBootstrapOnly,
   rollbackTransaction,
+  resolveMigrationConfig,
   sameCounts,
   sourcePredicate,
   validateMigrationConfig,
@@ -29,6 +30,21 @@ describe("staging data migration safety", () => {
     expect(() => validateMigrationConfig(config)).not.toThrow();
     expect(() => validateMigrationConfig({ ...config, destinationDatabase: config.sourceDatabase.toUpperCase() })).toThrow(/different/);
     expect(() => validateMigrationConfig({ ...config, sourceDatabase: "db]; DROP TABLE users;--" })).toThrow(/unsafe/);
+    expect(() => validateMigrationConfig({ ...config, destinationDatabase: "some-other-db" })).toThrow(/staging destination/);
+  });
+
+  it("defaults only the staging source and requires the App Service destination", () => {
+    const resolved = resolveMigrationConfig({
+      AZURE_SQL_SERVER: config.server,
+      AZURE_SQL_DATABASE: config.destinationDatabase,
+    });
+    expect(resolved.sourceDatabase).toBe("vl-compliance-staging-db");
+    expect(resolved.destinationDatabase).toBe("vl-compliance-staging-db-gp");
+    expect(() =>
+      validateMigrationConfig(
+        resolveMigrationConfig({ AZURE_SQL_SERVER: config.server }),
+      ),
+    ).toThrow(/AZURE_SQL_DATABASE/);
   });
 
   it("preserves identity IDs, administrator hashes and all ordinary values", () => {

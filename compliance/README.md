@@ -36,13 +36,13 @@ Run a no-write plan first, then schedule the final copy in a quiet window. The A
 
 ```sh
 cd /home/site/wwwroot
-export SOURCE_AZURE_SQL_DATABASE=vl-compliance-staging-db
-export AZURE_SQL_DATABASE=vl-compliance-staging-db-gp
-npm run migrate-staging-data -- --dry-run
+npm run migrate-staging-data:dry-run
 npm run migrate-staging-data
 # type MIGRATE only after reviewing the printed server, databases and counts
-npm run migrate-staging-data -- --verify-only
+npm run migrate-staging-data:verify
 ```
+
+For this staging wrapper, `SOURCE_AZURE_SQL_DATABASE` defaults to `vl-compliance-staging-db`. The destination never defaults: it must be supplied by the existing App Service `AZURE_SQL_DATABASE` setting and must equal the intended `vl-compliance-staging-db-gp` deployment value. Both names are printed and the existing different-database validation runs before any SQL connection or write.
 
 The command discovers every `dbo` application table and its foreign keys from the live catalogs, validates that source and destination schemas match, and inserts in dependency order inside a serializable transaction protected by `sp_getapplock`. SQL constraints are disabled only inside that destination transaction, then re-enabled with full checking. Counts, every copied column (including IDs and password hashes), the active administrator, the single real venue, attachment keys, and private Blob samples are checked without logging secrets or object keys.
 

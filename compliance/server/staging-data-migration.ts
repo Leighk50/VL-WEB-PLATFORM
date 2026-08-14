@@ -18,6 +18,22 @@ export type MigrationConfig = {
   storageContainer?: string;
 };
 export type TableCounts = Record<string, number>;
+export const STAGING_SOURCE_DATABASE = "vl-compliance-staging-db";
+export const STAGING_DESTINATION_DATABASE = "vl-compliance-staging-db-gp";
+
+export function resolveMigrationConfig(
+  env: NodeJS.ProcessEnv,
+): MigrationConfig {
+  return {
+    server: env.AZURE_SQL_SERVER || "",
+    sourceDatabase:
+      env.SOURCE_AZURE_SQL_DATABASE || STAGING_SOURCE_DATABASE,
+    destinationDatabase: env.AZURE_SQL_DATABASE || "",
+    storageAccount: env.AZURE_STORAGE_ACCOUNT,
+    storageContainer:
+      env.AZURE_STORAGE_CONTAINER || "compliance-private",
+  };
+}
 
 const identifier = (value: string) => `[${value.replace(/]/g, "]]" )}]`;
 export const qualified = (database: string, table: string) =>
@@ -34,6 +50,13 @@ export function validateMigrationConfig(config: MigrationConfig) {
     throw new Error("Database names contain unsafe or unsupported characters");
   if (config.sourceDatabase.toLowerCase() === config.destinationDatabase.toLowerCase())
     throw new Error("Source and destination databases must be different");
+  if (
+    config.destinationDatabase.toLowerCase() !==
+    STAGING_DESTINATION_DATABASE.toLowerCase()
+  )
+    throw new Error(
+      `AZURE_SQL_DATABASE must be the staging destination ${STAGING_DESTINATION_DATABASE}`,
+    );
   if (!/\.database\.windows\.net$/i.test(config.server))
     throw new Error("AZURE_SQL_SERVER must be an Azure SQL logical server hostname");
 }
