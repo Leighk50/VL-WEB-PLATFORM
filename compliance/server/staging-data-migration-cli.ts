@@ -8,6 +8,7 @@ import {
   canonicalRows,
   classifyDestination,
   createReadOnlySourceQuery,
+  describeRowDifferences,
   dependencyOrder,
   destinationIsBootstrapOnly,
   discoverSeparateSchemas,
@@ -15,9 +16,11 @@ import {
   insertRowStatement,
   isPreservableFailedLoginAuditRow,
   localTable,
+  parameterExpression,
   resolveMigrationConfig,
   selectRowsStatement,
   sourcePredicate,
+  sqlTypeForColumn,
   validateMigrationConfig,
   type Query,
   type TableCounts,
@@ -81,8 +84,7 @@ function validateSchema(source: TableSchema[], destination: TableSchema[]) {
 
 async function tableRows(query: Query, table: TableSchema, source = false) {
   if (source) return (await query(selectRowsStatement(table))).recordset || [];
-  const destinationStatement = `SELECT ${table.columns.filter((column) => !column.computed && column.type !== "timestamp").map((column) => identifier(column.name)).join(",")} FROM ${localTable(table.name)}`;
-  return (await query(destinationStatement)).recordset || [];
+  return (await query(selectRowsStatement(table, false))).recordset || [];
 }
 
 async function compareDatabases(tables: TableSchema[]) {
@@ -122,7 +124,10 @@ async function validateData(
     if (!ok) throw new Error(`Row count validation failed for ${table.name}`);
     const [sourceRows, destinationRows] = await Promise.all([tableRows(sourceQuery, table, true), tableRows(destination, table)]);
     const expectedRows = [...sourceRows, ...(additionalRows[table.name] || [])];
-    if (JSON.stringify(canonicalRows(expectedRows)) !== JSON.stringify(canonicalRows(destinationRows))) throw new Error(`Value/ID validation failed for ${table.name}`);
+    if (JSON.stringify(canonicalRows(expectedRows)) !== JSON.stringify(canonicalRows(destinationRows))) {
+      const details = describeRowDifferences(expectedRows, destinationRows, table.columns);
+      throw new Error(`Value/ID validation failed for ${table.name} (${details.join("; ")})`);
+    }
   }
   const constraints = await destination("DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS");
   if (constraints.recordset?.length) throw new Error("Destination foreign-key/check-constraint validation failed");
@@ -148,7 +153,13 @@ async function insertRows(request: () => sql.Request, table: TableSchema, rows: 
   const columns = table.columns.filter((column) => !column.computed && column.type !== "timestamp");
   for (const row of rows) {
     const operation = request();
-    columns.forEach((column, index) => operation.input(`r0c${index}`, row[column.name] === undefined ? null : row[column.name]));
+    columns.forEach((column, index) =>
+      operation.input(
+        `r0c${index}`,
+        sqlTypeForColumn(column),
+        row[column.name] === undefined ? null : row[column.name],
+      ),
+    );
     await operation.query(insertRowStatement(table));
   }
 }
@@ -165,10 +176,14 @@ async function reinsertPreservedAuditRows(
   for (const row of rows) {
     const operation = request();
     columns.forEach((column, index) =>
-      operation.input(`p${index}`, row[column.name] === undefined ? null : row[column.name]),
+      operation.input(
+        `p${index}`,
+        sqlTypeForColumn(column),
+        row[column.name] === undefined ? null : row[column.name],
+      ),
     );
     const result = await operation.query(
-      `INSERT INTO ${localTable(table.name)} (${columns.map((column) => identifier(column.name)).join(",")}) OUTPUT INSERTED.[id] VALUES (${columns.map((_, index) => `@p${index}`).join(",")})`,
+      `INSERT INTO ${localTable(table.name)} (${columns.map((column) => identifier(column.name)).join(",")}) OUTPUT INSERTED.[id] VALUES (${columns.map((column, index) => parameterExpression(column, `@p${index}`)).join(",")})`,
     );
     restored.push({ ...row, id: result.recordset?.[0]?.id });
   }

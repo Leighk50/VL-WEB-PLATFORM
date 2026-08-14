@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createReadOnlySourceQuery,
   classifyDestination,
+  describeRowDifferences,
   dependencyOrder,
   destinationIsBootstrapOnly,
   discoverSeparateSchemas,
@@ -12,6 +13,7 @@ import {
   resolveMigrationConfig,
   sameCounts,
   selectRowsStatement,
+  sqlTypeForColumn,
   sourcePredicate,
   validateMigrationConfig,
   type TableSchema,
@@ -56,6 +58,43 @@ describe("staging data migration safety", () => {
   it("preserves identity IDs, administrator hashes and all ordinary values", () => {
     expect(selectRowsStatement(users)).toContain("SELECT [id],[email],[password_hash] FROM [dbo].[users]");
     expect(insertRowStatement(users)).toContain("([id],[email],[password_hash]) VALUES (@r0c0,@r0c1,@r0c2)");
+  });
+
+  it("round-trips DATE and DATETIME2 values through exact ISO conversion", () => {
+    const actions: TableSchema = {
+      name: "actions",
+      columns: [
+        { name: "id", type: "bigint", identity: true, computed: false },
+        { name: "due_date", type: "date", identity: false, computed: false },
+        { name: "created_at", type: "datetime2", scale: 7, identity: false, computed: false },
+      ],
+    };
+    expect(selectRowsStatement(actions)).toContain(
+      "CONVERT(nvarchar(64),[due_date],126) [due_date]",
+    );
+    expect(selectRowsStatement(actions)).toContain(
+      "CONVERT(nvarchar(64),[created_at],126) [created_at]",
+    );
+    expect(insertRowStatement(actions)).toContain(
+      "CONVERT(date,@r0c1,126)",
+    );
+    expect(insertRowStatement(actions)).toContain(
+      "CONVERT(datetime2(7),@r0c2,126)",
+    );
+    expect(sqlTypeForColumn(actions.columns[2]!)).toBeDefined();
+  });
+
+  it("reports mismatch IDs and column names without logging values", () => {
+    const expected = [{ id: 3, description: "Private source value", created_at: "2026-08-14T12:00:00.1234567" }];
+    const actual = [{ id: 3, description: "Private source value", created_at: "2026-08-14T12:00:00.1230000" }];
+    const details = describeRowDifferences(expected, actual, [
+      { name: "id", type: "bigint", identity: true, computed: false },
+      { name: "description", type: "nvarchar", identity: false, computed: false },
+      { name: "created_at", type: "datetime2", scale: 7, identity: false, computed: false },
+    ]);
+    expect(details).toEqual(["id=3: created_at"]);
+    expect(details.join(" ")).not.toContain("Private source value");
+    expect(details.join(" ")).not.toContain("2026-08-14");
   });
 
   it("filters only unambiguously marked demo parent rows", () => {

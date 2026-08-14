@@ -6,7 +6,15 @@ export const isExcludedTable = (name: string) =>
 export const STAGING_SOURCE_DATABASE = "vl-compliance-staging-db";
 export const STAGING_DESTINATION_DATABASE = "vl-compliance-staging-db-gp";
 
-export type Column = { name: string; type: string; identity: boolean; computed: boolean };
+export type Column = {
+  name: string;
+  type: string;
+  identity: boolean;
+  computed: boolean;
+  maxLength?: number;
+  precision?: number;
+  scale?: number;
+};
 export type ForeignKey = { parent: string; referenced: string };
 export type TableSchema = { name: string; columns: Column[] };
 export type DatabaseSchema = { tables: TableSchema[]; foreignKeys: ForeignKey[] };
@@ -59,7 +67,7 @@ export async function discoverSchema(query: Query): Promise<DatabaseSchema> {
   const tables: TableSchema[] = [];
   for (const name of names) {
     const escaped = name.replace(/'/g, "''");
-    const result = await query(`SELECT c.name,ty.name [type],CONVERT(bit,c.is_identity) [identity],CONVERT(bit,c.is_computed) [computed] FROM sys.columns c JOIN sys.types ty ON c.user_type_id=ty.user_type_id WHERE c.object_id=OBJECT_ID('dbo.${escaped}') ORDER BY c.column_id`);
+    const result = await query(`SELECT c.name,ty.name [type],CONVERT(bit,c.is_identity) [identity],CONVERT(bit,c.is_computed) [computed],c.max_length [maxLength],c.precision,c.scale FROM sys.columns c JOIN sys.types ty ON c.user_type_id=ty.user_type_id WHERE c.object_id=OBJECT_ID('dbo.${escaped}') ORDER BY c.column_id`);
     tables.push({ name, columns: (result.recordset || []) as Column[] });
   }
   const fkResult = await query("SELECT pt.name parent,rt.name referenced FROM sys.foreign_keys fk JOIN sys.tables pt ON pt.object_id=fk.parent_object_id JOIN sys.tables rt ON rt.object_id=fk.referenced_object_id");
@@ -101,16 +109,61 @@ export function sourcePredicate(table: TableSchema) {
 export function sameCounts(source: TableCounts, destination: TableCounts) {
   return Object.keys(source).every((table) => source[table] === destination[table]);
 }
-export function selectRowsStatement(table: TableSchema) {
+const temporalTypes = new Set([
+  "date", "datetime", "datetime2", "datetimeoffset", "smalldatetime", "time",
+]);
+export const isTemporalColumn = (column: Column) =>
+  temporalTypes.has(column.type.toLowerCase());
+export function selectColumnExpression(column: Column) {
+  return isTemporalColumn(column)
+    ? `CONVERT(nvarchar(64),${identifier(column.name)},${column.type.toLowerCase() === "datetimeoffset" ? 127 : 126}) ${identifier(column.name)}`
+    : identifier(column.name);
+}
+export function parameterExpression(column: Column, parameter: string) {
+  if (!isTemporalColumn(column)) return parameter;
+  const type = column.type.toLowerCase();
+  const declared = ["datetime2", "datetimeoffset", "time"].includes(type)
+    ? `${type}(${column.scale ?? 7})`
+    : type;
+  return `CONVERT(${declared},${parameter},${type === "datetimeoffset" ? 127 : 126})`;
+}
+export function selectRowsStatement(table: TableSchema, filterDemo = true) {
   const columns = table.columns.filter((column) => !column.computed && column.type !== "timestamp");
   if (!columns.length) throw new Error(`Table ${table.name} has no copyable columns`);
-  return `SELECT ${columns.map((column) => identifier(column.name)).join(",")} FROM ${localTable(table.name)}${sourcePredicate(table)}`;
+  return `SELECT ${columns.map(selectColumnExpression).join(",")} FROM ${localTable(table.name)}${filterDemo ? sourcePredicate(table) : ""}`;
 }
 export function insertRowStatement(table: TableSchema, rowIndex = 0) {
   const columns = table.columns.filter((column) => !column.computed && column.type !== "timestamp");
   const names = columns.map((column) => identifier(column.name)).join(",");
-  const values = columns.map((_, index) => `@r${rowIndex}c${index}`).join(",");
+  const values = columns.map((column, index) => parameterExpression(column, `@r${rowIndex}c${index}`)).join(",");
   return `INSERT INTO ${localTable(table.name)} (${names}) VALUES (${values})`;
+}
+
+export function sqlTypeForColumn(column: Column) {
+  const type = column.type.toLowerCase();
+  if (isTemporalColumn(column)) return sql.NVarChar(64);
+  switch (type) {
+    case "bigint": return sql.BigInt;
+    case "int": return sql.Int;
+    case "smallint": return sql.SmallInt;
+    case "tinyint": return sql.TinyInt;
+    case "bit": return sql.Bit;
+    case "float": return sql.Float;
+    case "real": return sql.Real;
+    case "decimal": case "numeric": return sql.Decimal(column.precision || 18, column.scale || 0);
+    case "uniqueidentifier": return sql.UniqueIdentifier;
+    case "nvarchar": case "nchar": return type === "nvarchar"
+      ? sql.NVarChar(column.maxLength === -1 ? sql.MAX : Math.max(1, (column.maxLength || 2) / 2))
+      : sql.NChar(Math.max(1, (column.maxLength || 2) / 2));
+    case "varchar": case "char": return type === "varchar"
+      ? sql.VarChar(column.maxLength === -1 ? sql.MAX : Math.max(1, column.maxLength || 1))
+      : sql.Char(Math.max(1, column.maxLength || 1));
+    case "varbinary": case "binary": return type === "varbinary"
+      ? sql.VarBinary(column.maxLength === -1 ? sql.MAX : Math.max(1, column.maxLength || 1))
+      : sql.Binary;
+    case "xml": return sql.Xml;
+    default: return sql.NVarChar(sql.MAX);
+  }
 }
 
 export function isPreservableFailedLoginAuditRow(row: Record<string, unknown>) {
@@ -206,6 +259,26 @@ export async function destinationIsBootstrapOnly(source: Query, destination: Que
 export function canonicalRows(rows: any[]) {
   const normalize = (value: any): any => value instanceof Date ? value.toISOString() : Buffer.isBuffer(value) ? value.toString("base64") : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, normalize(value[key])])) : value;
   return rows.map((row) => JSON.stringify(normalize(row))).sort();
+}
+
+export function describeRowDifferences(
+  expected: any[],
+  actual: any[],
+  columns: Column[],
+) {
+  const names = columns.filter((column) => !column.computed && column.type !== "timestamp").map((column) => column.name);
+  const key = names.includes("id") ? "id" : undefined;
+  if (!key) return ["row set differs (table has no id column)"];
+  const expectedById = new Map(expected.map((row) => [String(row[key]), row]));
+  const actualById = new Map(actual.map((row) => [String(row[key]), row]));
+  const details: string[] = [];
+  for (const id of new Set([...expectedById.keys(), ...actualById.keys()])) {
+    const left = expectedById.get(id), right = actualById.get(id);
+    if (!left || !right) { details.push(`id=${id}: row ${left ? "missing from destination" : "not present in source"}`); continue; }
+    const changed = names.filter((name) => JSON.stringify(canonicalRows([{ value: left[name] }])) !== JSON.stringify(canonicalRows([{ value: right[name] }])));
+    if (changed.length) details.push(`id=${id}: ${changed.join(",")}`);
+  }
+  return details.slice(0, 20);
 }
 
 export async function rollbackTransaction(transaction: Pick<sql.Transaction, "rollback">) { await transaction.rollback(); }
