@@ -48,6 +48,8 @@ The command opens two independent managed-identity Azure SQL connections, one di
 
 Column discovery also captures SQL length, precision and scale. Inserts bind explicit SQL types instead of relying on JavaScript inference. `DATE`, `DATETIME2`, `DATETIMEOFFSET` and other temporal values cross the process boundary as exact ISO text and are converted back to their declared SQL types in the destination statement, preserving fractional precision. If full-row validation fails, diagnostics name only row IDs and differing column names, never field values.
 
+Constraint validation does not require privileged `DBCC` access. Each table is re-enabled with `WITH CHECK CHECK CONSTRAINT ALL`, which rejects invalid existing rows, and a read-only `sys.foreign_keys`/`sys.check_constraints` check then refuses completion if any `dbo` constraint is disabled or untrusted.
+
 An empty destination is accepted. A non-empty destination is accepted only when it consists entirely of the known startup bootstrap graph: the real Village Limits venue and its locations/settings, site-verification risk templates and their hazards/registry, and CP01–CP05. That graph is replaced transactionally by the source data to avoid duplicates. Any user, operational record, non-template assessment, unknown call point, demo venue, or unrelated row aborts the command. A completed copy refuses a second write run; use `--verify-only` instead.
 
 Every run prints `Destination classification: EMPTY`, `BOOTSTRAP_ONLY`, `REAL_DATA` or `AMBIGUOUS`, followed by the table counts or failed conditions supporting that result. `schema_migrations` is excluded case-insensitively in both catalog discovery and application code, and Azure/SQL system metadata is never discovered as application data.

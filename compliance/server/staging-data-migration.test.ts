@@ -17,6 +17,7 @@ import {
   sourcePredicate,
   validateMigrationConfig,
   type TableSchema,
+  UNTRUSTED_CONSTRAINTS_SQL,
 } from "./staging-data-migration.js";
 
 const config = {
@@ -95,6 +96,14 @@ describe("staging data migration safety", () => {
     expect(details).toEqual(["id=3: created_at"]);
     expect(details.join(" ")).not.toContain("Private source value");
     expect(details.join(" ")).not.toContain("2026-08-14");
+  });
+
+  it("validates constraint trust through readable catalogs without DBCC privilege", () => {
+    expect(UNTRUSTED_CONSTRAINTS_SQL).toContain("sys.foreign_keys");
+    expect(UNTRUSTED_CONSTRAINTS_SQL).toContain("sys.check_constraints");
+    expect(UNTRUSTED_CONSTRAINTS_SQL).toContain("is_not_trusted=1");
+    expect(UNTRUSTED_CONSTRAINTS_SQL).toContain("is_disabled=1");
+    expect(UNTRUSTED_CONSTRAINTS_SQL).not.toMatch(/DBCC/i);
   });
 
   it("filters only unambiguously marked demo parent rows", () => {

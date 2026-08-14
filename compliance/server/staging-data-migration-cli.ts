@@ -25,6 +25,7 @@ import {
   type Query,
   type TableCounts,
   type TableSchema,
+  UNTRUSTED_CONSTRAINTS_SQL,
 } from "./staging-data-migration.js";
 
 const args = new Set(process.argv.slice(2));
@@ -129,8 +130,14 @@ async function validateData(
       throw new Error(`Value/ID validation failed for ${table.name} (${details.join("; ")})`);
     }
   }
-  const constraints = await destination("DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS");
-  if (constraints.recordset?.length) throw new Error("Destination foreign-key/check-constraint validation failed");
+  const constraints = await destination(UNTRUSTED_CONSTRAINTS_SQL);
+  if (constraints.recordset?.length) {
+    const names = constraints.recordset
+      .map((row) => `${row.tableName}.${row.constraintName}`)
+      .slice(0, 20)
+      .join(", ");
+    throw new Error(`Destination has disabled or untrusted constraints: ${names}`);
+  }
   const admin = await destination(`SELECT COUNT_BIG(*) count FROM ${localTable("users")} WHERE [role]='administrator' AND [active]=1`);
   if (Number(admin.recordset?.[0]?.count) < 1) throw new Error("No active administrator exists in the migrated destination");
   const venue = await destination(`SELECT COUNT_BIG(*) count FROM ${localTable("venues")} WHERE LOWER([name])='village limits' AND ISNULL([is_demo],0)=0`);

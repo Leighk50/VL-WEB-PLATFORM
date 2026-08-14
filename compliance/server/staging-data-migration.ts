@@ -37,6 +37,18 @@ export type ClassificationReport = {
   classification: DestinationClassification;
   reasons: string[];
 };
+export const UNTRUSTED_CONSTRAINTS_SQL = `
+SELECT 'FOREIGN_KEY' [constraintType],OBJECT_NAME(fk.parent_object_id) [tableName],fk.name [constraintName],fk.is_disabled [isDisabled],fk.is_not_trusted [isNotTrusted]
+FROM sys.foreign_keys fk
+JOIN sys.tables t ON t.object_id=fk.parent_object_id
+JOIN sys.schemas s ON s.schema_id=t.schema_id
+WHERE s.name='dbo' AND (fk.is_disabled=1 OR fk.is_not_trusted=1)
+UNION ALL
+SELECT 'CHECK' [constraintType],OBJECT_NAME(cc.parent_object_id) [tableName],cc.name [constraintName],cc.is_disabled [isDisabled],cc.is_not_trusted [isNotTrusted]
+FROM sys.check_constraints cc
+JOIN sys.tables t ON t.object_id=cc.parent_object_id
+JOIN sys.schemas s ON s.schema_id=t.schema_id
+WHERE s.name='dbo' AND (cc.is_disabled=1 OR cc.is_not_trusted=1)`;
 
 export function resolveMigrationConfig(env: NodeJS.ProcessEnv): MigrationConfig {
   return {
