@@ -16,6 +16,8 @@
     "typecheck": "tsc -b --pretty false",
     "migrate": "node dist-server/migrate.js",
     "migrate:dev": "tsx server/migrate.ts",
+    "migrate-staging-data": "node dist-server/staging-data-migration-cli.js",
+    "migrate-staging-data:dev": "tsx server/staging-data-migration-cli.ts",
     "create-admin": "node dist-server/create-admin.js",
     "storage:diagnostic": "node dist-server/storage-diagnostic.js",
     "start": "node dist-server/index.js"

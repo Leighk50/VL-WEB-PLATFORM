@@ -28,6 +28,28 @@ With `DEMO_SEED=true`, local SQLite is seeded with the clearly labelled demo acc
 
 Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm audit`.
 
+## One-time staging data copy
+
+The compiled `npm run migrate-staging-data` command copies application data between two databases on the configured Azure SQL logical server using `DefaultAzureCredential`. It never writes to the source, excludes `schema_migrations`, preserves identity values and attachment storage keys, and does not copy Blob objects. Both database names are mandatory and must differ.
+
+Run a no-write plan first, then schedule the final copy in a quiet window. The App Service does not need to be stopped (and stopping it would remove the managed-identity SSH execution environment); the serializable migration transaction takes destination locks that block competing writes until commit or rollback:
+
+```sh
+cd /home/site/wwwroot
+export SOURCE_AZURE_SQL_DATABASE=vl-compliance-staging-db
+export AZURE_SQL_DATABASE=vl-compliance-staging-db-gp
+npm run migrate-staging-data -- --dry-run
+npm run migrate-staging-data
+# type MIGRATE only after reviewing the printed server, databases and counts
+npm run migrate-staging-data -- --verify-only
+```
+
+The command discovers every `dbo` application table and its foreign keys from the live catalogs, validates that source and destination schemas match, and inserts in dependency order inside a serializable transaction protected by `sp_getapplock`. SQL constraints are disabled only inside that destination transaction, then re-enabled with full checking. Counts, every copied column (including IDs and password hashes), the active administrator, the single real venue, attachment keys, and private Blob samples are checked without logging secrets or object keys.
+
+An empty destination is accepted. A non-empty destination is accepted only when it consists entirely of the known startup bootstrap graph: the real Village Limits venue and its locations/settings, site-verification risk templates and their hazards/registry, and CP01–CP05. That graph is replaced transactionally by the source data to avoid duplicates. Any user, operational record, non-template assessment, unknown call point, demo venue, or unrelated row aborts the command. A completed copy refuses a second write run; use `--verify-only` instead.
+
+If any copy or pre-commit validation fails, SQL rolls back all destination writes automatically. The source remains unchanged. After a committed copy, rollback means stop the App Service and change only `AZURE_SQL_DATABASE` back to `vl-compliance-staging-db`, restart, and confirm `/health`; the utility never alters or deletes that database. No new Azure setting is permanently required: `SOURCE_AZURE_SQL_DATABASE` may be exported only in the SSH session. The managed identity needs read access to the source, data-writer access to the destination, and its existing Blob data read access.
+
 ## Deterministic migrations
 
 `npm run build` compiles the migration runner, then:
