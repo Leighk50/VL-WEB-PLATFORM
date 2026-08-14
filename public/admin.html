@@ -1,1 +1,506 @@
-<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website Administration | Village Limits</title><meta name="robots" content="noindex,nofollow,noarchive"><link rel="stylesheet" href="/assets/css/styles.css?v=2.1.0"></head><body class="admin-body"><div id="loginView" class="admin-login"><div class="login-card"><img src="/assets/images/logo-gold.png" alt="Village Limits"><div class="eyebrow">Version 2.1</div><h1>Website administration</h1><p>Sign in to manage menus, events and website details.</p><form id="loginForm"><label>Username<input id="username" required autocomplete="username"></label><label>Password<input id="password" type="password" required autocomplete="current-password"></label><button id="loginButton" class="btn" type="submit">Sign in</button><p id="loginError" class="form-error" role="alert"></p></form></div></div><div id="adminView" hidden><header class="admin-top"><strong>Village Limits · Version 2.1</strong><div><a class="btn outline-light" href="/" target="_blank" rel="noopener">View website</a><button id="logoutBtn" class="btn">Sign out</button></div></header><div class="admin-shell"><aside class="admin-nav"><button class="active" data-panel="dashboard">Dashboard</button><button data-panel="menus">Menus</button><button data-panel="events">What's On</button><button data-panel="settings">Website Details</button></aside><main class="admin-main"><section id="panel-dashboard" class="admin-panel"><div class="admin-heading"><h1>Dashboard</h1><button id="saveAll" class="btn">Save all changes</button></div><div class="stat-grid"><div class="admin-card"><strong id="menuCount">0</strong><p>Visible menus</p></div><div class="admin-card"><strong id="dishCount">0</strong><p>Dishes</p></div><div class="admin-card"><strong id="eventCount">0</strong><p>Events</p></div></div><p id="saveStatus"></p></section><section id="panel-menus" class="admin-panel" hidden><div class="admin-heading"><h1>Menus</h1><button id="addMenu" class="btn">Add Menu</button></div><div id="menusEditor"></div></section><section id="panel-events" class="admin-panel" hidden><div class="admin-heading"><h1>What's On</h1><button id="addEvent" class="btn">Add Event</button></div><div id="eventsEditor" class="editor-grid"></div></section><section id="panel-settings" class="admin-panel" hidden><h1>Website Details</h1><label>Opening Hours<input data-setting="openingHours"></label><label>Telephone<input data-setting="telephone"></label><label>Email<input data-setting="email"></label><label>Address<textarea data-setting="address"></textarea></label></section></main></div></div><script src="/assets/js/admin.js?v=2.1.0"></script></body></html>
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Website Administration | Village Limits</title>
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <link rel="stylesheet" href="/assets/css/styles.css?v=2.1.1">
+</head>
+<body class="admin-body">
+
+<div id="loginView" class="admin-login">
+  <div class="login-card">
+    <img src="/assets/images/logo-gold.png" alt="Village Limits">
+    <div class="eyebrow">Version 2.1.1</div>
+    <h1>Website administration</h1>
+    <p>Sign in to manage menus, events and website details.</p>
+
+    <form id="loginForm">
+      <label>
+        Username
+        <input id="username" required autocomplete="username">
+      </label>
+
+      <label>
+        Password
+        <input id="password" type="password" required autocomplete="current-password">
+      </label>
+
+      <button id="loginButton" class="btn" type="submit">Sign in</button>
+      <p id="loginError" class="form-error" role="alert"></p>
+    </form>
+  </div>
+</div>
+
+<div id="adminView" hidden>
+  <header class="admin-top">
+    <strong>Village Limits · Version 2.1.1</strong>
+    <div>
+      <a class="btn outline-light" href="/" target="_blank" rel="noopener">View website</a>
+      <button id="logoutBtn" class="btn">Sign out</button>
+    </div>
+  </header>
+
+  <div class="admin-shell">
+    <aside class="admin-nav">
+      <button class="active" data-panel="dashboard">Dashboard</button>
+      <button data-panel="menus">Menus</button>
+      <button data-panel="events">What's On</button>
+      <button data-panel="settings">Website Details</button>
+    </aside>
+
+    <main class="admin-main">
+      <section id="panel-dashboard" class="admin-panel">
+        <div class="admin-heading">
+          <h1>Dashboard</h1>
+          <button id="saveAll" class="btn">Save all changes</button>
+        </div>
+
+        <div class="stat-grid">
+          <div class="admin-card"><strong id="menuCount">0</strong><p>Visible menus</p></div>
+          <div class="admin-card"><strong id="dishCount">0</strong><p>Dishes</p></div>
+          <div class="admin-card"><strong id="eventCount">0</strong><p>Events</p></div>
+        </div>
+
+        <p id="saveStatus" class="save-status"></p>
+      </section>
+
+      <section id="panel-menus" class="admin-panel" hidden>
+        <div class="admin-heading">
+          <h1>Menus</h1>
+          <button id="addMenu" class="btn">Add Menu</button>
+        </div>
+        <div id="menusEditor"></div>
+      </section>
+
+      <section id="panel-events" class="admin-panel" hidden>
+        <div class="admin-heading">
+          <h1>What's On</h1>
+          <button id="addEvent" class="btn">Add Event</button>
+        </div>
+        <div id="eventsEditor" class="editor-grid"></div>
+      </section>
+
+      <section id="panel-settings" class="admin-panel" hidden>
+        <h1>Website Details</h1>
+        <label>Opening Hours<input data-setting="openingHours"></label>
+        <label>Telephone<input data-setting="telephone"></label>
+        <label>Email<input data-setting="email"></label>
+        <label>Address<textarea data-setting="address"></textarea></label>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+(() => {
+  let content = null;
+
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
+  }[c]));
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+  async function req(url, options = {}, timeoutMs = 15000) {
+    const token = sessionStorage.getItem('vl_admin_token');
+    const headers = {'Content-Type':'application/json', ...(options.headers || {})};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'same-origin',
+        signal: controller.signal
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || `Request failed (${response.status})`);
+      }
+
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('The server did not respond in time. Please try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function showAdmin() {
+    $('#loginView').hidden = true;
+    $('#adminView').hidden = false;
+  }
+
+  function showLogin(message = '') {
+    $('#adminView').hidden = true;
+    $('#loginView').hidden = false;
+    $('#loginError').textContent = message;
+  }
+
+  async function loadContent() {
+    content = await req('/api/admin/content');
+    render();
+  }
+
+  $('#loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const button = $('#loginButton');
+    const error = $('#loginError');
+
+    error.textContent = '';
+    button.disabled = true;
+    button.textContent = 'Signing in…';
+
+    try {
+      const result = await req('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: $('#username').value.trim(),
+          password: $('#password').value
+        })
+      });
+
+      if (!result.token) {
+        throw new Error('Login succeeded but no session token was returned.');
+      }
+
+      sessionStorage.setItem('vl_admin_token', result.token);
+
+      content = await req('/api/admin/content');
+      render();
+      showAdmin();
+    } catch (err) {
+      sessionStorage.removeItem('vl_admin_token');
+      showLogin(err.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Sign in';
+    }
+  });
+
+  $('#logoutBtn').addEventListener('click', async () => {
+    try {
+      await req('/api/admin/logout', {method:'POST'});
+    } finally {
+      sessionStorage.removeItem('vl_admin_token');
+      location.reload();
+    }
+  });
+
+  document.querySelectorAll('.admin-nav button').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.admin-nav button').forEach(x => x.classList.remove('active'));
+      button.classList.add('active');
+      document.querySelectorAll('.admin-panel').forEach(p => p.hidden = true);
+      $(`#panel-${button.dataset.panel}`).hidden = false;
+    });
+  });
+
+  function render() {
+    renderStats();
+    renderSettings();
+    renderMenus();
+    renderEvents();
+  }
+
+  function renderStats() {
+    $('#menuCount').textContent = content.menus.filter(m => m.visible).length;
+    $('#dishCount').textContent = content.menus.reduce(
+      (n,m) => n + (m.sections || []).reduce((x,s) => x + (s.items || []).length, 0), 0
+    );
+    $('#eventCount').textContent = content.events.length;
+  }
+
+  function renderSettings() {
+    document.querySelectorAll('[data-setting]').forEach(el => {
+      el.value = content.settings[el.dataset.setting] || '';
+      el.oninput = () => content.settings[el.dataset.setting] = el.value;
+    });
+  }
+
+  function renderMenus() {
+    const box = $('#menusEditor');
+    box.innerHTML = '';
+
+    content.menus.forEach((menu, menuIndex) => {
+      const el = document.createElement('div');
+      el.className = 'menu-editor';
+
+      el.innerHTML = `
+        <div class="menu-head">
+          <h2>${esc(menu.name)}</h2>
+          <div>
+            <button data-add-section class="small-btn">Add Section</button>
+            <button data-delete-menu class="danger-btn">Delete Menu</button>
+          </div>
+        </div>
+
+        <div class="row-2">
+          <label>Menu Name
+            <input data-menu="name" value="${esc(menu.name)}">
+          </label>
+          <label class="switchline">
+            <input type="checkbox" data-menu="visible" ${menu.visible ? 'checked' : ''}>
+            Show menu
+          </label>
+        </div>
+
+        <label>Description
+          <textarea data-menu="description">${esc(menu.description)}</textarea>
+        </label>
+
+        <div>
+          ${(menu.sections || []).map(section => sectionHtml(section)).join('')}
+        </div>
+      `;
+
+      box.appendChild(el);
+
+      el.querySelectorAll('[data-menu]').forEach(input => {
+        input.oninput = () => {
+          menu[input.dataset.menu] = input.type === 'checkbox' ? input.checked : input.value;
+        };
+      });
+
+      el.querySelector('[data-add-section]').onclick = () => {
+        menu.sections.push({name:'New Section', items:[]});
+        renderMenus();
+      };
+
+      el.querySelector('[data-delete-menu]').onclick = () => {
+        if (confirm('Delete this menu?')) {
+          content.menus.splice(menuIndex, 1);
+          render();
+        }
+      };
+
+      el.querySelectorAll('.section-editor').forEach((sectionEl, sectionIndex) => {
+        bindSection(sectionEl, menu, sectionIndex);
+      });
+    });
+  }
+
+  function sectionHtml(section) {
+    return `
+      <div class="admin-card section-editor">
+        <div class="item-actions">
+          <h3>Section</h3>
+          <button data-delete-section class="danger-btn">Delete</button>
+        </div>
+
+        <label>Section Name
+          <input data-section-name value="${esc(section.name)}">
+        </label>
+
+        <button data-add-dish class="small-btn">Add Dish</button>
+
+        <div class="dish-grid">
+          ${(section.items || []).map(dish => dishHtml(dish)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function dishHtml(dish) {
+    return `
+      <div class="item-card">
+        <div class="item-actions">
+          <h3>Dish</h3>
+          <button data-delete-dish class="danger-btn">Delete</button>
+        </div>
+
+        <label>Name
+          <input data-dish="name" value="${esc(dish.name)}">
+        </label>
+
+        <div class="row-2">
+          <label>Price
+            <input data-dish="price" value="${esc(dish.price || '')}">
+          </label>
+          <label class="switchline">
+            <input type="checkbox" data-dish="visible" ${dish.visible !== false ? 'checked' : ''}>
+            Show
+          </label>
+        </div>
+
+        <label>Description
+          <textarea data-dish="description">${esc(dish.description || '')}</textarea>
+        </label>
+
+        <label>Allergens
+          <input data-dish="allergens" value="${esc(dish.allergens || '')}">
+        </label>
+      </div>
+    `;
+  }
+
+  function bindSection(sectionEl, menu, sectionIndex) {
+    const section = menu.sections[sectionIndex];
+
+    sectionEl.querySelector('[data-section-name]').oninput = e => {
+      section.name = e.target.value;
+    };
+
+    sectionEl.querySelector('[data-add-dish]').onclick = () => {
+      section.items.push({
+        id: uid(),
+        name:'New Dish',
+        description:'',
+        price:'',
+        allergens:'',
+        visible:true
+      });
+      renderMenus();
+      renderStats();
+    };
+
+    sectionEl.querySelector('[data-delete-section]').onclick = () => {
+      if (confirm('Delete this section?')) {
+        menu.sections.splice(sectionIndex, 1);
+        renderMenus();
+      }
+    };
+
+    sectionEl.querySelectorAll('.item-card').forEach((card, dishIndex) => {
+      const dish = section.items[dishIndex];
+
+      card.querySelectorAll('[data-dish]').forEach(input => {
+        input.oninput = () => {
+          dish[input.dataset.dish] = input.type === 'checkbox' ? input.checked : input.value;
+        };
+      });
+
+      card.querySelector('[data-delete-dish]').onclick = () => {
+        section.items.splice(dishIndex, 1);
+        renderMenus();
+        renderStats();
+      };
+    });
+  }
+
+  function renderEvents() {
+    const box = $('#eventsEditor');
+    box.innerHTML = '';
+
+    content.events.forEach((event, index) => {
+      const el = document.createElement('div');
+      el.className = 'item-card';
+
+      el.innerHTML = `
+        <div class="item-actions">
+          <h3>${esc(event.title)}</h3>
+          <button data-delete class="danger-btn">Delete</button>
+        </div>
+
+        <label>Title
+          <input data-event="title" value="${esc(event.title)}">
+        </label>
+
+        <label>Date
+          <input data-event="date" value="${esc(event.date)}">
+        </label>
+
+        <label>Description
+          <textarea data-event="description">${esc(event.description)}</textarea>
+        </label>
+
+        <label>Ticket Link
+          <input data-event="ticketUrl" value="${esc(event.ticketUrl)}">
+        </label>
+
+        <label class="switchline">
+          <input type="checkbox" data-event="visible" ${event.visible ? 'checked' : ''}>
+          Show event
+        </label>
+
+        <label class="switchline">
+          <input type="checkbox" data-event="featured" ${event.featured ? 'checked' : ''}>
+          Feature on homepage
+        </label>
+      `;
+
+      box.appendChild(el);
+
+      el.querySelectorAll('[data-event]').forEach(input => {
+        input.oninput = () => {
+          event[input.dataset.event] = input.type === 'checkbox' ? input.checked : input.value;
+        };
+      });
+
+      el.querySelector('[data-delete]').onclick = () => {
+        content.events.splice(index, 1);
+        renderEvents();
+        renderStats();
+      };
+    });
+  }
+
+  $('#addMenu').onclick = () => {
+    content.menus.push({
+      id: uid(),
+      name:'New Menu',
+      description:'',
+      visible:false,
+      sections:[]
+    });
+    renderMenus();
+    renderStats();
+  };
+
+  $('#addEvent').onclick = () => {
+    content.events.unshift({
+      id: uid(),
+      title:'New Event',
+      date:'',
+      description:'',
+      ticketUrl:'https://villagelimits.touchtakeaway.net/menu',
+      visible:true,
+      featured:true
+    });
+    renderEvents();
+    renderStats();
+  };
+
+  $('#saveAll').onclick = async () => {
+    const status = $('#saveStatus');
+    status.textContent = 'Saving…';
+
+    try {
+      await req('/api/admin/content', {
+        method:'PUT',
+        body:JSON.stringify(content)
+      });
+      status.textContent = 'Saved. Changes are live.';
+    } catch (err) {
+      status.textContent = err.message;
+    }
+  };
+
+  (async () => {
+    try {
+      const status = await req('/api/admin/status');
+      if (status.authenticated) {
+        await loadContent();
+        showAdmin();
+      } else {
+        showLogin();
+      }
+    } catch (err) {
+      showLogin(err.message);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
