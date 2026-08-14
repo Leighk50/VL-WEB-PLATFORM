@@ -48,6 +48,8 @@ The command opens two independent managed-identity Azure SQL connections, one di
 
 An empty destination is accepted. A non-empty destination is accepted only when it consists entirely of the known startup bootstrap graph: the real Village Limits venue and its locations/settings, site-verification risk templates and their hazards/registry, and CP01–CP05. That graph is replaced transactionally by the source data to avoid duplicates. Any user, operational record, non-template assessment, unknown call point, demo venue, or unrelated row aborts the command. A completed copy refuses a second write run; use `--verify-only` instead.
 
+Every run prints `Destination classification: EMPTY`, `BOOTSTRAP_ONLY`, `REAL_DATA` or `AMBIGUOUS`, followed by the table counts or failed conditions supporting that result. `schema_migrations` is excluded case-insensitively in both catalog discovery and application code, and Azure/SQL system metadata is never discovered as application data.
+
 If any copy or pre-commit validation fails, SQL rolls back all destination writes automatically. The source remains unchanged. After a committed copy, rollback means stop the App Service and change only `AZURE_SQL_DATABASE` back to `vl-compliance-staging-db`, restart, and confirm `/health`; the utility never alters or deletes that database. No new Azure setting is permanently required: `SOURCE_AZURE_SQL_DATABASE` may be exported only in the SSH session. The managed identity needs read access to the source, data-writer access to the destination, and its existing Blob data read access.
 
 ## Deterministic migrations

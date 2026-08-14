@@ -1,6 +1,8 @@
 import sql from "mssql";
 
 export const EXCLUDED_TABLES = new Set(["schema_migrations"]);
+export const isExcludedTable = (name: string) =>
+  EXCLUDED_TABLES.has(name.trim().toLowerCase());
 export const STAGING_SOURCE_DATABASE = "vl-compliance-staging-db";
 export const STAGING_DESTINATION_DATABASE = "vl-compliance-staging-db-gp";
 
@@ -18,6 +20,15 @@ export type MigrationConfig = {
 export type TableCounts = Record<string, number>;
 export type QueryResult = { recordset?: any[]; rowsAffected?: number[] };
 export type Query = (text: string) => Promise<QueryResult>;
+export type DestinationClassification =
+  | "EMPTY"
+  | "BOOTSTRAP_ONLY"
+  | "REAL_DATA"
+  | "AMBIGUOUS";
+export type ClassificationReport = {
+  classification: DestinationClassification;
+  reasons: string[];
+};
 
 export function resolveMigrationConfig(env: NodeJS.ProcessEnv): MigrationConfig {
   return {
@@ -43,8 +54,8 @@ export function createReadOnlySourceQuery(execute: Query): Query {
 }
 
 export async function discoverSchema(query: Query): Promise<DatabaseSchema> {
-  const tableResult = await query("SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name='dbo' AND t.is_ms_shipped=0 ORDER BY t.name");
-  const names = (tableResult.recordset || []).map((row) => String(row.name)).filter((name) => !EXCLUDED_TABLES.has(name));
+  const tableResult = await query("SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name='dbo' AND t.is_ms_shipped=0 AND LOWER(LTRIM(RTRIM(t.name))) <> 'schema_migrations' ORDER BY t.name");
+  const names = (tableResult.recordset || []).map((row) => String(row.name).trim()).filter((name) => !isExcludedTable(name));
   const tables: TableSchema[] = [];
   for (const name of names) {
     const escaped = name.replace(/'/g, "''");
@@ -107,21 +118,25 @@ async function keySet(query: Query, statement: string, fields: string[]) {
   return new Set((result.recordset || []).map((row) => fields.map((field) => String(row[field]).toLowerCase()).join("\u0000")));
 }
 
-export async function destinationIsBootstrapOnly(source: Query, destination: Query, tables: string[]) {
+async function inspectBootstrap(source: Query, destination: Query, tables: string[], counts?: TableCounts) {
+  const reasons: string[] = [];
   const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings"]);
   for (const table of tables) {
     if (allowed.has(table)) continue;
-    const result = await destination(`SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable(table)}) THEN 1 ELSE 0 END invalid`);
-    if (Number(result.recordset?.[0]?.invalid)) return false;
+    const count = counts?.[table] ?? Number((await destination(`SELECT COUNT_BIG(*) count FROM ${localTable(table)}`)).recordset?.[0]?.count);
+    if (count > 0) reasons.push(`${table}: ${count} row(s) in a non-bootstrap application table`);
   }
-  const checks = [
-    `SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable("venues")} WHERE LOWER([name]) <> 'village limits' OR ISNULL([is_demo],0) <> 0) THEN 1 ELSE 0 END invalid`,
-    `SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable("risk_assessments")} WHERE [template_key] IS NULL OR ISNULL([site_verification_required],0) <> 1) THEN 1 ELSE 0 END invalid`,
-    `SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable("fire_alarm_call_points")} WHERE [code] NOT IN ('CP01','CP02','CP03','CP04','CP05')) THEN 1 ELSE 0 END invalid`,
-    `SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable("locations")} l WHERE NOT EXISTS(SELECT 1 FROM ${localTable("venues")} v WHERE v.id=l.venue_id AND LOWER(v.name)='village limits')) THEN 1 ELSE 0 END invalid`,
-    `SELECT CASE WHEN EXISTS(SELECT 1 FROM ${localTable("risk_hazards")} h WHERE NOT EXISTS(SELECT 1 FROM ${localTable("risk_assessments")} r WHERE r.id=h.assessment_id AND r.template_key IS NOT NULL)) THEN 1 ELSE 0 END invalid`,
+  const checks: Array<[string, string]> = [
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("venues")} WHERE LOWER([name]) <> 'village limits' OR ISNULL([is_demo],0) <> 0`, "venues: rows are not the non-demo Village Limits bootstrap venue"],
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("risk_assessments")} WHERE [template_key] IS NULL OR ISNULL([site_verification_required],0) <> 1`, "risk_assessments: rows are operational, edited, or not site-verification templates"],
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("fire_alarm_call_points")} WHERE [code] NOT IN ('CP01','CP02','CP03','CP04','CP05')`, "fire_alarm_call_points: rows exist outside CP01-CP05"],
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("locations")} l WHERE NOT EXISTS(SELECT 1 FROM ${localTable("venues")} v WHERE v.id=l.venue_id AND LOWER(v.name)='village limits')`, "locations: rows are not linked to the Village Limits bootstrap venue"],
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("risk_hazards")} h WHERE NOT EXISTS(SELECT 1 FROM ${localTable("risk_assessments")} r WHERE r.id=h.assessment_id AND r.template_key IS NOT NULL)`, "risk_hazards: rows are not linked to bootstrap template assessments"],
   ];
-  for (const check of checks) if (Number((await destination(check)).recordset?.[0]?.invalid)) return false;
+  for (const [check, reason] of checks) {
+    const invalid = Number((await destination(check)).recordset?.[0]?.invalid);
+    if (invalid > 0) reasons.push(`${reason} (${invalid} row(s))`);
+  }
   const comparisons: Array<[string, string[], string]> = [
     [`SELECT LOWER([name]) [name] FROM ${localTable("venues")} WHERE ISNULL([is_demo],0)=0`, ["name"], "venue"],
     [`SELECT LOWER(v.[name]) venue,LOWER(l.[name]) [name] FROM ${localTable("locations")} l JOIN ${localTable("venues")} v ON v.id=l.venue_id`, ["venue", "name"], "location"],
@@ -130,9 +145,46 @@ export async function destinationIsBootstrapOnly(source: Query, destination: Que
   ];
   for (const [statement, fields, label] of comparisons) {
     const [sourceKeys, destinationKeys] = await Promise.all([keySet(source, statement, fields), keySet(destination, statement, fields)]);
-    for (const key of destinationKeys) if (!sourceKeys.has(key)) throw new Error(`Destination bootstrap ${label} has no source equivalent`);
+    const missing = [...destinationKeys].filter((key) => !sourceKeys.has(key));
+    if (missing.length) reasons.push(`${label}: ${missing.length} bootstrap key(s) have no source equivalent`);
   }
-  return true;
+  return reasons;
+}
+
+export async function classifyDestination(
+  source: Query,
+  destination: Query,
+  tables: string[],
+  counts: TableCounts,
+  alreadyComplete = false,
+): Promise<ClassificationReport> {
+  const occupied = Object.entries(counts).filter(([, count]) => Number(count) > 0);
+  if (!occupied.length)
+    return {
+      classification: "EMPTY",
+      reasons: [
+        `All ${tables.length} discovered application tables contain zero rows`,
+        "schema_migrations and SQL/Azure system metadata are excluded from application-data classification",
+      ],
+    };
+  if (alreadyComplete)
+    return {
+      classification: "REAL_DATA",
+      reasons: ["Destination application rows already match the source exactly (completed migration)"],
+    };
+  const reasons = await inspectBootstrap(source, destination, tables, counts);
+  if (!reasons.length)
+    return {
+      classification: "BOOTSTRAP_ONLY",
+      reasons: occupied.map(([table, count]) => `${table}: ${count} proven bootstrap row(s)`),
+    };
+  const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings"]);
+  const realData = occupied.some(([table]) => !allowed.has(table));
+  return { classification: realData ? "REAL_DATA" : "AMBIGUOUS", reasons };
+}
+
+export async function destinationIsBootstrapOnly(source: Query, destination: Query, tables: string[], counts?: TableCounts) {
+  return (await inspectBootstrap(source, destination, tables, counts)).length === 0;
 }
 
 export function canonicalRows(rows: any[]) {

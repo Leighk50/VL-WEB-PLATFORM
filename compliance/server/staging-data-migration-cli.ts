@@ -6,6 +6,7 @@ import { DefaultAzureCredential } from "@azure/identity";
 import { BlobServiceClient } from "@azure/storage-blob";
 import {
   canonicalRows,
+  classifyDestination,
   createReadOnlySourceQuery,
   dependencyOrder,
   destinationIsBootstrapOnly,
@@ -139,13 +140,22 @@ try {
   for (const table of order) console.log(`${table}: source=${sourceCounts[table]} destination-before=${destinationBefore[table]}`);
   const destinationHasRows = Object.values(destinationBefore).some(Boolean);
   const alreadyComplete = destinationHasRows && sameCounts(sourceCounts, destinationBefore) && await databasesEqual(destinationSchema.tables);
+  const classification = await classifyDestination(
+    sourceQuery,
+    destinationQuery,
+    order,
+    destinationBefore,
+    alreadyComplete,
+  );
+  console.log(`Destination classification: ${classification.classification}`);
+  for (const reason of classification.reasons) console.log(`  - ${reason}`);
   if (verifyOnly) {
     await validateData(destinationSchema.tables, sourceCounts);
     await verifyBlobSamples(destinationSchema.tables);
     console.log("Destination verification: PASS");
   } else if (dryRun) {
-    if (destinationHasRows && !alreadyComplete && !(await destinationIsBootstrapOnly(sourceQuery, destinationQuery, order)))
-      throw new Error("Destination contains ambiguous or real data; refusing migration");
+    if (["REAL_DATA", "AMBIGUOUS"].includes(classification.classification) && !alreadyComplete)
+      throw new Error(`Destination classified ${classification.classification}; refusing migration`);
     await verifyBlobSamples(destinationSchema.tables);
     console.log(`Dry run complete: no database changes were made.${alreadyComplete ? " Destination already matches source." : ""}`);
   } else {
@@ -162,7 +172,7 @@ try {
       const destinationTransactionQuery: Query = (text) => request().query(text);
       const lock = await destinationTransactionQuery("DECLARE @result int; EXEC @result=sp_getapplock @Resource='vl-compliance-staging-data-migration',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=60000; SELECT @result result");
       if (Number(lock.recordset?.[0]?.result) < 0) throw new Error("Could not acquire migration lock");
-      if (destinationHasRows && !(await destinationIsBootstrapOnly(sourceQuery, destinationTransactionQuery, order))) throw new Error("Destination contains ambiguous or real data; refusing migration");
+      if (destinationHasRows && !(await destinationIsBootstrapOnly(sourceQuery, destinationTransactionQuery, order, destinationBefore))) throw new Error("Destination contains ambiguous or real data; refusing migration");
       for (const table of [...order].reverse()) await request().batch(`ALTER TABLE ${localTable(table)} NOCHECK CONSTRAINT ALL; DELETE FROM ${localTable(table)};`);
       for (const name of order) {
         const table = destinationSchema.tables.find((item) => item.name === name)!;

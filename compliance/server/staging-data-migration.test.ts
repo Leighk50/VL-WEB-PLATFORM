@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createReadOnlySourceQuery,
+  classifyDestination,
   dependencyOrder,
   destinationIsBootstrapOnly,
   discoverSeparateSchemas,
+  discoverSchema,
   insertRowStatement,
   rollbackTransaction,
   resolveMigrationConfig,
@@ -77,8 +79,10 @@ describe("staging data migration safety", () => {
 
   it("rejects destination data outside the bootstrap graph, including users", async () => {
     const source = vi.fn(async () => ({ recordset: [] }));
-    const destination = vi.fn(async (query: string) => ({ recordset: [{ invalid: query.includes("[users]") ? 1 : 0 }] }));
-    await expect(destinationIsBootstrapOnly(source, destination, ["venues", "users"])).resolves.toBe(false);
+    const destination = vi.fn(async (query: string) => ({
+      recordset: query.includes("[users]") ? [{ count: 1 }] : [{ invalid: 0 }],
+    }));
+    await expect(destinationIsBootstrapOnly(source, destination, ["venues", "users"], { venues: 1, users: 1 })).resolves.toBe(false);
   });
 
   it("accepts only the known venue/template/hazard/CP01-CP05 bootstrap graph", async () => {
@@ -106,6 +110,54 @@ describe("staging data migration safety", () => {
     expect(sourceSql.join("\n")).not.toContain("vl-compliance-staging-db.sys.");
     expect(destinationSql.join("\n")).not.toContain("vl-compliance-staging-db-gp.sys.");
     expect([...sourceSql, ...destinationSql].every((query) => /\bsys\.(tables|schemas|columns|types|foreign_keys)\b/.test(query))).toBe(true);
+  });
+
+  it("classifies current schema plus schema_migrations and zero application rows as EMPTY", async () => {
+    const discovery = vi.fn(async (query: string) => {
+      if (query.includes("FROM sys.tables"))
+        return { recordset: [{ name: "Schema_Migrations " }, { name: "venues" }, { name: "users" }] };
+      if (query.includes("OBJECT_ID('dbo.venues')")) return { recordset: [] };
+      if (query.includes("OBJECT_ID('dbo.users')")) return { recordset: [] };
+      return { recordset: [] };
+    });
+    const schema = await discoverSchema(discovery);
+    expect(schema.tables.map((table) => table.name)).toEqual(["venues", "users"]);
+    expect(discovery.mock.calls.flat().join("\n").toLowerCase()).toContain("schema_migrations");
+    const source = vi.fn(async () => ({ recordset: [] }));
+    const destination = vi.fn(async () => ({ recordset: [] }));
+    await expect(
+      classifyDestination(source, destination, ["venues", "users"], {
+        venues: 0,
+        users: 0,
+      }),
+    ).resolves.toEqual({
+      classification: "EMPTY",
+      reasons: [
+        "All 2 discovered application tables contain zero rows",
+        "schema_migrations and SQL/Azure system metadata are excluded from application-data classification",
+      ],
+    });
+    expect(source).not.toHaveBeenCalled();
+    expect(destination).not.toHaveBeenCalled();
+  });
+
+  it("reports the exact non-bootstrap table that makes a destination REAL_DATA", async () => {
+    const source = vi.fn(async () => ({ recordset: [] }));
+    const destination = vi.fn(async (query: string) => ({
+      recordset: query.includes("COUNT_BIG(*) invalid")
+        ? [{ invalid: 0 }]
+        : [],
+    }));
+    const report = await classifyDestination(
+      source,
+      destination,
+      ["venues", "users"],
+      { venues: 0, users: 1 },
+    );
+    expect(report.classification).toBe("REAL_DATA");
+    expect(report.reasons).toContain(
+      "users: 1 row(s) in a non-bootstrap application table",
+    );
   });
 
   it("makes source writes impossible through the migration source query path", async () => {
