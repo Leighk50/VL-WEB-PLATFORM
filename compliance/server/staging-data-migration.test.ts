@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  copyStatement,
+  createReadOnlySourceQuery,
   dependencyOrder,
   destinationIsBootstrapOnly,
+  discoverSeparateSchemas,
+  insertRowStatement,
   rollbackTransaction,
   resolveMigrationConfig,
   sameCounts,
+  selectRowsStatement,
   sourcePredicate,
   validateMigrationConfig,
   type TableSchema,
@@ -48,9 +51,8 @@ describe("staging data migration safety", () => {
   });
 
   it("preserves identity IDs, administrator hashes and all ordinary values", () => {
-    const statement = copyStatement(config.sourceDatabase, config.destinationDatabase, users);
-    expect(statement).toContain("([id],[email],[password_hash]) SELECT [id],[email],[password_hash]");
-    expect(statement).not.toContain("schema_migrations");
+    expect(selectRowsStatement(users)).toContain("SELECT [id],[email],[password_hash] FROM [dbo].[users]");
+    expect(insertRowStatement(users)).toContain("([id],[email],[password_hash]) VALUES (@r0c0,@r0c1,@r0c2)");
   });
 
   it("filters only unambiguously marked demo parent rows", () => {
@@ -74,15 +76,45 @@ describe("staging data migration safety", () => {
   });
 
   it("rejects destination data outside the bootstrap graph, including users", async () => {
-    const request = vi.fn(async (query: string) => ({ recordset: [{ invalid: query.includes("[users]") ? 1 : 0 }] }));
-    await expect(destinationIsBootstrapOnly(request, config.sourceDatabase, config.destinationDatabase, ["venues", "users"])).resolves.toBe(false);
+    const source = vi.fn(async () => ({ recordset: [] }));
+    const destination = vi.fn(async (query: string) => ({ recordset: [{ invalid: query.includes("[users]") ? 1 : 0 }] }));
+    await expect(destinationIsBootstrapOnly(source, destination, ["venues", "users"])).resolves.toBe(false);
   });
 
   it("accepts only the known venue/template/hazard/CP01-CP05 bootstrap graph", async () => {
-    const request = vi.fn(async () => ({ recordset: [{ invalid: 0 }] }));
-    await expect(destinationIsBootstrapOnly(request, config.sourceDatabase, config.destinationDatabase, [
+    const source = vi.fn(async () => ({ recordset: [] }));
+    const destination = vi.fn(async (query: string) => ({
+      recordset: query.includes("CASE WHEN") ? [{ invalid: 0 }] : [],
+    }));
+    await expect(destinationIsBootstrapOnly(source, destination, [
       "venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points",
     ])).resolves.toBe(true);
+  });
+
+  it("discovers metadata through separate local connection objects without Azure SQL cross-database names", async () => {
+    const sourceSql: string[] = [], destinationSql: string[] = [];
+    const metadata = (log: string[]) => vi.fn(async (query: string) => {
+      log.push(query);
+      if (query.includes("FROM sys.tables")) return { recordset: [{ name: "users" }] };
+      if (query.includes("FROM sys.columns")) return { recordset: users.columns };
+      return { recordset: [] };
+    });
+    const source = metadata(sourceSql), destination = metadata(destinationSql);
+    await discoverSeparateSchemas(source, destination);
+    expect(source).toHaveBeenCalled();
+    expect(destination).toHaveBeenCalled();
+    expect(sourceSql.join("\n")).not.toContain("vl-compliance-staging-db.sys.");
+    expect(destinationSql.join("\n")).not.toContain("vl-compliance-staging-db-gp.sys.");
+    expect([...sourceSql, ...destinationSql].every((query) => /\bsys\.(tables|schemas|columns|types|foreign_keys)\b/.test(query))).toBe(true);
+  });
+
+  it("makes source writes impossible through the migration source query path", async () => {
+    const execute = vi.fn(async () => ({ recordset: [] }));
+    const source = createReadOnlySourceQuery(execute);
+    await expect(source("SELECT * FROM sys.tables")).resolves.toEqual({ recordset: [] });
+    await expect(source("DELETE FROM [dbo].[users]")).rejects.toThrow(/SELECT queries only/);
+    await expect(source("ALTER TABLE [dbo].[users] ADD x int")).rejects.toThrow(/SELECT queries only/);
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it("detects completed count sets for explicit rerun refusal", () => {
