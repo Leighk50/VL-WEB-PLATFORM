@@ -113,6 +113,17 @@ export function insertRowStatement(table: TableSchema, rowIndex = 0) {
   return `INSERT INTO ${localTable(table.name)} (${names}) VALUES (${values})`;
 }
 
+export function isPreservableFailedLoginAuditRow(row: Record<string, unknown>) {
+  return (
+    row.entity_type === "session" &&
+    row.action === "login_failed" &&
+    row.entity_id == null &&
+    row.user_id == null &&
+    row.before_json == null &&
+    row.after_json != null
+  );
+}
+
 async function keySet(query: Query, statement: string, fields: string[]) {
   const result = await query(statement);
   return new Set((result.recordset || []).map((row) => fields.map((field) => String(row[field]).toLowerCase()).join("\u0000")));
@@ -120,7 +131,7 @@ async function keySet(query: Query, statement: string, fields: string[]) {
 
 async function inspectBootstrap(source: Query, destination: Query, tables: string[], counts?: TableCounts) {
   const reasons: string[] = [];
-  const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings"]);
+  const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings", "audit_events"]);
   for (const table of tables) {
     if (allowed.has(table)) continue;
     const count = counts?.[table] ?? Number((await destination(`SELECT COUNT_BIG(*) count FROM ${localTable(table)}`)).recordset?.[0]?.count);
@@ -132,6 +143,7 @@ async function inspectBootstrap(source: Query, destination: Query, tables: strin
     [`SELECT COUNT_BIG(*) invalid FROM ${localTable("fire_alarm_call_points")} WHERE [code] NOT IN ('CP01','CP02','CP03','CP04','CP05')`, "fire_alarm_call_points: rows exist outside CP01-CP05"],
     [`SELECT COUNT_BIG(*) invalid FROM ${localTable("locations")} l WHERE NOT EXISTS(SELECT 1 FROM ${localTable("venues")} v WHERE v.id=l.venue_id AND LOWER(v.name)='village limits')`, "locations: rows are not linked to the Village Limits bootstrap venue"],
     [`SELECT COUNT_BIG(*) invalid FROM ${localTable("risk_hazards")} h WHERE NOT EXISTS(SELECT 1 FROM ${localTable("risk_assessments")} r WHERE r.id=h.assessment_id AND r.template_key IS NOT NULL)`, "risk_hazards: rows are not linked to bootstrap template assessments"],
+    [`SELECT COUNT_BIG(*) invalid FROM ${localTable("audit_events")} WHERE [entity_type]<>'session' OR [action]<>'login_failed' OR [entity_id] IS NOT NULL OR [user_id] IS NOT NULL OR [before_json] IS NOT NULL OR [after_json] IS NULL`, "audit_events: rows are not preservable unauthenticated failed-login evidence"],
   ];
   for (const [check, reason] of checks) {
     const invalid = Number((await destination(check)).recordset?.[0]?.invalid);
@@ -176,9 +188,13 @@ export async function classifyDestination(
   if (!reasons.length)
     return {
       classification: "BOOTSTRAP_ONLY",
-      reasons: occupied.map(([table, count]) => `${table}: ${count} proven bootstrap row(s)`),
+      reasons: occupied.map(([table, count]) =>
+        table === "audit_events"
+          ? `${table}: ${count} preservable pre-migration failed-login audit row(s)`
+          : `${table}: ${count} proven bootstrap row(s)`,
+      ),
     };
-  const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings"]);
+  const allowed = new Set(["venues", "locations", "risk_assessments", "risk_hazards", "risk_template_registry", "fire_alarm_call_points", "venue_settings", "audit_events"]);
   const realData = occupied.some(([table]) => !allowed.has(table));
   return { classification: realData ? "REAL_DATA" : "AMBIGUOUS", reasons };
 }

@@ -50,6 +50,8 @@ An empty destination is accepted. A non-empty destination is accepted only when 
 
 Every run prints `Destination classification: EMPTY`, `BOOTSTRAP_ONLY`, `REAL_DATA` or `AMBIGUOUS`, followed by the table counts or failed conditions supporting that result. `schema_migrations` is excluded case-insensitively in both catalog discovery and application code, and Azure/SQL system metadata is never discovered as application data.
 
+If the otherwise-empty destination contains only unauthenticated `session/login_failed` audit evidence produced before users were migrated, the command preserves it transactionally. Only rows with null entity/user IDs, null `before_json` and non-null hashed-login metadata qualify. They are reinserted after the source audit history with new identity IDs while retaining their timestamp and metadata. Any successful login, linked audit event or other action still aborts.
+
 If any copy or pre-commit validation fails, SQL rolls back all destination writes automatically. The source remains unchanged. After a committed copy, rollback means stop the App Service and change only `AZURE_SQL_DATABASE` back to `vl-compliance-staging-db`, restart, and confirm `/health`; the utility never alters or deletes that database. No new Azure setting is permanently required: `SOURCE_AZURE_SQL_DATABASE` may be exported only in the SSH session. The managed identity needs read access to the source, data-writer access to the destination, and its existing Blob data read access.
 
 ## Deterministic migrations

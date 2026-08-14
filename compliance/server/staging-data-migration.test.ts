@@ -7,6 +7,7 @@ import {
   discoverSeparateSchemas,
   discoverSchema,
   insertRowStatement,
+  isPreservableFailedLoginAuditRow,
   rollbackTransaction,
   resolveMigrationConfig,
   sameCounts,
@@ -158,6 +159,54 @@ describe("staging data migration safety", () => {
     expect(report.reasons).toContain(
       "users: 1 row(s) in a non-bootstrap application table",
     );
+  });
+
+  it("accepts only the exact orphaned failed-login audit shape as preservable", async () => {
+    const failedLogin = {
+      id: 1,
+      entity_type: "session",
+      entity_id: null,
+      action: "login_failed",
+      before_json: null,
+      after_json: '{"emailHash":"redacted"}',
+      user_id: null,
+      occurred_at: new Date("2026-08-14T17:00:00Z"),
+      ip_address: "redacted",
+    };
+    expect(isPreservableFailedLoginAuditRow(failedLogin)).toBe(true);
+    expect(
+      isPreservableFailedLoginAuditRow({ ...failedLogin, action: "login" }),
+    ).toBe(false);
+    expect(
+      isPreservableFailedLoginAuditRow({ ...failedLogin, user_id: 1 }),
+    ).toBe(false);
+    expect(
+      isPreservableFailedLoginAuditRow({ ...failedLogin, entity_id: 1 }),
+    ).toBe(false);
+    expect(
+      isPreservableFailedLoginAuditRow({ ...failedLogin, before_json: "{}" }),
+    ).toBe(false);
+  });
+
+  it("classifies exact pre-migration failed-login evidence as safely preservable", async () => {
+    const source = vi.fn(async () => ({ recordset: [] }));
+    const destination = vi.fn(async (query: string) => ({
+      recordset: query.includes("COUNT_BIG(*) invalid")
+        ? [{ invalid: 0 }]
+        : [],
+    }));
+    const report = await classifyDestination(
+      source,
+      destination,
+      ["audit_events", "venues", "users"],
+      { audit_events: 1, venues: 0, users: 0 },
+    );
+    expect(report).toEqual({
+      classification: "BOOTSTRAP_ONLY",
+      reasons: [
+        "audit_events: 1 preservable pre-migration failed-login audit row(s)",
+      ],
+    });
   });
 
   it("makes source writes impossible through the migration source query path", async () => {

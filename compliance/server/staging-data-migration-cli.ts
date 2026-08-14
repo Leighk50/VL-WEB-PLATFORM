@@ -13,9 +13,9 @@ import {
   discoverSeparateSchemas,
   identifier,
   insertRowStatement,
+  isPreservableFailedLoginAuditRow,
   localTable,
   resolveMigrationConfig,
-  sameCounts,
   selectRowsStatement,
   sourcePredicate,
   validateMigrationConfig,
@@ -85,22 +85,44 @@ async function tableRows(query: Query, table: TableSchema, source = false) {
   return (await query(destinationStatement)).recordset || [];
 }
 
-async function databasesEqual(tables: TableSchema[]) {
+async function compareDatabases(tables: TableSchema[]) {
+  const additionalRows: Record<string, any[]> = {};
   for (const table of tables) {
     const [sourceRows, destinationRows] = await Promise.all([tableRows(sourceQuery, table, true), tableRows(destinationQuery, table)]);
-    if (JSON.stringify(canonicalRows(sourceRows)) !== JSON.stringify(canonicalRows(destinationRows))) return false;
+    if (table.name === "audit_events") {
+      const sourceIds = new Set(sourceRows.map((row) => String(row.id)));
+      const sourceIdRows = destinationRows.filter((row) => sourceIds.has(String(row.id)));
+      const extras = destinationRows.filter((row) => !sourceIds.has(String(row.id)));
+      if (
+        JSON.stringify(canonicalRows(sourceRows)) !==
+          JSON.stringify(canonicalRows(sourceIdRows)) ||
+        !extras.every(isPreservableFailedLoginAuditRow)
+      )
+        return { complete: false, additionalRows: {} };
+      additionalRows.audit_events = extras;
+      continue;
+    }
+    if (JSON.stringify(canonicalRows(sourceRows)) !== JSON.stringify(canonicalRows(destinationRows)))
+      return { complete: false, additionalRows: {} };
   }
-  return true;
+  return { complete: true, additionalRows };
 }
 
-async function validateData(tables: TableSchema[], sourceCounts: TableCounts, destination: Query = destinationQuery) {
+async function validateData(
+  tables: TableSchema[],
+  sourceCounts: TableCounts,
+  destination: Query = destinationQuery,
+  additionalRows: Record<string, any[]> = {},
+) {
   const destinationCounts = await counts(destination, tables);
   for (const table of tables) {
-    const ok = sourceCounts[table.name] === destinationCounts[table.name];
-    console.log(`${table.name}: source=${sourceCounts[table.name]} destination=${destinationCounts[table.name]} validation=${ok ? "PASS" : "FAIL"}`);
+    const expectedCount = sourceCounts[table.name] + (additionalRows[table.name]?.length || 0);
+    const ok = expectedCount === destinationCounts[table.name];
+    console.log(`${table.name}: source=${sourceCounts[table.name]} preserved=${additionalRows[table.name]?.length || 0} destination=${destinationCounts[table.name]} validation=${ok ? "PASS" : "FAIL"}`);
     if (!ok) throw new Error(`Row count validation failed for ${table.name}`);
     const [sourceRows, destinationRows] = await Promise.all([tableRows(sourceQuery, table, true), tableRows(destination, table)]);
-    if (JSON.stringify(canonicalRows(sourceRows)) !== JSON.stringify(canonicalRows(destinationRows))) throw new Error(`Value/ID validation failed for ${table.name}`);
+    const expectedRows = [...sourceRows, ...(additionalRows[table.name] || [])];
+    if (JSON.stringify(canonicalRows(expectedRows)) !== JSON.stringify(canonicalRows(destinationRows))) throw new Error(`Value/ID validation failed for ${table.name}`);
   }
   const constraints = await destination("DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS");
   if (constraints.recordset?.length) throw new Error("Destination foreign-key/check-constraint validation failed");
@@ -131,6 +153,28 @@ async function insertRows(request: () => sql.Request, table: TableSchema, rows: 
   }
 }
 
+async function reinsertPreservedAuditRows(
+  request: () => sql.Request,
+  table: TableSchema,
+  rows: any[],
+) {
+  const columns = table.columns.filter(
+    (column) => !column.identity && !column.computed && column.type !== "timestamp",
+  );
+  const restored: any[] = [];
+  for (const row of rows) {
+    const operation = request();
+    columns.forEach((column, index) =>
+      operation.input(`p${index}`, row[column.name] === undefined ? null : row[column.name]),
+    );
+    const result = await operation.query(
+      `INSERT INTO ${localTable(table.name)} (${columns.map((column) => identifier(column.name)).join(",")}) OUTPUT INSERTED.[id] VALUES (${columns.map((_, index) => `@p${index}`).join(",")})`,
+    );
+    restored.push({ ...row, id: result.recordset?.[0]?.id });
+  }
+  return restored;
+}
+
 try {
   const [sourceSchema, destinationSchema] = await discoverSeparateSchemas(sourceQuery, destinationQuery);
   validateSchema(sourceSchema.tables, destinationSchema.tables);
@@ -139,7 +183,10 @@ try {
   const [sourceCounts, destinationBefore] = await Promise.all([counts(sourceQuery, sourceSchema.tables, true), counts(destinationQuery, destinationSchema.tables)]);
   for (const table of order) console.log(`${table}: source=${sourceCounts[table]} destination-before=${destinationBefore[table]}`);
   const destinationHasRows = Object.values(destinationBefore).some(Boolean);
-  const alreadyComplete = destinationHasRows && sameCounts(sourceCounts, destinationBefore) && await databasesEqual(destinationSchema.tables);
+  const comparison = destinationHasRows
+    ? await compareDatabases(destinationSchema.tables)
+    : { complete: false, additionalRows: {} };
+  const alreadyComplete = comparison.complete;
   const classification = await classifyDestination(
     sourceQuery,
     destinationQuery,
@@ -150,7 +197,12 @@ try {
   console.log(`Destination classification: ${classification.classification}`);
   for (const reason of classification.reasons) console.log(`  - ${reason}`);
   if (verifyOnly) {
-    await validateData(destinationSchema.tables, sourceCounts);
+    await validateData(
+      destinationSchema.tables,
+      sourceCounts,
+      destinationQuery,
+      comparison.additionalRows,
+    );
     await verifyBlobSamples(destinationSchema.tables);
     console.log("Destination verification: PASS");
   } else if (dryRun) {
@@ -166,13 +218,20 @@ try {
     if (answer !== "MIGRATE") throw new Error("Confirmation refused; no changes made");
     if (alreadyComplete) throw new Error("Destination already matches source; use --verify-only instead of rerunning");
     const transaction = new sql.Transaction(destinationPool);
+    let restoredFailedLogins: any[] = [];
     await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
     try {
       const request = () => new sql.Request(transaction);
       const destinationTransactionQuery: Query = (text) => request().query(text);
       const lock = await destinationTransactionQuery("DECLARE @result int; EXEC @result=sp_getapplock @Resource='vl-compliance-staging-data-migration',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=60000; SELECT @result result");
       if (Number(lock.recordset?.[0]?.result) < 0) throw new Error("Could not acquire migration lock");
-      if (destinationHasRows && !(await destinationIsBootstrapOnly(sourceQuery, destinationTransactionQuery, order, destinationBefore))) throw new Error("Destination contains ambiguous or real data; refusing migration");
+      if (destinationHasRows && !(await destinationIsBootstrapOnly(sourceQuery, destinationTransactionQuery, order))) throw new Error("Destination contains ambiguous or real data; refusing migration");
+      const auditTable = destinationSchema.tables.find((table) => table.name === "audit_events")!;
+      const preservedFailedLogins = destinationBefore.audit_events
+        ? await tableRows(destinationTransactionQuery, auditTable)
+        : [];
+      if (!preservedFailedLogins.every(isPreservableFailedLoginAuditRow))
+        throw new Error("Destination audit residue changed or is not safely preservable");
       for (const table of [...order].reverse()) await request().batch(`ALTER TABLE ${localTable(table)} NOCHECK CONSTRAINT ALL; DELETE FROM ${localTable(table)};`);
       for (const name of order) {
         const table = destinationSchema.tables.find((item) => item.name === name)!;
@@ -183,14 +242,21 @@ try {
         if (identity) await request().batch(`SET IDENTITY_INSERT ${localTable(name)} OFF`);
         console.log(`${name}: inserted=${rows.length} skipped=0`);
       }
+      restoredFailedLogins = await reinsertPreservedAuditRows(
+        request,
+        auditTable,
+        preservedFailedLogins,
+      );
+      if (restoredFailedLogins.length)
+        console.log(`audit_events: preserved=${restoredFailedLogins.length} pre-migration failed-login row(s) with new IDs`);
       for (const table of order) await request().batch(`ALTER TABLE ${localTable(table)} WITH CHECK CHECK CONSTRAINT ALL`);
-      await validateData(destinationSchema.tables, sourceCounts, destinationTransactionQuery);
+      await validateData(destinationSchema.tables, sourceCounts, destinationTransactionQuery, { audit_events: restoredFailedLogins });
       await transaction.commit();
     } catch (error) {
       await transaction.rollback().catch(() => undefined);
       throw error;
     }
-    await validateData(destinationSchema.tables, sourceCounts);
+    await validateData(destinationSchema.tables, sourceCounts, destinationQuery, { audit_events: restoredFailedLogins });
     await verifyBlobSamples(destinationSchema.tables);
     console.log("Migration and validation: PASS");
   }
