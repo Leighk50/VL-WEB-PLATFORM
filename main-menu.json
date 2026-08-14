@@ -1,0 +1,178 @@
+{
+  "id": "main",
+  "name": "Main Menu",
+  "description": "Seasonal dishes and Village Limits favourites.",
+  "visible": true,
+  "sections": [
+    {
+      "name": "Starters",
+      "items": [
+        {
+          "id": "main-soup",
+          "name": "Homemade Soup of the Day",
+          "description": "With toasted sourdough.",
+          "price": "£8.50",
+          "allergens": "Gluten, Celery",
+          "visible": true
+        },
+        {
+          "id": "main-focaccia",
+          "name": "House Garlic & Rosemary Focaccia",
+          "description": "Truffle and cauliflower hummus with roasted hazelnuts and crispy onions.",
+          "price": "£8.50",
+          "allergens": "Nuts, Gluten, Sesame",
+          "visible": true
+        },
+        {
+          "id": "main-mackerel",
+          "name": "Smoked Mackerel Fillet",
+          "description": "Beetroot, horseradish and spring leaf salad.",
+          "price": "£8.50",
+          "allergens": "Fish, Sulphites, Egg, Mustard",
+          "visible": true
+        },
+        {
+          "id": "main-mushrooms",
+          "name": "Pan-Fried Chestnut Mushrooms",
+          "description": "Garlic and herb vegan butter, toasted sourdough.",
+          "price": "£8.50",
+          "allergens": "Gluten, Soya",
+          "visible": true
+        },
+        {
+          "id": "main-seafood",
+          "name": "Crab, Prawn & Smoked Salmon",
+          "description": "Mary Rose, brown bread & lemon aioli.",
+          "price": "£8.50",
+          "allergens": "Crustaceans, Gluten, Mustard, Egg, Fish, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "main-sweetcorn-ribs",
+          "name": "Grilled Sweetcorn Ribs",
+          "description": "Tossed in house Cajun, served with chipotle mayo and lime (vegan).",
+          "price": "£8.50",
+          "allergens": "Sulphites, Soya",
+          "visible": true
+        },
+        {
+          "id": "main-beetroot-hummus",
+          "name": "Beetroot Hummus",
+          "description": "Padron peppers with sumac salt, pickled carrot, crispy chickpeas and flatbread.",
+          "price": "£8.50",
+          "allergens": "Sesame, Gluten, Soya",
+          "visible": true
+        },
+        {
+          "id": "main-rum-ribs",
+          "name": "Sticky Rum & Soy Glazed BBQ Ribs",
+          "description": "Spring onion, sesame.",
+          "price": "£9.50",
+          "allergens": "Soya, Fish, Gluten, Sesame, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "main-camembert",
+          "name": "Whole Baked Camembert Wrapped in Filo Pastry",
+          "description": "Hot honey, candied cashews and toasted sourdough.",
+          "price": "£8.50",
+          "allergens": "Dairy, Gluten, Milk, Nuts",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "Mains",
+      "items": [
+        {
+          "id": "main-crispy-beef",
+          "name": "Asian Style Crispy Shredded Beef Salad",
+          "description": "Cucumber, Chinese leaf, peppers, house dressing, candied cashews.",
+          "price": "£18",
+          "allergens": "Nuts, Gluten, Sesame, Mustard, Sulphites, Soya",
+          "visible": true
+        },
+        {
+          "id": "main-gammon",
+          "name": "Gammon Steak",
+          "description": "Braised pineapple, pan-seared new potatoes, tender-stem broccoli, honey and pineapple glaze.",
+          "price": "£20",
+          "allergens": "No listed allergens",
+          "visible": true
+        },
+        {
+          "id": "main-lamb",
+          "name": "Pan-Fried Lamb Rump",
+          "description": "Salsa verde, dauphinoise potato, broad beans, peas, lamb jus.",
+          "price": "£28",
+          "allergens": "Soya, Dairy, Celery, Mustard, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "main-halloumi",
+          "name": "Pan-Fried Halloumi & Orzo Salad",
+          "description": "Courgette, aubergine, rocket, caramelised onion, pine nuts, sun-dried tomato dressing.",
+          "price": "£16",
+          "allergens": "Fish, Egg, Mustard, Milk",
+          "visible": true
+        },
+        {
+          "id": "main-salmon",
+          "name": "Pan-Roasted Salmon",
+          "description": "Crispy new potato, peas, tender-stem broccoli, lemon & dill beurre sauce.",
+          "price": "£20",
+          "allergens": "Dairy, Egg, Sulphites, Fish",
+          "visible": true
+        },
+        {
+          "id": "main-burger",
+          "name": "6oz Limits Burger",
+          "description": "Caramelised onion, burger relish, smoked Applewood, lettuce, tomato and chips.",
+          "price": "£18",
+          "allergens": "Sulphites, Gluten, Dairy, Egg, Mustard",
+          "visible": true
+        },
+        {
+          "id": "main-tikka",
+          "name": "Authentic Chicken Tikka Masala",
+          "description": "Coconut rice, pickled chilli, coriander.",
+          "price": "£18",
+          "allergens": "Sulphites, Dairy, Nuts, Celery, Mustard, Soya",
+          "visible": true
+        },
+        {
+          "id": "main-haddock",
+          "name": "Beer-Battered Haddock",
+          "description": "Tartar sauce, mushy peas, lemon and chips.",
+          "price": "£18",
+          "allergens": "Fish, Gluten, Egg, Mustard, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "main-steak",
+          "name": "Rib Eye Steak or Fillet",
+          "description": "Spring salad, homemade chips and peppercorn sauce.",
+          "price": "Rib Eye £30 · Fillet £38",
+          "allergens": "Mustard, Sulphites, Milk",
+          "visible": true
+        },
+        {
+          "id": "main-pie",
+          "name": "Limits Pie of the Day",
+          "description": "Creamed mash, greens and gravy.",
+          "price": "£18",
+          "allergens": "Milk, Celery, Gluten, Egg, Lupin, Mustard",
+          "visible": true
+        },
+        {
+          "id": "main-korean-ribs",
+          "name": "Full Rack of Korean BBQ Ribs",
+          "description": "Homemade chips and red cabbage slaw.",
+          "price": "£24",
+          "allergens": "Celery, Gluten, Mustard, Sesame, Sulphites, Soya, Milk",
+          "visible": true
+        }
+      ]
+    }
+  ]
+}
