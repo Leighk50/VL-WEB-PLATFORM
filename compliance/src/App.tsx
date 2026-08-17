@@ -25,6 +25,7 @@ import {
   sanitizePdfPreviewError,
 } from "./pdf-preview";
 import { RiskAssessments } from "./RiskAssessments";
+import { FoodHygiene } from "./FoodHygiene";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { name: string; role: string };
@@ -36,6 +37,7 @@ type Boot = {
 };
 const nav = [
   ["/", "Dashboard"],
+  ["/food-hygiene", "Food Hygiene"],
   ["/assets", "Assets"],
   ["/pat", "PAT Testing"],
   ["/extinguishers", "Fire Extinguishers"],
@@ -156,6 +158,7 @@ export default function App() {
         </div>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/food-hygiene/*" element={<FoodHygiene boot={boot} user={user} />} />
           <Route
             path="/assets"
             element={

@@ -24,13 +24,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 

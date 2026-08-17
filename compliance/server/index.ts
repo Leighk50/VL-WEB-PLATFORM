@@ -36,9 +36,11 @@ import {
   venueSettingsSchema,
 } from "./validation.js";
 import { riskLevel, riskScore } from "./risk-library.js";
+import { bootstrapFoodHygiene, registerFoodHygiene } from "./food-hygiene.js";
 
 try {
   await migrateDatabase();
+  await bootstrapFoodHygiene();
   console.log(`Compliance database migrations complete (${db.provider}).`);
 } catch (error) {
   console.error("Compliance database migration failed during startup.", error);
@@ -203,6 +205,11 @@ const entityTables: Record<string, { table: string; via?: string }> = {
   fire_alarm_call_point: { table: "fire_alarm_call_points" },
   pat_test: { table: "pat_tests", via: "assets" },
   extinguisher_check: { table: "extinguisher_checks", via: "extinguishers" },
+  food_task_instance: { table: "food_task_instances" },
+  food_temperature_reading: { table: "food_temperature_readings" },
+  food_delivery_record: { table: "food_delivery_records" },
+  food_probe_calibration: { table: "food_probe_calibrations" },
+  food_checklist_completion: { table: "food_checklist_completions" },
 };
 async function entityVenue(
   type: string,
@@ -297,6 +304,8 @@ app.get("/api/bootstrap", async (req: AuthedRequest, res) => {
     demoMode: demoDataMode(),
   });
 });
+
+registerFoodHygiene(app);
 
 app.get("/api/dashboard", async (req: AuthedRequest, res) => {
   const v = isAdmin(req) ? [] : [req.user!.venueId];
