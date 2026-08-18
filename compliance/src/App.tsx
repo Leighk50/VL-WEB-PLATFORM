@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Route, Routes, useSearchParams } from "react-router-dom";
+import {
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useSearchParams,
+} from "react-router-dom";
 import {
   GlobalWorkerOptions,
   getDocument,
@@ -103,6 +109,12 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null),
     [boot, setBoot] = useState<Boot | null>(null),
     [menu, setMenu] = useState(false);
+  const location = useLocation();
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const currentPage =
+    nav.find(([to]) =>
+      to === "/" ? location.pathname === "/" : location.pathname.startsWith(to),
+    )?.[1] || "Compliance Hub";
   useEffect(() => {
     if (localStorage.getItem("compliance_token"))
       api<User>("/me")
@@ -112,16 +124,41 @@ export default function App() {
   useEffect(() => {
     if (user) api<Boot>("/bootstrap").then(setBoot);
   }, [user]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenu(false);
+        menuButton.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [menu]);
   if (!user) return <Login done={setUser} />;
   return (
     <div className="shell">
-      <aside className={menu ? "open" : ""}>
+      <aside
+        id="primary-navigation"
+        className={menu ? "open" : ""}
+        aria-label="Primary navigation"
+      >
         <header>
           <div className="brandmark">VL</div>
           <div>
             <strong>Compliance Hub</strong>
             <small>Village Limits</small>
           </div>
+          <button
+            className="nav-close"
+            aria-label="Close navigation"
+            onClick={() => {
+              setMenu(false);
+              menuButton.current?.focus();
+            }}
+          >
+            ×
+          </button>
         </header>
         <nav>
           {nav.map(([to, label]) => (
@@ -149,16 +186,36 @@ export default function App() {
           </button>
         </footer>
       </aside>
+      {menu && (
+        <button
+          className="nav-scrim"
+          aria-label="Close navigation"
+          onClick={() => setMenu(false)}
+        />
+      )}
       <main className="content">
         <div className="topbar">
-          <button className="menu" onClick={() => setMenu(!menu)}>
-            ☰
+          <button
+            ref={menuButton}
+            className="menu"
+            aria-label="Open navigation"
+            aria-controls="primary-navigation"
+            aria-expanded={menu}
+            onClick={() => setMenu(!menu)}
+          >
+            <span aria-hidden="true">☰</span>
           </button>
-          <span>Village Limits {boot?.demoMode && <b>• DEMO DATA</b>}</span>
+          <strong className="mobile-page-title">{currentPage}</strong>
+          <span className="venue-label">
+            Village Limits {boot?.demoMode && <b>• DEMO DATA</b>}
+          </span>
         </div>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/food-hygiene/*" element={<FoodHygiene boot={boot} user={user} />} />
+          <Route
+            path="/food-hygiene/*"
+            element={<FoodHygiene boot={boot} user={user} />}
+          />
           <Route
             path="/assets"
             element={
@@ -402,7 +459,7 @@ function Register({
             {items.map((x) => (
               <tr key={x.id}>
                 {fields.slice(0, 5).map((f) => (
-                  <td key={f.key}>
+                  <td key={f.key} data-label={f.label}>
                     {f.key === "venue_id"
                       ? x.venue_name
                       : f.key === "location_id"
@@ -410,7 +467,7 @@ function Register({
                         : String(x[f.key] ?? "—")}
                   </td>
                 ))}
-                <td>
+                <td data-label="Actions">
                   <button className="link" onClick={() => setEditing(x)}>
                     Edit
                   </button>
@@ -811,22 +868,24 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
           <tbody>
             {documents.map((document) => (
               <tr key={document.id}>
-                <td>
+                <td data-label="Type / title">
                   <b>{document.title}</b>
                   <br />
                   <small>{document.type}</small>
                 </td>
-                <td>
+                <td data-label="Provider / reference">
                   {document.issuer || "—"}
                   <br />
                   <small>{document.reference || "No reference"}</small>
                 </td>
-                <td>{document.review_date || "Not set"}</td>
-                <td>{document.venue_name}</td>
-                <td>
+                <td data-label="Expiry / review">
+                  {document.review_date || "Not set"}
+                </td>
+                <td data-label="Venue">{document.venue_name}</td>
+                <td data-label="Evidence">
                   <b>{Number(document.attachment_count)} attachments</b>
                 </td>
-                <td>
+                <td data-label="Actions">
                   <div className="record-actions">
                     <button
                       className="link"
@@ -1612,17 +1671,19 @@ function FireAlarm({ boot, user }: { boot: Boot | null; user: User }) {
           <tbody>
             {points.map((point) => (
               <tr key={point.id}>
-                <td>{point.code}</td>
-                <td>{point.description}</td>
-                <td>{point.location_name}</td>
-                <td>
+                <td data-label="Code">{point.code}</td>
+                <td data-label="Description">{point.description}</td>
+                <td data-label="Location">{point.location_name}</td>
+                <td data-label="Last tested">
                   {point.last_tested_at
                     ? new Date(point.last_tested_at).toLocaleString()
                     : "Never"}
                 </td>
-                <td>{point.test_count}</td>
-                <td>{point.active ? "Active" : "Inactive"}</td>
-                <td>
+                <td data-label="Tests">{point.test_count}</td>
+                <td data-label="Status">
+                  {point.active ? "Active" : "Inactive"}
+                </td>
+                <td data-label="Actions">
                   {user.role === "administrator" && (
                     <button
                       className="link"
