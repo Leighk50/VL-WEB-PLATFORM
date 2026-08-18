@@ -55,4 +55,10 @@ describe("Azure SQL migration batching", () => {
     expect((database.prepare("SELECT description FROM fire_alarm_call_points WHERE id=1").get() as any).description).toBe("Existing call point");
     database.close();
   });
+
+  it("adds a provider-compatible venue asset reference sequence", () => {
+    const migration = migrations.find((item) => item.version === 6)!;
+    expect(migration.sqlite).toContain("asset_reference_sequences");
+    expect(migration.azure).toContain("OBJECT_ID('asset_reference_sequences','U') IS NULL");
+  });
 });

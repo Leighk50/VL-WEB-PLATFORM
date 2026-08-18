@@ -15,6 +15,7 @@ import {
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   api,
+  ApiError,
   createEvidenceObjectUrl,
   downloadPrivateAttachment,
   evidencePreviewKind,
@@ -32,6 +33,7 @@ import {
 } from "./pdf-preview";
 import { RiskAssessments } from "./RiskAssessments";
 import { FoodHygiene } from "./FoodHygiene";
+import { BarcodeScanner } from "./BarcodeScanner";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { name: string; role: string };
@@ -343,7 +345,9 @@ function Register({
 }) {
   const [items, setItems] = useState<any[]>([]),
     [editing, setEditing] = useState<any | null>(null),
+    [duplicateAsset, setDuplicateAsset] = useState<any | null>(null),
     [error, setError] = useState(""),
+    [choosingAssetReference, setChoosingAssetReference] = useState(false),
     [scanning, setScanning] = useState(
       kind === "assets" &&
         new URLSearchParams(window.location.search).has("scan"),
@@ -352,6 +356,25 @@ function Register({
   useEffect(() => {
     void load();
   }, [kind]);
+  const venueId = Number(boot?.venues[0]?.id || 0);
+  async function useAssetReference(reference: string) {
+    try {
+      const asset = await api<any>(
+        `/assets/barcode/${encodeURIComponent(reference)}?venue_id=${venueId}`,
+      );
+      setEditing(asset);
+      setError("This reference already belongs to an existing asset. The existing record has been opened.");
+    } catch (lookupError) {
+      if (lookupError instanceof Error && lookupError.message === "Unknown barcode") {
+        setEditing({ barcode: reference, venue_id: venueId });
+        setError("");
+      } else {
+        setError(lookupError instanceof Error ? lookupError.message : "Barcode lookup failed");
+      }
+    }
+    setScanning(false);
+    setChoosingAssetReference(false);
+  }
   async function save(e: any) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
@@ -374,6 +397,14 @@ function Register({
       load();
     } catch (e: any) {
       setError(e.message);
+      if (kind === "assets" && e instanceof ApiError && e.code === "DUPLICATE_ASSET_REFERENCE") {
+        const reference = String((body as Record<string, unknown>).barcode || "");
+        try {
+          setDuplicateAsset(await api<any>(`/assets/barcode/${encodeURIComponent(reference)}?venue_id=${Number((body as Record<string, unknown>).venue_id)}`));
+        } catch {
+          setDuplicateAsset(null);
+        }
+      }
     }
   }
   return (
@@ -387,7 +418,7 @@ function Register({
               Scan barcode
             </button>
           )}
-          <button onClick={() => setEditing({ venue_id: boot?.venues[0]?.id })}>
+          <button onClick={() => kind === "assets" ? setChoosingAssetReference(true) : setEditing({ venue_id: boot?.venues[0]?.id })}>
             + Add record
           </button>
         </div>
@@ -395,31 +426,35 @@ function Register({
     >
       {scanning && (
         <BarcodeScanner
-          onClose={() => setScanning(false)}
-          onCode={async (barcode) => {
-            try {
-              const asset = await api<any>(
-                `/assets/barcode/${encodeURIComponent(barcode)}`,
-              );
-              setEditing(asset);
-            } catch (error) {
-              if (error instanceof Error && error.message === "Unknown barcode")
-                setEditing({ barcode, venue_id: boot?.venues[0]?.id });
-              else
-                setError(
-                  error instanceof Error
-                    ? error.message
-                    : "Barcode lookup failed",
-                );
-            }
-            setScanning(false);
-          }}
+          onCancel={() => setScanning(false)}
+          onUse={(barcode) => void useAssetReference(barcode)}
         />
+      )}
+      {kind === "assets" && choosingAssetReference && (
+        <section className="panel assetreferencechoices">
+          <div className="sectionhead">
+            <div><h2>Add asset</h2><p>Choose how this asset will be identified.</p></div>
+            <button type="button" className="secondary" onClick={() => setChoosingAssetReference(false)}>Cancel</button>
+          </div>
+          <div className="choicecards">
+            <button type="button" onClick={() => setScanning(true)}>Scan barcode<small>Use the phone camera</small></button>
+            <button type="button" className="secondary" onClick={() => { setEditing({ venue_id: venueId }); setChoosingAssetReference(false); }}>Enter manually<small>Type any practical asset reference</small></button>
+            <button type="button" className="secondary" onClick={async () => {
+              try {
+                const result = await api<{ reference: string }>("/assets/generated-reference", { method: "POST", body: JSON.stringify({ venue_id: venueId }) });
+                setEditing({ barcode: result.reference, venue_id: venueId });
+                setChoosingAssetReference(false);
+              } catch (generateError) {
+                setError(generateError instanceof Error ? generateError.message : "Reference could not be generated");
+              }
+            }}>Generate VL reference<small>Allocate the next unique VL number</small></button>
+          </div>
+        </section>
       )}
       {editing && (
         <section className="panel formpanel">
           <h2>{editing.id ? "Edit" : "New"} record</h2>
-          <form className="gridform" onSubmit={save}>
+          <form key={`${editing.id || "new"}-${editing.barcode || "manual"}`} className="gridform" onSubmit={save}>
             {fields.map((f) => (
               <FieldInput
                 key={f.key}
@@ -429,6 +464,11 @@ function Register({
               />
             ))}
             {error && <p className="error">{error}</p>}
+            {duplicateAsset && (
+              <button type="button" className="secondary" onClick={() => { setEditing(duplicateAsset); setDuplicateAsset(null); setError(""); }}>
+                View existing asset
+              </button>
+            )}
             <div className="formactions">
               <button
                 type="button"
@@ -536,97 +576,6 @@ function FieldInput({
     </label>
   );
 }
-function BarcodeScanner({
-  onCode,
-  onClose,
-}: {
-  onCode: (code: string) => void;
-  onClose: () => void;
-}) {
-  const video = useRef<HTMLVideoElement>(null),
-    [manual, setManual] = useState(""),
-    [message, setMessage] = useState("Requesting camera permission…");
-  useEffect(() => {
-    let stream: MediaStream | undefined,
-      timer: number | undefined,
-      stopped = false;
-    async function start() {
-      const Detector = (window as any).BarcodeDetector;
-      if (!Detector) {
-        setMessage(
-          "Camera barcode detection is not supported by this browser. Enter the barcode manually.",
-        );
-        return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
-        if (!video.current || stopped) return;
-        video.current.srcObject = stream;
-        await video.current.play();
-        setMessage("Point the camera at the barcode.");
-        const detector = new Detector({
-          formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code"],
-        });
-        timer = window.setInterval(async () => {
-          if (!video.current || video.current.readyState < 2) return;
-          try {
-            const found = await detector.detect(video.current);
-            if (found[0]?.rawValue) {
-              window.clearInterval(timer);
-              onCode(found[0].rawValue);
-            }
-          } catch {
-            /* retry next frame */
-          }
-        }, 450);
-      } catch (error) {
-        setMessage(
-          error instanceof DOMException && error.name === "NotAllowedError"
-            ? "Camera permission was denied. Allow camera access or enter the barcode manually."
-            : "The camera could not be started. Enter the barcode manually.",
-        );
-      }
-    }
-    void start();
-    return () => {
-      stopped = true;
-      if (timer) window.clearInterval(timer);
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [onCode]);
-  return (
-    <section className="panel scanner">
-      <div className="sectionhead">
-        <h2>Scan asset barcode</h2>
-        <button className="secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
-      <video ref={video} playsInline muted />
-      <p>{message}</p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (manual.trim()) onCode(manual.trim());
-        }}
-      >
-        <label>
-          Manual barcode
-          <input
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            autoFocus
-          />
-        </label>
-        <button>Find asset</button>
-      </form>
-    </section>
-  );
-}
-
 function CertificatesDocuments({ boot }: { boot: Boot | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedDocumentId = Number(
@@ -1766,6 +1715,14 @@ function PhotoManager({
             type="file"
             accept="image/*"
             capture="environment"
+            onChange={(e) => void upload(e.target.files?.[0], false)}
+          />
+        </label>
+        <label className="upload secondary">
+          Choose photo
+          <input
+            type="file"
+            accept="image/*"
             onChange={(e) => void upload(e.target.files?.[0], false)}
           />
         </label>

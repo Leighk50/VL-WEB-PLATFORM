@@ -34,6 +34,7 @@ import {
   riskHazardSchema,
   riskReviewSchema,
   venueSettingsSchema,
+  assetReference,
 } from "./validation.js";
 import { riskLevel, riskScore } from "./risk-library.js";
 import { bootstrapFoodHygiene, registerFoodHygiene } from "./food-hygiene.js";
@@ -362,19 +363,26 @@ app.get("/api/dashboard", async (req: AuthedRequest, res) => {
 });
 
 app.get("/api/assets/barcode/:barcode", async (req: AuthedRequest, res) => {
-  const row = await (isAdmin(req)
-    ? db.get("SELECT * FROM assets WHERE barcode=?", [
-        String(req.params.barcode),
-      ])
-    : db.get("SELECT * FROM assets WHERE barcode=? AND venue_id=?", [
-        String(req.params.barcode),
-        req.user!.venueId,
-      ]));
+  const parsed = assetReference.safeParse(req.params.barcode);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid asset reference" });
+  const venueId = isAdmin(req) ? Number(req.query.venue_id) : Number(req.user!.venueId);
+  if (!venueId || !(await assertVenue(req, res, venueId))) return;
+  const row = await db.get("SELECT * FROM assets WHERE barcode=? AND venue_id=?", [
+    parsed.data,
+    venueId,
+  ]);
   if (!row)
     return res
       .status(404)
       .json({ error: "Unknown barcode", barcode: req.params.barcode });
   res.json(row);
+});
+
+app.post("/api/assets/generated-reference", canWrite, async (req: AuthedRequest, res) => {
+  const venueId = Number(req.body?.venue_id);
+  if (!venueId || !(await assertVenue(req, res, venueId))) return;
+  const reference = await db.allocateAssetReference(venueId);
+  res.status(201).json({ reference });
 });
 
 const resources: Record<
@@ -925,6 +933,18 @@ for (const [route, cfg] of Object.entries(resources)) {
     const body = parsed.data as Record<string, any>,
       venueId = Number(body.venue_id);
     if (!(await validateReferences(req, res, route, body, venueId))) return;
+    if (route === "assets") {
+      const duplicate = await db.get<{ id: number }>(
+        "SELECT id FROM assets WHERE venue_id=? AND barcode=?",
+        [venueId, body.barcode],
+      );
+      if (duplicate)
+        return res.status(409).json({
+          error: "An asset with this reference already exists at this venue",
+          code: "DUPLICATE_ASSET_REFERENCE",
+          assetId: duplicate.id,
+        });
+    }
     const cols = Object.keys(body),
       vals = Object.values(body);
     try {
@@ -937,6 +957,18 @@ for (const [route, cfg] of Object.entries(resources)) {
       await audit(route, id, "create", null, after, req.user!.id, req.ip);
       res.status(201).json(after);
     } catch {
+      if (route === "assets") {
+        const duplicate = await db.get<{ id: number }>(
+          "SELECT id FROM assets WHERE venue_id=? AND barcode=?",
+          [venueId, body.barcode],
+        );
+        if (duplicate)
+          return res.status(409).json({
+            error: "An asset with this reference already exists at this venue",
+            code: "DUPLICATE_ASSET_REFERENCE",
+            assetId: duplicate.id,
+          });
+      }
       res.status(400).json({ error: "Record could not be saved" });
     }
   });

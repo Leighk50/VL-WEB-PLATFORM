@@ -205,4 +205,10 @@ IF COL_LENGTH('food_temperature_readings','resolved_at') IS NULL ALTER TABLE foo
 IF COL_LENGTH('food_temperature_readings','resolved_by') IS NULL ALTER TABLE food_temperature_readings ADD resolved_by BIGINT NULL REFERENCES users(id);
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_food_temperature_exceptions') CREATE INDEX idx_food_temperature_exceptions ON food_temperature_readings(venue_id,resolution_status,recorded_at);`,
   },
+  {
+    version: 6,
+    name: "asset_reference_sequences",
+    sqlite: `CREATE TABLE asset_reference_sequences(venue_id INTEGER PRIMARY KEY REFERENCES venues(id),next_number INTEGER NOT NULL CHECK(next_number > 0));`,
+    azure: `IF OBJECT_ID('asset_reference_sequences','U') IS NULL CREATE TABLE asset_reference_sequences(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),next_number BIGINT NOT NULL CHECK(next_number > 0));`,
+  },
 ];

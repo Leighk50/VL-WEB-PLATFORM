@@ -20,7 +20,11 @@ export interface DatabaseAdapter {
   ): Promise<T[]>;
   run(statement: string, params?: unknown[]): Promise<RunResult>;
   exec(statement: string): Promise<void>;
+  allocateAssetReference(venueId: number): Promise<string>;
 }
+
+const formatAssetReference = (number: number) =>
+  `VL-${String(number).padStart(6, "0")}`;
 
 class SqliteAdapter implements DatabaseAdapter {
   readonly provider = "sqlite" as const;
@@ -51,6 +55,18 @@ class SqliteAdapter implements DatabaseAdapter {
   }
   async exec(statement: string) {
     this.raw.exec(statement);
+  }
+  async allocateAssetReference(venueId: number) {
+    this.raw
+      .prepare(
+        "INSERT OR IGNORE INTO asset_reference_sequences(venue_id,next_number) VALUES(?,1)",
+      )
+      .run(venueId);
+    const allocated = Number(
+      (this.raw.prepare("SELECT max(next_number) allocated FROM asset_reference_sequences").get() as { allocated: number }).allocated,
+    );
+    this.raw.prepare("UPDATE asset_reference_sequences SET next_number=? WHERE venue_id=?").run(allocated + 1, venueId);
+    return formatAssetReference(allocated);
   }
 }
 
@@ -133,6 +149,31 @@ class AzureSqlAdapter implements DatabaseAdapter {
   async exec(statement: string) {
     const pool = await this.pool();
     await pool.request().batch(statement);
+  }
+  async allocateAssetReference(venueId: number) {
+    const transaction = new sql.Transaction(await this.pool());
+    await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+    try {
+      const request = new sql.Request(transaction);
+      request.input("venueId", sql.BigInt, venueId);
+      const result = await request.query<{ allocated: number }>(`
+        DECLARE @lockResult INT;
+        EXEC @lockResult = sp_getapplock
+          @Resource = 'vl-asset-reference-global',
+          @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @lockResult < 0 THROW 50001, 'Could not allocate asset reference', 1;
+        IF NOT EXISTS (SELECT 1 FROM asset_reference_sequences WHERE venue_id=@venueId)
+          INSERT INTO asset_reference_sequences(venue_id,next_number) VALUES(@venueId,1);
+        DECLARE @allocated BIGINT;
+        SELECT @allocated=MAX(next_number) FROM asset_reference_sequences;
+        UPDATE asset_reference_sequences SET next_number=@allocated+1 WHERE venue_id=@venueId;
+        SELECT @allocated AS allocated;`);
+      await transaction.commit();
+      return formatAssetReference(Number(result.recordset[0].allocated));
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
   }
   async migrateVersioned() {
     const transaction = new sql.Transaction(await this.pool());

@@ -1113,6 +1113,51 @@ dd {
   border-radius: 12px;
   object-fit: cover;
 }
+.modalbackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(5 24 15 / 78%);
+}
+.modalbackdrop .scanner {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.scannerpreview {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.scannerpreview video {
+  width: 100%;
+}
+.scannerguide {
+  position: absolute;
+  width: min(82%, 480px);
+  height: 34%;
+  border: 3px solid white;
+  border-radius: 12px;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 20%);
+}
+.choicecards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.choicecards button {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .45rem;
+  font-size: 1.05rem;
+}
+.choicecards small { font-weight: 400; }
+.detectedbarcode strong { display: block; font-size: 1.35rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
 .scanner form {
   display: flex;
   gap: 10px;
@@ -1142,6 +1187,11 @@ dd {
 .upload.secondary {
   background: #e8ece8;
   color: #283a2f;
+}
+@media (max-width: 700px) {
+  .choicecards { grid-template-columns: 1fr; }
+  .modalbackdrop { padding: 0; }
+  .modalbackdrop .scanner { width: 100%; min-height: 100dvh; border-radius: 0; }
 }
 .upload input {
   position: absolute;

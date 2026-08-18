@@ -12,11 +12,17 @@ const optional = <T extends z.ZodTypeAny>(schema: T) =>
   schema.optional().nullable();
 const venueLocation = { venue_id: id, location_id: optional(id) };
 const booleanFlag = z.coerce.number().int().min(0).max(1);
+export const assetReference = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9 ._/:+-]*$/, "Invalid asset reference");
 
 export const resourceSchemas = {
   assets: z
     .object({
-      barcode: text.min(1),
+      barcode: assetReference,
       description: text.min(1),
       category: optional(text),
       manufacturer: optional(text),

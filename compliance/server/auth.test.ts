@@ -26,13 +26,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -642,5 +642,46 @@ describe("venue security, current authorization and immutable history", () => {
     expect(overview.body.equipment.every((row: any) => row.active === 1)).toBe(true);
     expect(overview.body.readings.some((row: any) => row.equipment_id === fridge1 && row.compliant === 0)).toBe(true);
     expect(overview.body.readings.every((row: any) => row.equipment_name && row.recorded_at)).toBe(true);
+  });
+
+  it("atomically allocates venue references and rejects duplicate assets", async () => {
+    const first = await request(app)
+      .post("/api/assets/generated-reference")
+      .set(auth(tokens.staff))
+      .send({ venue_id: venue1 })
+      .expect(201);
+    const second = await request(app)
+      .post("/api/assets/generated-reference")
+      .set(auth(tokens.staff))
+      .send({ venue_id: venue1 })
+      .expect(201);
+    expect(first.body.reference).toMatch(/^VL-\d{6}$/);
+    expect(second.body.reference).not.toBe(first.body.reference);
+    const created = await request(app)
+      .post("/api/assets")
+      .set(auth(tokens.staff))
+      .send({ barcode: first.body.reference, description: "Generated asset", venue_id: venue1 })
+      .expect(201);
+    const duplicate = await request(app)
+      .post("/api/assets")
+      .set(auth(tokens.staff))
+      .send({ barcode: first.body.reference, description: "Duplicate", venue_id: venue1 })
+      .expect(409);
+    expect(duplicate.body).toMatchObject({ code: "DUPLICATE_ASSET_REFERENCE", assetId: created.body.id });
+  });
+
+  it("keeps scanned asset lookup venue scoped for administrators and staff", async () => {
+    await request(app)
+      .get(`/api/assets/barcode/${encodeURIComponent("V2-ASSET")}?venue_id=${venue1}`)
+      .set(auth(tokens.admin))
+      .expect(404);
+    await request(app)
+      .get(`/api/assets/barcode/${encodeURIComponent("V2-ASSET")}?venue_id=${venue2}`)
+      .set(auth(tokens.admin))
+      .expect(200);
+    await request(app)
+      .get(`/api/assets/barcode/${encodeURIComponent("V2-ASSET")}`)
+      .set(auth(tokens.staff))
+      .expect(404);
   });
 });
