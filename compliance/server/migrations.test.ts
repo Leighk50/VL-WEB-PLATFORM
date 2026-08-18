@@ -61,4 +61,11 @@ describe("Azure SQL migration batching", () => {
     expect(migration.sqlite).toContain("asset_reference_sequences");
     expect(migration.azure).toContain("OBJECT_ID('asset_reference_sequences','U') IS NULL");
   });
+
+  it("guards Azure content-review tracking columns for safe deployment", () => {
+    const migration = migrations.find((item) => item.version === 7)!;
+    const sql = sqlBatches(migration, "azure-sql").join("\n");
+    expect(sql).toContain("COL_LENGTH('risk_assessments','content_reviewed_at') IS NULL");
+    expect(sql).toContain("COL_LENGTH('risk_assessments','content_review_note') IS NULL");
+  });
 });

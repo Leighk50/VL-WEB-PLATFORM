@@ -59,6 +59,82 @@ export const riskTemplates: RiskTemplate[] = [
 export const riskScore = (likelihood: number, severity: number) => likelihood * severity;
 export const riskLevel = (score: number) => score >= 15 ? "Critical" : score >= 10 ? "High" : score >= 5 ? "Medium" : "Low";
 
+export const RISK_CONTENT_REVIEW_DATE = "2026-07-07";
+export const RISK_NEXT_REVIEW_DATE = "2027-07-07";
+export const BOOTSTRAP_RISK_NOTE = "Working template for the responsible person to verify against actual site conditions. No control is confirmed merely because it appears here.";
+export const REVIEWED_RISK_NOTE = "Content reviewed for practical hospitality use on 7 July 2026. Physical controls and site conditions still require confirmation by the responsible person.";
+
+const peopleFor = (area: string) => {
+  if (area === "Kitchen") return "Kitchen staff, other employees working nearby, contractors and visitors entering the kitchen";
+  if (area === "Accommodation") return "Guests, housekeeping staff, maintenance staff and contractors";
+  if (area === "Restaurant") return "Guests, front-of-house staff, performers and contractors";
+  if (area === "Events") return "Guests, performers, event staff, contractors and other employees";
+  if (area === "External") return "Guests, staff, contractors, delivery drivers and members of the public";
+  return "Staff, guests, contractors and visitors who may encounter the hazard";
+};
+
+const harmFor = (hazard: string) => {
+  const value = hazard.toLowerCase();
+  if (/gas|co2|cylinder|cartridge/.test(value)) return "Fire, explosion, burns, asphyxiation or illness following a leak, damaged container or unsafe isolation";
+  if (/oil|grease|fryer|flame|ignition|combust|candle|heater|smoking|fire spread/.test(value)) return "Burns, smoke inhalation, fire spread or delayed evacuation";
+  if (/electrical|cable|plug|socket|charger|lighting/.test(value)) return "Electric shock, burns, fire or an obstructed evacuation route";
+  if (/escape|exit|evacuation|alarm|warning|door|compartment/.test(value)) return "Smoke or fire exposure and delayed or failed evacuation";
+  if (/slip|trip|surface|floor|movement|access/.test(value)) return "Slips, trips, falls, collision injuries or delayed evacuation";
+  if (/lift|handling|barrel|keg|linen|repetitive/.test(value)) return "Musculoskeletal injury, crushing, strains or sprains";
+  if (/chemical|spill|mixing|coshh/.test(value)) return "Skin or eye injury, breathing difficulty, poisoning or a slip-related injury";
+  return `Injury, ill health or impaired evacuation arising from ${hazard.toLowerCase()}`;
+};
+
+const controlsFor = (hazard: string) => {
+  const value = hazard.toLowerCase();
+  if (/gas|cylinder|cartridge/.test(value)) return "Site verification must confirm sound equipment and connections, suitable ventilation and storage, a clearly identified accessible isolation point, competent users and an understood leak/emergency procedure. Maintenance or inspection evidence should be linked where available.";
+  if (/fryer|hot oil|oil changing/.test(value)) return "Site verification must confirm temperature and high-limit controls, safe operating and shutdown arrangements, separation from combustibles, safe cooled-oil handling, appropriate fire-fighting equipment and trained staff who prioritise raising the alarm and evacuation.";
+  if (/extraction|grease|duct|filter/.test(value)) return "Site verification must confirm filters and accessible surfaces are clean, duct cleaning frequency reflects use, inaccessible sections are included, penetrations are protected and dated cleaning/service evidence is retained.";
+  if (/extinguisher|fire blanket|suppression/.test(value)) return "Site verification must confirm the provision suits the identified hazard, equipment is visible, accessible, undamaged, signed and within service, and staff understand that evacuation takes priority over attempting to fight a fire.";
+  if (/fire door|self-close|compartment|penetration/.test(value)) return "Site verification must confirm doors close fully and are not wedged, seals, glazing and ironmongery are sound, service penetrations are sealed and inspection defects are recorded and tracked to completion.";
+  if (/electrical|cable|plug|socket|charger|lighting/.test(value)) return "Site verification must confirm equipment and supplies are suitable, visually sound and not overloaded, cables are routed safely, defective items are removed from use and relevant inspection or maintenance records are retained.";
+  if (/escape|exit|evacuation|alarm|warning|assembly/.test(value)) return "Site verification must confirm routes and exits are clear, warning can be heard or seen in the area, staff know the immediate evacuation procedure and assembly/accountability arrangements are workable.";
+  if (/waste|bin|combustible|packaging|decoration|linen stored/.test(value)) return "Site verification must confirm combustible material is controlled, separated from heat and building openings, removed at a suitable frequency and does not obstruct escape routes, signs or detection.";
+  if (/slip|trip|floor|surface|movement/.test(value)) return "Site verification must confirm routine inspection and prompt spill/defect response, suitable lighting and housekeeping, clear walking routes and warning or exclusion controls where a hazard cannot be removed immediately.";
+  if (/lift|handling|barrel|keg|linen|repetitive/.test(value)) return "Site verification must confirm loads and routes have been assessed, handling aids or team lifting are used where appropriate, storage reduces awkward handling and staff know when not to attempt a lift alone.";
+  if (/chemical|coshh|mixing|spill response/.test(value)) return "Site verification must confirm labelled products, current safety information, secure segregated storage, correct dilution and PPE, staff instruction and a suitable spill/exposure response.";
+  return `Site verification must confirm practical controls, staff instructions, inspection records and defect reporting are suitable for ${hazard.toLowerCase()}.`;
+};
+
+export function reviewedHazardContent(template: RiskTemplate, hazard: string) {
+  return {
+    whoMayBeHarmed: peopleFor(template.area),
+    howHarmed: harmFor(hazard),
+    existingControls: controlsFor(hazard),
+    furtherAction: "Responsible person to confirm these arrangements on site, record any shortfall as a linked Action / Defect and attach supporting evidence where available.",
+  };
+}
+
+export async function reviewBootstrappedRiskContent(database: DatabaseAdapter) {
+  let assessmentsReviewed = 0, hazardsReviewed = 0, historicalDatesPreserved = 0;
+  for (const template of riskTemplates) {
+    const records = await database.all<any>("SELECT r.* FROM risk_assessments r JOIN venues v ON v.id=r.venue_id WHERE v.is_demo=0 AND r.template_key=? AND r.status<>'Archived'", [template.key]);
+    for (const assessment of records) {
+      const untouched = assessment.created_by == null && assessment.updated_by == null && assessment.assessor == null && assessment.signed_by == null && assessment.signed_at == null && Number(assessment.version || 1) === 1 && assessment.notes === BOOTSTRAP_RISK_NOTE;
+      const hazards = await database.all<any>("SELECT * FROM risk_hazards WHERE assessment_id=?", [assessment.id]);
+      for (const row of hazards) {
+        const oldFurtherAction = `Verify site-specific arrangements, records, staff competence and condition for: ${row.hazard}.`;
+        if (row.created_by != null || row.existing_controls !== "Requires site verification" || row.further_action !== oldFurtherAction) continue;
+        const content = reviewedHazardContent(template, row.hazard);
+        await database.run("UPDATE risk_hazards SET who_may_be_harmed=?,how_harmed=?,existing_controls=?,further_action=?,status='Requires site verification',site_verification_required=1 WHERE id=?", [content.whoMayBeHarmed, content.howHarmed, content.existingControls, content.furtherAction, row.id]);
+        hazardsReviewed++;
+      }
+      if (untouched) {
+        await database.run("UPDATE risk_assessments SET assessment_date=?,signed_at=?,review_date=?,content_reviewed_at=?,content_review_note=?,notes=?,status='Requires Site Verification',site_verification_required=1 WHERE id=?", [RISK_CONTENT_REVIEW_DATE, `${RISK_CONTENT_REVIEW_DATE}T00:00:00`, RISK_NEXT_REVIEW_DATE, RISK_CONTENT_REVIEW_DATE, REVIEWED_RISK_NOTE, REVIEWED_RISK_NOTE, assessment.id]);
+        assessmentsReviewed++;
+      } else if (assessment.content_reviewed_at == null) {
+        historicalDatesPreserved++;
+      }
+    }
+  }
+  return { assessmentsReviewed, hazardsReviewed, historicalDatesPreserved };
+}
+
 export async function bootstrapRiskLibrary(database: DatabaseAdapter) {
   const venues = await database.all<{ id: number }>("SELECT id FROM venues WHERE lower(name)=lower(?) AND is_demo=0", ["Village Limits"]);
   let assessments = 0, hazards = 0, callPoints = 0;
@@ -68,14 +144,15 @@ export async function bootstrapRiskLibrary(database: DatabaseAdapter) {
       if (marker) continue;
       let result;
       try {
-        result = await database.run("INSERT INTO risk_assessments(venue_id,title,category,area,assessment_date,status,overall_risk_rating,version,template_key,site_verification_required,notes) VALUES(?,?,?,?,?,'Requires Site Verification','Requires site verification',1,?,1,?)", [venue.id, template.title, template.category, template.area, new Date().toISOString().slice(0, 10), template.key, "Working template for the responsible person to verify against actual site conditions. No control is confirmed merely because it appears here."]);
+        result = await database.run("INSERT INTO risk_assessments(venue_id,title,category,area,assessment_date,signed_at,review_date,status,overall_risk_rating,version,template_key,site_verification_required,content_reviewed_at,content_review_note,notes) VALUES(?,?,?,?,?,?,?,'Requires Site Verification','Requires site verification',1,?,1,?,?,?)", [venue.id, template.title, template.category, template.area, RISK_CONTENT_REVIEW_DATE, `${RISK_CONTENT_REVIEW_DATE}T00:00:00`, RISK_NEXT_REVIEW_DATE, template.key, RISK_CONTENT_REVIEW_DATE, REVIEWED_RISK_NOTE, REVIEWED_RISK_NOTE]);
       } catch (error) {
         if (await database.get("SELECT id FROM risk_assessments WHERE venue_id=? AND template_key=?", [venue.id, template.key])) continue;
         throw error;
       }
       const assessmentId = Number(result.lastInsertRowid);
       for (const hazard of template.hazards) {
-        await database.run("INSERT INTO risk_hazards(assessment_id,hazard,who_may_be_harmed,how_harmed,existing_controls,initial_likelihood,initial_severity,initial_score,further_action,residual_likelihood,residual_severity,residual_score,status,site_verification_required) VALUES(?,?,?,?,?,3,4,12,?,2,4,8,'Requires site verification',1)", [assessmentId, hazard, "Staff, contractors, guests and visitors as applicable", `Injury, ill health, burns, smoke exposure or impaired evacuation arising from ${hazard.toLowerCase()}.`, "Requires site verification", `Verify site-specific arrangements, records, staff competence and condition for: ${hazard}.`]);
+        const content = reviewedHazardContent(template, hazard);
+        await database.run("INSERT INTO risk_hazards(assessment_id,hazard,who_may_be_harmed,how_harmed,existing_controls,initial_likelihood,initial_severity,initial_score,further_action,residual_likelihood,residual_severity,residual_score,status,site_verification_required) VALUES(?,?,?,?,?,3,4,12,?,2,4,8,'Requires site verification',1)", [assessmentId, hazard, content.whoMayBeHarmed, content.howHarmed, content.existingControls, content.furtherAction]);
         hazards++;
       }
       await database.run("INSERT INTO risk_template_registry(venue_id,template_key,assessment_id) VALUES(?,?,?)", [venue.id, template.key, assessmentId]);

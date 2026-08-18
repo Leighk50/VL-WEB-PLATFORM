@@ -9,6 +9,7 @@ import {
   localIsoDate,
   nextReviewDateChanged,
   runAssessmentConfirmation,
+  formatUkDate,
 } from "./risk-confirmation";
 import {
   assessmentFilters,
@@ -50,7 +51,7 @@ export function RiskAssessments({ boot, user }: { boot: any; user: { name:string
   return <>
     <header className="pagehead"><div><p className="eyebrow">Compliance Hub</p><h1>Risk Assessments</h1><p>Editable, versioned working assessments. Templates require responsible-person verification.</p></div><button onClick={() => { navigate(riskListPath(filter)); setSelected(undefined); setEditing(true); }}>+ New assessment</button></header>
     {dashboard && <section className="risk-dashboard" aria-label="Fire safety dashboard">
-      {[['Current',dashboard.current],['Draft',dashboard.draft],['Review due',dashboard.reviewDue],['Overdue',dashboard.overdue],['Action required',dashboard.actionRequired],['Open fire actions',dashboard.openFireActions],['High-risk unresolved',dashboard.highRisk],['Site verification',dashboard.siteVerification]].map(([label,value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}
+      {[['Content reviewed',dashboard.contentReviewed],['Site verification',dashboard.siteVerification],['Current',dashboard.current],['Action required',dashboard.actionRequired],['Next review',formatUkDate(dashboard.nextReviewDate)],['Review due',dashboard.reviewDue],['Open fire actions',dashboard.openFireActions],['High-risk unresolved',dashboard.highRisk]].map(([label,value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}
     </section>}
     {!assessmentId && <><div className="risk-filters" aria-label="Assessment categories">{assessmentFilters.map(item => <button aria-pressed={filter === item.value} className={filter === item.value ? "active" : "secondary"} onClick={() => setSearchParams(item.value === "All" ? {} : { category:item.value })} key={item.value}>{item.label}</button>)}</div><p className="filter-count"><b>{visible.length}</b> matching assessment{visible.length === 1 ? "" : "s"}</p></>}
     {editing && <AssessmentForm assessment={selected} boot={boot} user={user} onSubmit={saveAssessment} onCancel={() => setEditing(false)} error={error} />}
@@ -99,7 +100,7 @@ function AssessmentDetail({ assessment, user, filter, onRefresh, onSaved, onEdit
     <nav className="risk-breadcrumb" aria-label="Breadcrumb"><button className="link" onClick={onClose}>← Back to all risk assessments</button><span>Risk Assessments &gt; {assessment.title}</span>{filter !== "All" && <small>Return filter: {filter}</small>}</nav>
     <div className="sectionhead"><div><span className={`badge ${String(assessmentStatus(assessment)).toLowerCase().replaceAll(' ','-')}`}>{assessmentStatus(assessment)}</span><h2>{assessment.title}</h2><p>{assessment.category} · {assessment.area} · Version {assessment.version || 1}</p></div><div className="pageactions"><button className="secondary" onClick={() => window.print()}>Print / report</button>{assessment.status !== "Archived" && <button className="secondary" onClick={onEdit}>Amend controls</button>}<button className="secondary" onClick={onClose}>Close</button></div></div>
     {assessment.site_verification_required ? <p className="verification">Requires site verification — this working template is not a statement of compliance.</p> : null}
-    <dl className="assessment-meta"><div><dt>Assessment date</dt><dd>{assessment.assessment_date}</dd></div><div><dt>Assessed by</dt><dd>{assessment.assessor || "Not assigned"}</dd></div><div><dt>Reviewed / approved by</dt><dd>{assessment.signed_by || "Not yet approved"}</dd></div><div><dt>Approval date</dt><dd>{assessment.signed_at ? String(assessment.signed_at).slice(0,10) : "Not set"}</dd></div><div><dt>Next review</dt><dd>{assessment.review_date || "Not set"}</dd></div><div><dt>Overall risk</dt><dd>{assessment.overall_risk_rating}</dd></div></dl>
+    <dl className="assessment-meta"><div><dt>Assessment date</dt><dd>{formatUkDate(assessment.assessment_date)}</dd></div><div><dt>Assessed by</dt><dd>{assessment.assessor || "Not assigned"}</dd></div><div><dt>Reviewed / approved by</dt><dd>{assessment.signed_by || "Not yet approved"}</dd></div><div><dt>Approval date</dt><dd>{formatUkDate(assessment.signed_at)}</dd></div><div><dt>Next review</dt><dd>{formatUkDate(assessment.review_date)}</dd></div><div><dt>Content review</dt><dd>{assessment.content_reviewed_at ? formatUkDate(assessment.content_reviewed_at) : "Not reviewed"}</dd></div><div><dt>Overall risk</dt><dd>{assessment.overall_risk_rating}</dd></div></dl>
     <div className="sectionhead"><h3>Hazards and controls</h3>{assessment.status !== "Archived" && <button onClick={() => setAddingHazard(!addingHazard)}>+ Add hazard</button>}</div>
     {addingHazard && <HazardForm onSubmit={saveHazard} error={error} />}
     <div className="hazard-list">{assessment.hazards.map((hazard:any, index:number) => <HazardCard key={hazard.id} number={index + 1} hazard={hazard} refresh={onRefresh} />)}</div>

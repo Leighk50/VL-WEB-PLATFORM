@@ -5,6 +5,7 @@ import {
   assessmentDateChanged,
   initialConfirmationDates,
   isoAssessmentDate,
+  formatUkDate,
   nextReviewDateChanged,
   runAssessmentConfirmation,
   submitAssessmentConfirmation,
@@ -18,6 +19,11 @@ describe("assessment confirmation dates", () => {
   it("normalises a UK-displayed date when supplied", () => {
     expect(isoAssessmentDate("01/06/2026")).toBe("2026-06-01");
     expect(isoAssessmentDate("11/08/2026")).toBe("2026-08-11");
+  });
+
+  it("displays stored ISO dates in UK format without timezone conversion", () => {
+    expect(formatUkDate("2026-07-07")).toBe("07/07/2026");
+    expect(formatUkDate("2027-07-07T00:00:00")).toBe("07/07/2027");
   });
 
   it("defaults approval to assessment date and review to twelve months later", () => {

@@ -6,6 +6,11 @@ export function isoAssessmentDate(value: FormDataEntryValue | null) {
   return text;
 }
 
+export function formatUkDate(value?: string | null) {
+  const match = String(value || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : (value || "Not set");
+}
+
 export function assessmentConfirmationPayload(form: HTMLFormElement) {
   const data = new FormData(form);
   return {

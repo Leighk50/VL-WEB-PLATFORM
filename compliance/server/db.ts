@@ -258,8 +258,9 @@ export async function migrateDatabase() {
       throw error;
     }
   }
-  const { bootstrapRiskLibrary } = await import("./risk-library.js");
+  const { bootstrapRiskLibrary, reviewBootstrappedRiskContent } = await import("./risk-library.js");
   await bootstrapRiskLibrary(db);
+  await reviewBootstrappedRiskContent(db);
 }
 
 async function seedDemo() {

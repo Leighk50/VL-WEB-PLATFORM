@@ -211,4 +211,15 @@ IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_food_temperature_excepti
     sqlite: `CREATE TABLE asset_reference_sequences(venue_id INTEGER PRIMARY KEY REFERENCES venues(id),next_number INTEGER NOT NULL CHECK(next_number > 0));`,
     azure: `IF OBJECT_ID('asset_reference_sequences','U') IS NULL CREATE TABLE asset_reference_sequences(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),next_number BIGINT NOT NULL CHECK(next_number > 0));`,
   },
+  {
+    version: 7,
+    name: "risk_content_review_tracking",
+    sqlite: `
+ALTER TABLE risk_assessments ADD COLUMN content_reviewed_at TEXT;
+ALTER TABLE risk_assessments ADD COLUMN content_review_note TEXT;`,
+    azure: [
+      `IF COL_LENGTH('risk_assessments','content_reviewed_at') IS NULL ALTER TABLE risk_assessments ADD content_reviewed_at DATE NULL;
+IF COL_LENGTH('risk_assessments','content_review_note') IS NULL ALTER TABLE risk_assessments ADD content_review_note NVARCHAR(1000) NULL;`,
+    ],
+  },
 ];
