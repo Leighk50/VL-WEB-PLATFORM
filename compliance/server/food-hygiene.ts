@@ -49,10 +49,10 @@ export async function bootstrapFoodHygiene() {
           [daily.id, key, label, instruction, index, daily.id, key],
         );
       }
-    await db.run(
-      "INSERT INTO food_equipment(venue_id,name,equipment_type,active) SELECT ?,'Marble Counter Fridge','fridge',1 WHERE NOT EXISTS(SELECT 1 FROM food_equipment WHERE venue_id=? AND name='Marble Counter Fridge')",
-      [venue.id, venue.id],
-    );
+    const untouchedMarble = await db.get<any>("SELECT id FROM food_equipment WHERE venue_id=? AND name='Marble Counter Fridge' AND lower_limit IS NULL AND upper_limit IS NULL AND notes IS NULL AND NOT EXISTS(SELECT 1 FROM food_temperature_readings r WHERE r.equipment_id=food_equipment.id)",[venue.id]);
+    if(untouchedMarble)await db.run("UPDATE food_equipment SET name='Under Counter Fridge 1',updated_at=CURRENT_TIMESTAMP WHERE id=?",[untouchedMarble.id]);
+    for(const [name,type] of [["Walk In Fridge","cold room"],["Walk In Freezer","freezer"],["Under Counter Fridge 1","fridge"],["Under Counter Fridge 2","fridge"]])
+      await db.run("INSERT INTO food_equipment(venue_id,name,equipment_type,active) SELECT ?,?,?,1 WHERE NOT EXISTS(SELECT 1 FROM food_equipment WHERE venue_id=? AND name=?)",[venue.id,name,type,venue.id,name]);
   }
 }
 
@@ -154,9 +154,13 @@ export function registerFoodHygiene(app: Express) {
     const keys=Object.keys(p.data);await db.run(`UPDATE food_equipment SET ${keys.map(k=>`${k}=?`).join(",")},updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE id=?`,[...Object.values(p.data),req.user!.id,id]);const after=await db.get("SELECT * FROM food_equipment WHERE id=?",[id]);await audit("food_equipment",id,"update",before,after,req.user!.id,req.ip);res.json(after);
   });
   app.get("/api/food-hygiene/temperature-exceptions",async(req:AuthedRequest,res)=>{const v=venueId(req);if(!(await allowed(req,res,v)))return;res.json(await rows("SELECT r.*,e.name equipment_name,e.equipment_type,u.name recorded_by_name FROM food_temperature_readings r JOIN food_equipment e ON e.id=r.equipment_id LEFT JOIN users u ON u.id=r.recorded_by WHERE r.venue_id=? AND r.compliant=0 AND r.resolution_status='unresolved' ORDER BY r.recorded_at DESC",v));});
+  app.get("/api/food-hygiene/refrigeration-overview",async(req:AuthedRequest,res)=>{
+    const v=venueId(req);if(!(await allowed(req,res,v)))return;const since=new Date(Date.now()-7*864e5).toISOString();
+    res.json({equipment:await rows("SELECT e.*,l.name location_name FROM food_equipment e LEFT JOIN locations l ON l.id=e.location_id WHERE e.venue_id=? AND e.active=1 ORDER BY CASE e.equipment_type WHEN 'cold room' THEN 0 WHEN 'freezer' THEN 1 ELSE 2 END,e.name",v),readings:await rows("SELECT r.*,e.name equipment_name,e.equipment_type,u.name recorded_by_name FROM food_temperature_readings r JOIN food_equipment e ON e.id=r.equipment_id LEFT JOIN users u ON u.id=r.recorded_by WHERE r.venue_id=? AND r.recorded_at>=? ORDER BY r.recorded_at DESC",v,since)});
+  });
   app.post("/api/food-hygiene/readings",canWrite,async(req:AuthedRequest,res)=>{
     const p=readingSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:"Invalid temperature reading",issues:p.error.flatten()}); const v=venueId(req);if(!(await allowed(req,res,v)))return;
-    let lower:null|number=null,upper:null|number=null; if(p.data.equipment_id){const equipment=await db.get<any>("SELECT * FROM food_equipment WHERE id=? AND venue_id=? AND active=1",[p.data.equipment_id,v]);if(!equipment)return res.status(400).json({error:"Equipment is inactive or outside this venue"});lower=equipment.lower_limit;upper=equipment.upper_limit;}
+    let lower:null|number=null,upper:null|number=null; if(p.data.equipment_id){const equipment=await db.get<any>("SELECT * FROM food_equipment WHERE id=? AND venue_id=? AND active=1",[p.data.equipment_id,v]);if(!equipment)return res.status(400).json({error:"Equipment is inactive or outside this venue"});lower=equipment.lower_limit;upper=equipment.upper_limit;if(lower==null||upper==null)return res.status(409).json({error:`Temperature limits must be configured for ${equipment.name} before recording`,code:"LIMITS_NOT_CONFIGURED",equipment});}
     if(p.data.task_instance_id){const t=await db.get<any>("SELECT * FROM food_task_instances WHERE id=? AND venue_id=?",[p.data.task_instance_id,v]);if(!t)return res.status(400).json({error:"Task is outside this venue"});lower=lower??t.lower_limit_snapshot;upper=upper??t.upper_limit_snapshot;}
     if(p.data.recheck_of_id){const original=await db.get<any>("SELECT * FROM food_temperature_readings WHERE id=? AND venue_id=? AND compliant=0",[p.data.recheck_of_id,v]);if(!original)return res.status(400).json({error:"Original exception was not found in this venue"});if(Number(original.equipment_id)!==Number(p.data.equipment_id))return res.status(400).json({error:"A recheck must use the same equipment"});}
     const compliant=readingIsCompliant(p.data.temperature,lower,upper),resolution=compliant?"resolved":"unresolved";

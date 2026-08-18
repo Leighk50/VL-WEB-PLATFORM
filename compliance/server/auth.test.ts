@@ -628,4 +628,19 @@ describe("venue security, current authorization and immutable history", () => {
     expect(resolved.body.action_id).toBeTruthy();
     expect(await db.get("SELECT related_type,related_id,status FROM actions WHERE id=?", [resolved.body.action_id])).toMatchObject({ related_type: "food_temperature_reading", related_id: original.body.id, status: "Open" });
   });
+
+  it("refuses refrigeration readings until both unit limits are configured", async () => {
+    const unit = await db.run("INSERT INTO food_equipment(venue_id,name,equipment_type,active) VALUES(?,'Unconfigured Test Fridge','fridge',1)", [venue1]);
+    const response = await request(app).post("/api/food-hygiene/readings").set(auth(tokens.staff)).send({ equipment_id: unit.lastInsertRowid, reading_type: "fridge", temperature: 3 }).expect(409);
+    expect(response.body).toMatchObject({ code: "LIMITS_NOT_CONFIGURED" });
+    expect(Number((await db.get<any>("SELECT count(*) n FROM food_temperature_readings WHERE equipment_id=?", [unit.lastInsertRowid]))!.n)).toBe(0);
+  });
+
+  it("returns all active refrigeration units with seven-day reading and warning history", async () => {
+    const overview = await request(app).get("/api/food-hygiene/refrigeration-overview").set(auth(tokens.staff)).expect(200);
+    expect(overview.body.equipment.map((row: any) => row.id)).toEqual(expect.arrayContaining([fridge1, freezer1]));
+    expect(overview.body.equipment.every((row: any) => row.active === 1)).toBe(true);
+    expect(overview.body.readings.some((row: any) => row.equipment_id === fridge1 && row.compliant === 0)).toBe(true);
+    expect(overview.body.readings.every((row: any) => row.equipment_name && row.recorded_at)).toBe(true);
+  });
 });
