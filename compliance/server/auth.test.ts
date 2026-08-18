@@ -17,20 +17,22 @@ describe("venue security, current authorization and immutable history", () => {
     location2 = 0,
     asset1 = 0,
     asset2 = 0,
-    extinguisher1 = 0;
+    extinguisher1 = 0,
+    fridge1 = 0,
+    freezer1 = 0;
   const tokens: Record<string, string> = {};
 
   it("bootstraps an empty database before serving and safely reruns migrations", async () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -583,5 +585,47 @@ describe("venue security, current authorization and immutable history", () => {
     await request(app).patch(`/api/risk-assessments/${assessment.body.id}`).set(auth(tokens.staff)).send({ notes: "silent overwrite" }).expect(409);
     const history = await db.all("SELECT * FROM risk_assessment_history WHERE assessment_id=?", [assessment.body.id]);
     expect(history.length).toBeGreaterThan(0);
+  });
+
+  it("administers multiple refrigeration units and filters inactive units", async () => {
+    const create = (name: string, type: string, active = 1) => request(app)
+      .post("/api/food-hygiene/equipment").set(auth(tokens.admin)).send({
+        venue_id: venue1, name, equipment_type: type, location_id: location1,
+        active, lower_limit: type === "freezer" ? -22 : 1,
+        upper_limit: type === "freezer" ? -18 : 5, notes: "Configured test unit",
+      });
+    fridge1 = (await create("Test Upright Fridge", "fridge").expect(201)).body.id;
+    freezer1 = (await create("Test Chest Freezer", "freezer").expect(201)).body.id;
+    const inactive = (await create("Retired Fridge", "fridge", 0).expect(201)).body.id;
+    const activeList = await request(app).get("/api/food-hygiene/equipment").set(auth(tokens.staff)).expect(200);
+    expect(activeList.body.map((row: any) => row.id)).toEqual(expect.arrayContaining([fridge1, freezer1]));
+    expect(activeList.body.some((row: any) => row.id === inactive)).toBe(false);
+    const adminList = await request(app).get(`/api/food-hygiene/equipment?venue_id=${venue1}&include_inactive=1`).set(auth(tokens.admin)).expect(200);
+    expect(adminList.body.some((row: any) => row.id === inactive && row.active === 0)).toBe(true);
+  });
+
+  it("saves in-range readings and flags below/above-range readings unresolved", async () => {
+    const save = (equipment_id: number, temperature: number) => request(app)
+      .post("/api/food-hygiene/readings").set(auth(tokens.staff))
+      .send({ equipment_id, reading_type: equipment_id === freezer1 ? "freezer" : "fridge", temperature });
+    expect((await save(fridge1, 3).expect(201)).body).toMatchObject({ compliant: 1, resolution_status: "resolved" });
+    expect((await save(fridge1, 0).expect(201)).body).toMatchObject({ compliant: 0, resolution_status: "unresolved", lower_limit_snapshot: 1, upper_limit_snapshot: 5 });
+    expect((await save(fridge1, 6).expect(201)).body).toMatchObject({ compliant: 0, resolution_status: "unresolved" });
+  });
+
+  it("requires a listed corrective action and preserves satisfactory recheck history", async () => {
+    const original = await request(app).post("/api/food-hygiene/readings").set(auth(tokens.staff)).send({ equipment_id: freezer1, reading_type: "freezer", temperature: -15 }).expect(201);
+    await request(app).post(`/api/food-hygiene/readings/${original.body.id}/corrective-action`).set(auth(tokens.staff)).send({ corrective_action_type: "other" }).expect(400);
+    const recheck = await request(app).post("/api/food-hygiene/readings").set(auth(tokens.staff)).send({ equipment_id: freezer1, reading_type: "freezer", temperature: -19, recheck_of_id: original.body.id }).expect(201);
+    expect(recheck.body).toMatchObject({ compliant: 1, recheck_of_id: original.body.id });
+    expect(await db.get("SELECT compliant,resolution_status,corrective_action_type FROM food_temperature_readings WHERE id=?", [original.body.id])).toMatchObject({ compliant: 0, resolution_status: "resolved", corrective_action_type: "recheck" });
+    expect(Number((await db.get<any>("SELECT count(*) n FROM food_temperature_readings WHERE id IN (?,?)", [original.body.id, recheck.body.id]))!.n)).toBe(2);
+  });
+
+  it("links a temperature exception to the existing Action / Defect register", async () => {
+    const original = await request(app).post("/api/food-hygiene/readings").set(auth(tokens.staff)).send({ equipment_id: fridge1, reading_type: "fridge", temperature: 9 }).expect(201);
+    const resolved = await request(app).post(`/api/food-hygiene/readings/${original.body.id}/corrective-action`).set(auth(tokens.staff)).send({ corrective_action_type: "raise_action", notes: "Engineer required" }).expect(200);
+    expect(resolved.body.action_id).toBeTruthy();
+    expect(await db.get("SELECT related_type,related_id,status FROM actions WHERE id=?", [resolved.body.action_id])).toMatchObject({ related_type: "food_temperature_reading", related_id: original.body.id, status: "Open" });
   });
 });

@@ -189,4 +189,20 @@ IF OBJECT_ID('food_probes','U') IS NULL CREATE TABLE food_probes(id BIGINT IDENT
 IF OBJECT_ID('food_probe_calibrations','U') IS NULL CREATE TABLE food_probe_calibrations(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),probe_id BIGINT NOT NULL REFERENCES food_probes(id),task_instance_id BIGINT REFERENCES food_task_instances(id),calibrated_at DATETIME2 DEFAULT SYSUTCDATETIME(),method NVARCHAR(200) NOT NULL,expected_value FLOAT NOT NULL,measured_value FLOAT NOT NULL,result NVARCHAR(20) NOT NULL,corrective_action NVARCHAR(MAX),notes NVARCHAR(MAX),completed_by BIGINT NOT NULL REFERENCES users(id),action_id BIGINT REFERENCES actions(id));
 IF OBJECT_ID('food_evidence_links','U') IS NULL CREATE TABLE food_evidence_links(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),entity_type NVARCHAR(80) NOT NULL,entity_id BIGINT NOT NULL,document_id BIGINT REFERENCES documents(id),photo_id BIGINT REFERENCES photos(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT NOT NULL REFERENCES users(id),CONSTRAINT ck_food_evidence CHECK(document_id IS NOT NULL OR photo_id IS NOT NULL));`,
   },
+  {
+    version: 5,
+    name: "refrigeration_exception_resolution",
+    sqlite: `
+ALTER TABLE food_temperature_readings ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_temperature_readings ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN resolved_by INTEGER REFERENCES users(id);
+CREATE INDEX idx_food_temperature_exceptions ON food_temperature_readings(venue_id,resolution_status,recorded_at);`,
+    azure: `
+IF COL_LENGTH('food_temperature_readings','resolution_status') IS NULL ALTER TABLE food_temperature_readings ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_temp_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_temperature_readings','corrective_action_type') IS NULL ALTER TABLE food_temperature_readings ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_temperature_readings','resolved_at') IS NULL ALTER TABLE food_temperature_readings ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_temperature_readings','resolved_by') IS NULL ALTER TABLE food_temperature_readings ADD resolved_by BIGINT NULL REFERENCES users(id);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_food_temperature_exceptions') CREATE INDEX idx_food_temperature_exceptions ON food_temperature_readings(venue_id,resolution_status,recorded_at);`,
+  },
 ];
