@@ -1977,7 +1977,7 @@ function Pat({ boot: _boot }: { boot: Boot | null }) {
           >
             <option>Select asset…</option>
             {assets.map((a) => (
-              <option value={a.id}>
+              <option key={a.id} value={a.id}>
                 {a.barcode} — {a.description}
               </option>
             ))}
