@@ -2,7 +2,7 @@ const http=require("http"),fs=require("fs"),path=require("path"),crypto=require(
 const PORT=process.env.PORT||8080,ROOT=path.join(__dirname,"public"),DEFAULT=path.join(__dirname,"data","default-content.json");
 const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,"site","data"):path.join(__dirname,"data")),CONTENT=path.join(DATA_DIR,"content.json");
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.1.2",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.1.3",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -27,8 +27,26 @@ function seedMainMenu(){
 function sign(v){return crypto.createHmac("sha256",SECRET).update(v).digest("hex")} function make(){const r=`${USER}|${Date.now()+28800000}`;return `${Buffer.from(r).toString("base64url")}.${sign(r)}`}
 function tok(req){const a=req.headers.authorization||"";if(a.startsWith("Bearer "))return a.slice(7);const c=(req.headers.cookie||"").split(";").map(x=>x.trim()).find(x=>x.startsWith("vl_admin="));return c?decodeURIComponent(c.slice(9)):""}
 function valid(req){const t=tok(req);if(!t.includes("."))return false;const[e,s]=t.split(".");let r="";try{r=Buffer.from(e,"base64url").toString()}catch{return false}const x=sign(r);if(s.length!==x.length||!crypto.timingSafeEqual(Buffer.from(s),Buffer.from(x)))return false;const[u,d]=r.split("|");return u===USER&&Number(d)>Date.now()}
-function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">Ã¢ËœÂ°</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
-function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform Ã‚Â· Version ${VERSION} Ã‚Â· Build ${BUILD}</small></div></footer>`}
+function canonicalRedirect(req,res,url){
+  const host=String(req.headers.host||"").split(":")[0].toLowerCase();
+  const canonicalHost="www.villagelimits.co.uk";
+  const isCanonical=host===canonicalHost;
+  const isRoot=host==="villagelimits.co.uk";
+  const isAzure=host.endsWith(".azurewebsites.net");
+  if(!isCanonical&&(isRoot||isAzure)){
+    const target=`https://${canonicalHost}${url.pathname}${url.search}`;
+    const status=(req.method==="GET"||req.method==="HEAD")?301:308;
+    res.writeHead(status,{
+      "Location":target,
+      "Cache-Control":"public, max-age=3600"
+    });
+    res.end();
+    return true;
+  }
+  return false;
+}
+function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">ÃƒÂ¢Ã‹Å“Ã‚Â°</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
+function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform Ãƒâ€šÃ‚Â· Version ${VERSION} Ãƒâ€šÃ‚Â· Build ${BUILD}</small></div></footer>`}
 function schema(c){return {"@context":"https://schema.org","@graph":[{"@type":"Restaurant","name":"Village Limits","url":SITE,"image":`${SITE}/assets/images/hero.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}},{"@type":"LodgingBusiness","name":"Village Limits Accommodation","url":`${SITE}/stay`,"image":`${SITE}/assets/images/rooms.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}}]}}
 function shell(t,d,p,b,robots="index,follow",og="/assets/images/hero.webp",extraSchema=null){const c=read(),can=`${SITE}${p}`;return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(t)}</title><meta name="description" content="${esc(d)}"><meta name="robots" content="${robots}"><link rel="canonical" href="${esc(can)}"><meta property="og:type" content="website"><meta property="og:title" content="${esc(t)}"><meta property="og:description" content="${esc(d)}"><meta property="og:url" content="${esc(can)}"><meta property="og:image" content="${esc(SITE+og)}"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/assets/css/styles.css?v=${AV}"><script type="application/ld+json">${JSON.stringify(extraSchema||schema(c)).replace(/</g,"\\u003c")}</script></head><body>${header()}${b}${footer(c)}<script src="/assets/js/site.js?v=${AV}"></script></body></html>`}
 function ph(e,h,p){return `<section class="page-hero"><div class="container"><div class="eyebrow">${esc(e)}</div><h1>${esc(h)}</h1><p>${esc(p)}</p></div></section>`}
@@ -45,6 +63,7 @@ function sitemap(){const c=read(),ps=["/","/eat","/stay","/whats-on","/private-e
 function staticFile(p,res){const f=path.normalize(path.join(ROOT,p));if(!f.startsWith(ROOT)){res.writeHead(403);return res.end("Forbidden")}fs.stat(f,(e,s)=>{if(e||!s.isFile()){res.writeHead(404);return res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
 seedMainMenu();
 http.createServer(async(req,res)=>{try{const u=new URL(req.url,`http://${req.headers.host||"localhost"}`),p=decodeURIComponent(u.pathname);
+if(canonicalRedirect(req,res,u))return;
 if(p==="/robots.txt"){res.writeHead(200,{"Content-Type":"text/plain; charset=utf-8"});return res.end(robots())} if(p==="/sitemap.xml"){res.writeHead(200,{"Content-Type":"application/xml; charset=utf-8"});return res.end(sitemap())}
 if(p==="/api/version")return json(res,200,{version:VERSION,build:BUILD,label:"SEO & Admin Reliability"}); if(p==="/api/content"&&req.method==="GET")return json(res,200,read()); if(p==="/api/admin/status")return json(res,200,{authenticated:valid(req)});
 if(p==="/api/admin/login"&&req.method==="POST"){const b=await body(req),u1=String(b.username??"").trim(),p1=String(b.password??"");if(u1!==USER||p1!==PASS)return json(res,401,{error:"Incorrect username or password"});const t=make();res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end(JSON.stringify({ok:true,token:t}))}
