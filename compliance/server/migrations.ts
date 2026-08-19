@@ -295,11 +295,12 @@ ALTER TABLE users ADD COLUMN last_login_at TEXT;
 UPDATE users SET module_access='both' WHERE role='administrator';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_ci ON users(lower(email));
 CREATE TABLE user_access_tokens(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),purpose TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires_at TEXT NOT NULL,used_at TEXT,created_by INTEGER REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP);`,
-    azure: `
-IF COL_LENGTH('users','module_access') IS NULL ALTER TABLE users ADD module_access NVARCHAR(20) NOT NULL CONSTRAINT df_users_module_access DEFAULT 'fire';
-IF COL_LENGTH('users','last_login_at') IS NULL ALTER TABLE users ADD last_login_at DATETIME2 NULL;
-UPDATE users SET module_access='both' WHERE role='administrator' AND module_access<>'both';
-IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_users_email_ci' AND object_id=OBJECT_ID('users')) CREATE UNIQUE INDEX uq_users_email_ci ON users(email);
-IF OBJECT_ID('user_access_tokens','U') IS NULL CREATE TABLE user_access_tokens(id BIGINT IDENTITY PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),purpose NVARCHAR(30) NOT NULL,token_hash NVARCHAR(64) NOT NULL UNIQUE,expires_at DATETIME2 NOT NULL,used_at DATETIME2,created_by BIGINT REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());`,
+    azure: [
+      `IF COL_LENGTH('users','module_access') IS NULL ALTER TABLE users ADD module_access NVARCHAR(20) NOT NULL CONSTRAINT df_users_module_access DEFAULT 'fire';`,
+      `IF COL_LENGTH('users','last_login_at') IS NULL ALTER TABLE users ADD last_login_at DATETIME2 NULL;`,
+      `UPDATE users SET module_access='both' WHERE role='administrator' AND module_access<>'both';`,
+      `IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_users_email_ci' AND object_id=OBJECT_ID('users')) CREATE UNIQUE INDEX uq_users_email_ci ON users(email);`,
+      `IF OBJECT_ID('user_access_tokens','U') IS NULL CREATE TABLE user_access_tokens(id BIGINT IDENTITY PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),purpose NVARCHAR(30) NOT NULL,token_hash NVARCHAR(64) NOT NULL UNIQUE,expires_at DATETIME2 NOT NULL,used_at DATETIME2,created_by BIGINT REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());`,
+    ],
   },
 ];

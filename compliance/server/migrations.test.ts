@@ -68,4 +68,23 @@ describe("Azure SQL migration batching", () => {
     expect(sql).toContain("COL_LENGTH('risk_assessments','content_reviewed_at') IS NULL");
     expect(sql).toContain("COL_LENGTH('risk_assessments','content_review_note') IS NULL");
   });
+
+  it("adds module_access before referencing it in migration 9", () => {
+    const migration = migrations.find((item) => item.version === 9)!;
+    const batches = sqlBatches(migration, "azure-sql");
+    expect(batches).toHaveLength(5);
+    expect(batches[0]).toContain("ALTER TABLE users ADD module_access");
+    expect(batches[0]).not.toContain("UPDATE users SET module_access");
+    expect(batches[2]).toContain("UPDATE users SET module_access='both'");
+    expect(batches.join("\n")).not.toMatch(/^\s*GO\s*$/im);
+  });
+
+  it("does not mark migration 9 complete when a later request fails", async () => {
+    const migration = migrations.find((item) => item.version === 9)!;
+    const markApplied = vi.fn(async () => undefined);
+    await expect(executeAndMarkMigration(migration,"azure-sql",async statement=>{
+      if(statement.includes("UPDATE users SET module_access"))throw new Error("simulated migration 9 failure");
+    },markApplied)).rejects.toThrow("simulated migration 9 failure");
+    expect(markApplied).not.toHaveBeenCalled();
+  });
 });
