@@ -21,6 +21,8 @@
     "migrate-staging-data:verify": "node dist-server/staging-data-migration-cli.js --verify-only",
     "migrate-staging-data:dev": "tsx server/staging-data-migration-cli.ts",
     "create-admin": "node dist-server/create-admin.js",
+    "import-fire-alarm-history": "node dist-server/fire-alarm-history-import-cli.js",
+    "import-fire-alarm-history:dry-run": "node dist-server/fire-alarm-history-import-cli.js --dry-run",
     "storage:diagnostic": "node dist-server/storage-diagnostic.js",
     "start": "node dist-server/index.js"
   },

@@ -146,6 +146,23 @@ cd /home/site/wwwroot
 npm run create-admin
 ```
 
+### One-time historical fire alarm import
+
+After confirming `/health` is successful, preview the Village Limits weekly-test import without writing anything:
+
+```sh
+cd /home/site/wwwroot
+npm run import-fire-alarm-history:dry-run
+```
+
+Run the import only after reviewing the dry-run counts:
+
+```sh
+npm run import-fire-alarm-history
+```
+
+The command resolves CP01–CP05 by code, preserves the supplied UK local clock times, and skips any test already matching the same venue, exact test date/time, and call point. It does not seed demo data and is safe to run again.
+
 Enter the administrator email, display name, password and password confirmation at the prompts. Password input is hidden. The command uses the same database adapter as the application, so in Azure it authenticates to SQL with the App Service system-assigned managed identity and requires no SQL credentials. It creates only the non-demo `Village Limits` venue, its default operational locations and the real administrator; it never enables demo seeding or creates demo compliance records. A duplicate email is refused, and creating an additional administrator requires explicit terminal confirmation.
 
 ## GitHub Actions staging workflow
