@@ -3,7 +3,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 
 process.env.NODE_ENV = "test";
-process.env.SQLITE_PATH = `.data/test-${process.pid}.db`;
+process.env.SQLITE_PATH = `.data/test-${process.pid}-${Date.now()}.db`;
 process.env.DEMO_SEED = "true";
 process.env.LOGIN_RATE_LIMIT = "100";
 const { default: app } = await import("./index.js");
@@ -430,6 +430,14 @@ describe("venue security, current authorization and immutable history", () => {
         active: 1,
       })
       .expect(201);
+    await db.run(
+      "INSERT INTO fire_alarm_tests(venue_id,test_datetime,call_point_id,result,faults,completed_by,confirmed,is_demo,alarm_operated,sounders_activated,panel_indication_correct,reset_successful) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+      [venue1,"2025-01-06T10:45:00",point.body.id,"Pass",null,"Historic fire alarm log import",1,0,1,1,1,1],
+    );
+    const historicalBefore = await db.get<any>(
+      "SELECT * FROM fire_alarm_tests WHERE test_datetime=? AND call_point_id=?",
+      ["2025-01-06T10:45:00",point.body.id],
+    );
     const test = await request(app)
       .post("/api/fire-alarm-tests")
       .set(auth(tokens.contractor))
@@ -442,8 +450,19 @@ describe("venue security, current authorization and immutable history", () => {
         sounders_activated: 1,
         panel_indication_correct: 1,
         reset_successful: 1,
+        faults: "",
       })
       .expect(201);
+    const contractor = await db.get<any>("SELECT id,name FROM users WHERE email=?", ["contractor@test.local"]);
+    expect(test.body).toMatchObject({
+      call_point_id: point.body.id,
+      result: "Pass",
+      faults: null,
+      completed_by: contractor.name,
+      confirmed: 1,
+      created_by: contractor.id,
+    });
+    expect(await db.get("SELECT * FROM fire_alarm_tests WHERE id=?", [historicalBefore.id])).toEqual(historicalBefore);
     await request(app)
       .patch(`/api/fire-alarm-tests/${test.body.id}`)
       .set(auth(tokens.admin))
@@ -461,7 +480,18 @@ describe("venue security, current authorization and immutable history", () => {
     expect(report.body.warningDays).toBe(7);
     expect(
       report.body.points.find((row: any) => row.id === point.body.id),
-    ).toMatchObject({ test_count: 1, overdue: true });
+    ).toMatchObject({ test_count: 2, last_tested_at: "2026-08-01T09:00", overdue: true });
+    const failed = await request(app).post("/api/fire-alarm-tests").set(auth(tokens.staff)).send({
+      venue_id: venue1, call_point_id: point.body.id, test_datetime: "2026-08-08T09:00",
+      result: "Fail", alarm_operated: 0, sounders_activated: 0,
+      panel_indication_correct: 0, reset_successful: 0, faults: "Sounders did not activate",
+    }).expect(201);
+    const action = await request(app).post("/api/actions").set(auth(tokens.staff)).send({
+      description: "Failed weekly fire alarm test at CP02: Sounders did not activate",
+      venue_id: venue1, location_id: location1, related_type: "fire_alarm_test",
+      related_id: failed.body.id, priority: "High", status: "Open",
+    }).expect(201);
+    expect(action.body).toMatchObject({ related_type: "fire_alarm_test", related_id: failed.body.id });
   });
 
   it("keeps multiple document attachments private, venue-scoped and historical", async () => {

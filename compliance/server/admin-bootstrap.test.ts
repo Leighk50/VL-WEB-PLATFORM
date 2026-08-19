@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_PROVIDER = "sqlite";
-process.env.SQLITE_PATH = `.data/admin-bootstrap-${process.pid}.db`;
+process.env.SQLITE_PATH = `.data/admin-bootstrap-${process.pid}-${Date.now()}.db`;
 process.env.DEMO_SEED = "false";
 
 const { db, migrateDatabase } = await import("./db.js");

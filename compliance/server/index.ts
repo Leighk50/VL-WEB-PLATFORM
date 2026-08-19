@@ -39,6 +39,7 @@ import {
 } from "./validation.js";
 import { riskLevel, riskScore } from "./risk-library.js";
 import { bootstrapFoodHygiene, registerFoodHygiene } from "./food-hygiene.js";
+import { insertFireAlarmTest } from "./fire-alarm-tests.js";
 
 try {
   await migrateDatabase();
@@ -975,6 +976,26 @@ for (const [route, cfg] of Object.entries(resources)) {
           code: "DUPLICATE_ASSET_REFERENCE",
           assetId: duplicate.id,
         });
+    }
+    if (route === "fire-alarm-tests") {
+      try {
+        const result = await insertFireAlarmTest(db, body, req.user!);
+        const id = Number(result.lastInsertRowid),
+          after = await db.get("SELECT * FROM fire_alarm_tests WHERE id=?", [id]);
+        await audit(route, id, "create", null, after, req.user!.id, req.ip);
+        return res.status(201).json(after);
+      } catch (error) {
+        const failure = error as { code?: string; number?: number; message?: string };
+        console.error("Fire alarm weekly test save failed", {
+          provider: db.provider, venueId, callPointId: body.call_point_id,
+          userId: req.user!.id, code: failure.code, number: failure.number,
+          message: failure.message,
+        });
+        return res.status(500).json({
+          error: "Weekly fire alarm test could not be saved. No test was recorded.",
+          code: "FIRE_ALARM_TEST_SAVE_FAILED",
+        });
+      }
     }
     const cols = Object.keys(body),
       vals = Object.values(body);
