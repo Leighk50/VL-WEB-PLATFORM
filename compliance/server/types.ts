@@ -6,6 +6,7 @@ export interface User {
   name: string;
   role: Role;
   venueId: number | null;
+  moduleAccess: "fire" | "food" | "both";
 }
 export interface AuthRequest extends Express.Request {
   user?: User;

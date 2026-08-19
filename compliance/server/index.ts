@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { basename, resolve } from "node:path";
 import express, {
   type NextFunction,
@@ -18,6 +18,7 @@ import {
   allow,
   canAdmin,
   canWrite,
+  requireModule,
   tokenFor,
   type AuthedRequest,
 } from "./auth.js";
@@ -115,7 +116,7 @@ app.post(
       ? await db.get<
           Record<string, unknown> & { passwordHash: string; active: number }
         >(
-          "SELECT id,email,name,role,venue_id venueId,password_hash passwordHash,active FROM users WHERE lower(email)=?",
+          "SELECT id,email,name,role,venue_id venueId,module_access moduleAccess,password_hash passwordHash,active FROM users WHERE lower(email)=?",
           [email],
         )
       : undefined;
@@ -147,6 +148,7 @@ app.post(
       name: String(user.name),
       role: user.role as any,
       venueId: user.venueId == null ? null : Number(user.venueId),
+      moduleAccess: user.moduleAccess as "fire" | "food" | "both",
     };
     await audit(
       "session",
@@ -157,12 +159,25 @@ app.post(
       safe.id,
       req.ip,
     );
+    await db.run("UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", [safe.id]);
     res.json({ token: tokenFor(safe), user: safe });
   },
 );
 
+const passwordSchema = z.string().min(12).max(200).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/).regex(/[^A-Za-z0-9]/);
+app.post("/api/auth/set-password", async (req,res)=>{
+  const parsed=z.object({token:z.string().min(32).max(500),password:passwordSchema,password_confirmation:z.string()}).strict().refine(v=>v.password===v.password_confirmation,{path:["password_confirmation"],message:"Passwords do not match"}).safeParse(req.body);
+  if(!parsed.success)return res.status(400).json({error:"Password does not meet the required policy",issues:parsed.error.flatten()});
+  const hash=createHash("sha256").update(parsed.data.token).digest("hex"),record=await db.get<any>("SELECT * FROM user_access_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP",[hash]);
+  if(!record)return res.status(400).json({error:"Setup or reset link is invalid or has expired"});
+  const passwordHash=await bcrypt.hash(parsed.data.password,12),claimed=await db.run("UPDATE user_access_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=? AND used_at IS NULL",[record.id]);if(claimed.changes===0)return res.status(400).json({error:"Setup or reset link is invalid or has expired"});await db.run("UPDATE users SET password_hash=?,active=1 WHERE id=?",[passwordHash,record.user_id]);
+  await audit("users",record.user_id,record.purpose==="invitation"?"invitation_completed":"password_reset_completed",null,{userId:record.user_id},record.user_id,req.ip);res.json({ok:true});
+});
+
 app.use("/api", authenticate);
 app.get("/api/me", (req: AuthedRequest, res) => res.json(req.user));
+app.use("/api/food-hygiene", requireModule("food"));
+app.use(["/api/dashboard","/api/assets","/api/extinguishers","/api/fire-alarm","/api/risk-assessments","/api/furnishings","/api/documents","/api/document-attachments","/api/pat"],requireModule("fire"));
 
 const isAdmin = (req: AuthedRequest) => req.user!.role === "administrator";
 function venueAllowed(req: AuthedRequest, venueId: number) {
@@ -235,6 +250,7 @@ async function entityVenue(
     )
   )?.venueId;
 }
+function entityModuleAllowed(req:AuthedRequest,type:string){const module=type.startsWith("food_")?"food":"fire";return req.user!.moduleAccess==="both"||req.user!.moduleAccess===module;}
 async function assertEntityReference(
   req: AuthedRequest,
   res: Response,
@@ -900,9 +916,10 @@ app.post("/api/risk-assessments/:id/review", canWrite, async (req: AuthedRequest
 
 for (const [route, cfg] of Object.entries(resources)) {
   app.get(`/api/${route}`, async (req: AuthedRequest, res) => {
-    const scoped = isAdmin(req)
+    let scoped = isAdmin(req)
       ? { sql: "", params: [] }
       : { sql: " WHERE t.venue_id=?", params: [req.user!.venueId] };
+    if(route==="actions"&&req.user!.moduleAccess!=="both")scoped={sql:`${scoped.sql||" WHERE 1=1"} AND ${req.user!.moduleAccess==="food"?"t.related_type LIKE 'food_%'":"COALESCE(t.related_type,'') NOT LIKE 'food_%'"}`,params:scoped.params};
     const joinLocation = cfg.location
       ? " LEFT JOIN locations l ON l.id=t.location_id"
       : "";
@@ -930,6 +947,7 @@ for (const [route, cfg] of Object.entries(resources)) {
     if (!row) return res.status(404).json({ error: "Not found" });
     if (!venueAllowed(req, row.venue_id))
       return res.status(403).json({ error: "Venue access denied" });
+    if(route==="actions"&&req.user!.moduleAccess!=="both"&&((req.user!.moduleAccess==="food")!==String(row.related_type||"").startsWith("food_")))return res.status(403).json({error:"Module access denied"});
     res.json(row);
   });
   app.post(`/api/${route}`, canWrite, async (req: AuthedRequest, res) => {
@@ -940,6 +958,7 @@ for (const [route, cfg] of Object.entries(resources)) {
         .json({ error: "Invalid record", issues: parsed.error.flatten() });
     const body = parsed.data as Record<string, any>,
       venueId = Number(body.venue_id);
+    if(route==="actions"&&req.user!.moduleAccess!=="both"&&((req.user!.moduleAccess==="food")!==String(body.related_type||"").startsWith("food_")))return res.status(403).json({error:"Module access denied"});
     if (!(await validateReferences(req, res, route, body, venueId))) return;
     if (route === "assets") {
       const duplicate = await db.get<{ id: number }>(
@@ -990,6 +1009,7 @@ for (const [route, cfg] of Object.entries(resources)) {
     if (!before) return res.status(404).json({ error: "Not found" });
     if (!venueAllowed(req, before.venue_id))
       return res.status(403).json({ error: "Venue access denied" });
+    if(route==="actions"&&req.user!.moduleAccess!=="both"&&((req.user!.moduleAccess==="food")!==String(before.related_type||"").startsWith("food_")))return res.status(403).json({error:"Module access denied"});
     const parsed = cfg.schema.partial().safeParse(req.body);
     if (!parsed.success || !Object.keys(parsed.data).length)
       return res.status(400).json({
@@ -1338,6 +1358,7 @@ app.get("/api/:entityType/:id/photos", async (req: AuthedRequest, res) => {
   const type = String(req.params.entityType).replace(/s$/, ""),
     id = Number(req.params.id),
     venue = await entityVenue(type, id);
+  if(!entityModuleAllowed(req,type))return res.status(403).json({error:"Module access denied"});
   if (!venue) return res.status(404).json({ error: "Record not found" });
   if (!venueAllowed(req, venue))
     return res.status(403).json({ error: "Venue access denied" });
@@ -1356,6 +1377,7 @@ app.post(
   async (req: AuthedRequest, res) => {
     const type = String(req.params.entityType).replace(/s$/, ""),
       id = Number(req.params.id);
+    if(!entityModuleAllowed(req,type))return res.status(403).json({error:"Module access denied"});
     if (
       ![
         "asset",
@@ -1417,6 +1439,7 @@ app.patch("/api/photos/:id/main", canWrite, async (req: AuthedRequest, res) => {
     Number(req.params.id),
   ]);
   if (!photo) return res.status(404).json({ error: "Photo not found" });
+  if(!entityModuleAllowed(req,photo.entity_type))return res.status(403).json({error:"Module access denied"});
   const venue = await entityVenue(photo.entity_type, photo.entity_id);
   if (!venue || !venueAllowed(req, venue))
     return res.status(403).json({ error: "Venue access denied" });
@@ -1509,6 +1532,8 @@ app.get(/^\/files\/(.+)$/, authenticate, async (req: AuthedRequest, res) => {
   const venue = photo
     ? await entityVenue(photo.entityType, photo.entityId)
     : (document?.venueId ?? attachment?.venueId);
+  if(photo&&!entityModuleAllowed(req,photo.entityType))return res.status(403).end();
+  if(!photo&&(document||attachment)&&req.user!.moduleAccess==="food")return res.status(403).end();
   if (!venue) return res.status(404).end();
   if (!venueAllowed(req, venue)) return res.status(403).end();
   try {
@@ -1530,13 +1555,14 @@ app.get("/api/audit", allow("administrator", "auditor"), async (_req, res) =>
     ),
   ),
 );
-app.get("/api/users", canAdmin, async (_req, res) =>
-  res.json(
-    await rows(
-      "SELECT id,email,name,role,venue_id,active,created_at FROM users",
-    ),
-  ),
-);
+const userFields=z.object({name:z.string().trim().min(2).max(250),email:z.string().trim().email().max(254).transform(v=>v.toLowerCase()),role:z.enum(["administrator","venue_manager","staff","contractor","auditor"]),module_access:z.enum(["fire","food","both"]),venue_id:z.coerce.number().int().positive().nullable(),active:z.coerce.number().int().min(0).max(1)}).strict();
+const userInputSchema=userFields;
+async function createAccessToken(userId:number,purpose:"invitation"|"password_reset",createdBy:number){const token=randomBytes(32).toString("base64url"),hash=createHash("sha256").update(token).digest("hex"),hours=purpose==="invitation"?48:1,expiresAt=new Date(Date.now()+hours*3600_000).toISOString();await db.run("UPDATE user_access_tokens SET used_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose=? AND used_at IS NULL",[userId,purpose]);await db.run("INSERT INTO user_access_tokens(user_id,purpose,token_hash,expires_at,created_by) VALUES(?,?,?,?,?)",[userId,purpose,hash,expiresAt,createdBy]);return {setup_url:`${process.env.APP_BASE_URL||"http://localhost:5173"}/set-password?token=${encodeURIComponent(token)}`,expires_at:expiresAt};}
+app.get("/api/users", canAdmin, async (_req, res) =>res.json(await rows("SELECT id,email,name,role,module_access,venue_id,active,created_at,last_login_at FROM users ORDER BY active DESC,name")));
+app.post("/api/users",(req,res,next)=>{if(req.body?.active===undefined)req.body.active=1;return req.body?.role==="administrator"&&req.body?.module_access!=="both"?res.status(400).json({error:"Administrators must retain access to both modules"}):next();});
+app.post("/api/users",canAdmin,async(req:AuthedRequest,res)=>{const p=userInputSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:"Invalid user",issues:p.error.flatten()});if(!await db.get("SELECT id FROM venues WHERE id=?",[p.data.venue_id]))return res.status(400).json({error:"Invalid venue"});if(await db.get("SELECT id FROM users WHERE lower(email)=?",[p.data.email]))return res.status(409).json({error:"A user with this email already exists"});const unavailable=await bcrypt.hash(randomBytes(32).toString("base64url"),12),r=await db.run("INSERT INTO users(email,password_hash,name,role,module_access,venue_id,active) VALUES(?,?,?,?,?,?,?)",[p.data.email,unavailable,p.data.name,p.data.role,p.data.module_access,p.data.venue_id,p.data.active]);const user=await db.get<any>("SELECT id,email,name,role,module_access,venue_id,active,created_at,last_login_at FROM users WHERE id=?",[r.lastInsertRowid]);const invitation=await createAccessToken(Number(r.lastInsertRowid),"invitation",req.user!.id);await audit("users",r.lastInsertRowid,"create",null,user,req.user!.id,req.ip);await audit("users",r.lastInsertRowid,"invitation_created",null,{expiresAt:invitation.expires_at},req.user!.id,req.ip);res.status(201).json({...user,...invitation});});
+app.patch("/api/users/:id",canAdmin,async(req:AuthedRequest,res)=>{const id=Number(req.params.id),before=await db.get<any>("SELECT id,email,name,role,module_access,venue_id,active,created_at,last_login_at FROM users WHERE id=?",[id]);if(!before)return res.status(404).json({error:"User not found"});const p=userInputSchema.partial().safeParse(req.body);if(!p.success||!Object.keys(p.data).length)return res.status(400).json({error:"Invalid user update",issues:p.success?undefined:p.error.flatten()});const merged={...before,...p.data};if(merged.role==="administrator"&&merged.module_access!=="both")return res.status(400).json({error:"Administrators must retain access to both modules"});const removesAdmin=before.role==="administrator"&&before.active===1&&(merged.role!=="administrator"||Number(merged.active)!==1);if(removesAdmin&&Number((await db.get<any>("SELECT count(*) n FROM users WHERE role='administrator' AND active=1 AND id<>?",[id]))?.n||0)===0)return res.status(409).json({error:"The last active administrator cannot be deactivated or have administrator access removed"});if(p.data.email&&await db.get("SELECT id FROM users WHERE lower(email)=? AND id<>?",[p.data.email,id]))return res.status(409).json({error:"A user with this email already exists"});if(p.data.venue_id&&!await db.get("SELECT id FROM venues WHERE id=?",[p.data.venue_id]))return res.status(400).json({error:"Invalid venue"});const keys=Object.keys(p.data);await db.run(`UPDATE users SET ${keys.map(k=>`${k}=?`).join(",")} WHERE id=?`,[...Object.values(p.data),id]);const after=await db.get<any>("SELECT id,email,name,role,module_access,venue_id,active,created_at,last_login_at FROM users WHERE id=?",[id]);await audit("users",id,"update",before,after,req.user!.id,req.ip);res.json(after);});
+app.post("/api/users/:id/access-token",canAdmin,async(req:AuthedRequest,res)=>{const id=Number(req.params.id),purpose=req.body?.purpose==="invitation"?"invitation":"password_reset";if(!await db.get("SELECT id FROM users WHERE id=?",[id]))return res.status(404).json({error:"User not found"});const result=await createAccessToken(id,purpose,req.user!.id);await audit("users",id,`${purpose}_created`,null,{expiresAt:result.expires_at},req.user!.id,req.ip);res.status(201).json(result);});
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError)
     return res.status(400).json({

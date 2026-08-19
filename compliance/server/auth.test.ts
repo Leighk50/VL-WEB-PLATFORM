@@ -26,13 +26,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -84,8 +84,8 @@ describe("venue security, current authorization and immutable history", () => {
       ["auditor", "auditor"],
     ]) {
       await db.run(
-        "INSERT INTO users(email,password_hash,name,role,venue_id) VALUES(?,?,?,?,?)",
-        [`${name}@test.local`, passwordHash, name, role, venue1],
+        "INSERT INTO users(email,password_hash,name,role,module_access,venue_id) VALUES(?,?,?,?,?,?)",
+        [`${name}@test.local`, passwordHash, name, role, "both", venue1],
       );
       const login = await request(app)
         .post("/api/auth/login")
@@ -96,6 +96,56 @@ describe("venue security, current authorization and immutable history", () => {
       .post("/api/auth/login")
       .send({ email: "admin@demo.local", password: "ChangeMe!123" });
     tokens.admin = admin.body.token;
+  });
+
+  it("lets administrators create a module-scoped user with a one-time setup link", async()=>{
+    const created=await request(app).post("/api/users").set(auth(tokens.admin)).send({name:"Kitchen User",email:"Kitchen.User@Test.Local",role:"staff",module_access:"food",venue_id:venue1,active:1}).expect(201);
+    expect(created.body).toMatchObject({email:"kitchen.user@test.local",module_access:"food",role:"staff"});
+    expect(created.body.password_hash).toBeUndefined();
+    expect(created.body.setup_url).toContain("/set-password?token=");
+    await request(app).post("/api/users").set(auth(tokens.admin)).send({name:"Duplicate Kitchen",email:"KITCHEN.USER@test.local",role:"staff",module_access:"food",venue_id:venue1,active:1}).expect(409);
+    const token=decodeURIComponent(created.body.setup_url.split("token=")[1]);
+    await request(app).post("/api/auth/set-password").send({token,password:"StrongPassword!234",password_confirmation:"StrongPassword!234"}).expect(200);
+    await request(app).post("/api/auth/set-password").send({token,password:"AnotherStrong!234",password_confirmation:"AnotherStrong!234"}).expect(400);
+    const login=await request(app).post("/api/auth/login").send({email:"kitchen.user@test.local",password:"StrongPassword!234"}).expect(200);
+    expect(login.body.user.moduleAccess).toBe("food");
+    await request(app).get("/api/food-hygiene/today").set(auth(login.body.token)).expect(200);
+    await request(app).get("/api/risk-assessments").set(auth(login.body.token)).expect(403);
+    await db.run("INSERT INTO actions(description,venue_id,related_type,status) VALUES('Fire-only action',?,'asset','Open')",[venue1]);
+    await db.run("INSERT INTO actions(description,venue_id,related_type,status) VALUES('Food action',?,'food_temperature_reading','Open')",[venue1]);
+    const scopedActions=await request(app).get("/api/actions").set(auth(login.body.token)).expect(200);
+    expect(scopedActions.body.map((item:any)=>item.description)).toContain("Food action");
+    expect(scopedActions.body.map((item:any)=>item.description)).not.toContain("Fire-only action");
+  });
+
+  it("enforces module scope server-side and prevents non-admin user management",async()=>{
+    await request(app).get("/api/users").set(auth(tokens.staff)).expect(403);
+    const staffId=Number((await db.get<any>("SELECT id FROM users WHERE email='staff@test.local'"))!.id);
+    await db.run("UPDATE users SET module_access='fire' WHERE id=?",[staffId]);
+    await request(app).get("/api/assets").set(auth(tokens.staff)).expect(200);
+    await request(app).get("/api/food-hygiene/today").set(auth(tokens.staff)).expect(403);
+    await db.run("UPDATE users SET module_access='both' WHERE id=?",[staffId]);
+  });
+
+  it("protects the last administrator and audits user access changes",async()=>{
+    const adminId=Number((await db.get<any>("SELECT id FROM users WHERE email='admin@demo.local'"))!.id);
+    await request(app).patch(`/api/users/${adminId}`).set(auth(tokens.admin)).send({active:0}).expect(409);
+    const kitchen=await db.get<any>("SELECT id FROM users WHERE email='kitchen.user@test.local'");
+    await request(app).patch(`/api/users/${kitchen.id}`).set(auth(tokens.admin)).send({module_access:"both"}).expect(200);
+    expect(await db.get("SELECT id FROM audit_events WHERE entity_type='users' AND entity_id=? AND action='update'",[kitchen.id])).toBeTruthy();
+  });
+
+  it("expires reset links, blocks inactive login and preserves the user history",async()=>{
+    const kitchen=await db.get<any>("SELECT id FROM users WHERE email='kitchen.user@test.local'");
+    const reset=await request(app).post(`/api/users/${kitchen.id}/access-token`).set(auth(tokens.admin)).send({purpose:"password_reset"}).expect(201),token=decodeURIComponent(reset.body.setup_url.split("token=")[1]);
+    await db.run("UPDATE user_access_tokens SET expires_at='2000-01-01T00:00:00.000Z' WHERE user_id=? AND used_at IS NULL",[kitchen.id]);
+    await request(app).post("/api/auth/set-password").send({token,password:"ExpiredReset!234",password_confirmation:"ExpiredReset!234"}).expect(400);
+    const activeSession=await request(app).post("/api/auth/login").send({email:"kitchen.user@test.local",password:"StrongPassword!234"}).expect(200);
+    await request(app).patch(`/api/users/${kitchen.id}`).set(auth(tokens.admin)).send({active:0}).expect(200);
+    await request(app).get("/api/me").set(auth(activeSession.body.token)).expect(401);
+    await request(app).post("/api/auth/login").send({email:"kitchen.user@test.local",password:"StrongPassword!234"}).expect(401);
+    expect(await db.get("SELECT id FROM users WHERE id=?",[kitchen.id])).toBeTruthy();
+    await request(app).patch(`/api/users/${kitchen.id}`).set(auth(tokens.admin)).send({active:1}).expect(200);
   });
 
   it("does not list another venue's records or locations", async () => {

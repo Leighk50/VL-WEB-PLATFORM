@@ -121,8 +121,8 @@ export async function createAdministrator(
 
   const passwordHash = await bcrypt.hash(parsed.password, 12);
   const result = await database.run(
-    "INSERT INTO users(email,password_hash,name,role,venue_id,active) VALUES(?,?,?,?,?,1)",
-    [parsed.email, passwordHash, parsed.displayName, "administrator", venue.id],
+    "INSERT INTO users(email,password_hash,name,role,module_access,venue_id,active) VALUES(?,?,?,?,?,?,1)",
+    [parsed.email, passwordHash, parsed.displayName, "administrator", "both", venue.id],
   );
   await database.run(
     "INSERT INTO audit_events(entity_type,entity_id,action,before_json,after_json,user_id,ip_address) VALUES(?,?,?,?,?,?,?)",

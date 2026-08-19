@@ -33,7 +33,7 @@ export async function authenticate(
     const payload = jwt.verify(raw, secret(), { issuer: "vl-compliance" });
     const subject = typeof payload === "string" ? undefined : payload.sub;
     const user = await db.get<User>(
-      "SELECT id,email,name,role,venue_id venueId FROM users WHERE id=? AND active=1",
+      "SELECT id,email,name,role,venue_id venueId,module_access moduleAccess FROM users WHERE id=? AND active=1",
       [Number(subject)],
     );
     if (!user)
@@ -59,3 +59,9 @@ export const canWrite = allow(
   "contractor",
 );
 export const canAdmin = allow("administrator");
+
+export const requireModule = (module: "fire" | "food") =>
+  (req: AuthedRequest, res: Response, next: NextFunction) =>
+    req.user && (req.user.moduleAccess === module || req.user.moduleAccess === "both")
+      ? next()
+      : res.status(403).json({ error: `${module === "food" ? "Food Hygiene" : "Fire & General Compliance"} access required` });

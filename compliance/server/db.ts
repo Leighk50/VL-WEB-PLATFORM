@@ -298,12 +298,13 @@ async function seedDemo() {
   }
   if (!(await db.get("SELECT id FROM users LIMIT 1")))
     await db.run(
-      "INSERT INTO users(email,password_hash,name,role,venue_id) VALUES(?,?,?,?,?)",
+      "INSERT INTO users(email,password_hash,name,role,module_access,venue_id) VALUES(?,?,?,?,?,?)",
       [
         "admin@demo.local",
         bcrypt.hashSync("ChangeMe!123", 12),
         "Demo Administrator",
         "administrator",
+        "both",
         venue.id,
       ],
     );

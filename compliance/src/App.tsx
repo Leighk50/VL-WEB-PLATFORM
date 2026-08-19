@@ -35,6 +35,7 @@ import {
 import { RiskAssessments } from "./RiskAssessments";
 import { FoodHygiene } from "./FoodHygiene";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { defaultLanding, moduleAllowed as hasModuleAccess, type ModuleAccess } from "./module-access";
 import {
   filterDocuments,
   filterLabels,
@@ -44,28 +45,21 @@ import {
 } from "./dashboard-filters";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-type User = { name: string; role: string };
+type User = { id:number; name: string; email:string; role: string; venueId:number|null; moduleAccess:ModuleAccess };
 type Boot = {
   venues: any[];
   locations: any[];
   documentTypes: any[];
   demoMode: boolean;
 };
-const nav = [
-  ["/", "Dashboard"],
-  ["/food-hygiene", "Food Hygiene"],
-  ["/assets", "Assets"],
-  ["/pat", "PAT Testing"],
-  ["/extinguishers", "Fire Extinguishers"],
-  ["/alarm", "Fire Alarm"],
-  ["/risk", "Risk Assessments"],
-  ["/furnishings", "Soft Furnishings"],
-  ["/documents", "Certificates & Documents"],
-  ["/locations", "Locations"],
-  ["/actions", "Actions / Defects"],
-  ["/reports", "Reports"],
-  ["/settings", "Settings"],
+const nav: Array<[string,string,"fire"|"food"|"shared"]> = [
+  ["/", "Dashboard","fire"], ["/food-hygiene", "Food Hygiene","food"],
+  ["/assets", "Assets","fire"], ["/pat", "PAT Testing","fire"], ["/extinguishers", "Fire Extinguishers","fire"],
+  ["/alarm", "Fire Alarm","fire"], ["/risk", "Risk Assessments","fire"], ["/furnishings", "Soft Furnishings","fire"],
+  ["/documents", "Certificates & Documents","fire"], ["/locations", "Locations","shared"], ["/actions", "Actions / Defects","shared"],
+  ["/reports", "Reports","fire"], ["/settings", "Settings","shared"],
 ];
+const moduleAllowed=(user:User,module:"fire"|"food"|"shared")=>hasModuleAccess(user.moduleAccess,module);
 function Login({ done }: { done: (u: User) => void }) {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -115,11 +109,13 @@ function Login({ done }: { done: (u: User) => void }) {
     </main>
   );
 }
+function SetPassword(){const [params]=useSearchParams(),[message,setMessage]=useState(""),[error,setError]=useState("");async function submit(e:any){e.preventDefault();const f=new FormData(e.currentTarget);try{await api("/auth/set-password",{method:"POST",body:JSON.stringify({token:params.get("token"),password:f.get("password"),password_confirmation:f.get("confirmation")})});setMessage("Password set successfully. You can now sign in.");e.currentTarget.reset();}catch(err){setError(err instanceof Error?err.message:"Password could not be set");}}return <main className="login"><section><div className="brandmark">VL</div><h1>Set your password</h1><p>Use at least 12 characters with upper and lowercase letters, a number and a symbol.</p><form onSubmit={submit}><label>New password<input name="password" type="password" required minLength={12}/></label><label>Confirm password<input name="confirmation" type="password" required minLength={12}/></label>{error&&<p className="error">{error}</p>}{message&&<p className="food-message">{message}</p>}<button>Set password</button></form>{message&&<NavLink to="/">Return to sign in</NavLink>}</section></main>}
 export default function App() {
   const [user, setUser] = useState<User | null>(null),
     [boot, setBoot] = useState<Boot | null>(null),
     [menu, setMenu] = useState(false);
   const location = useLocation();
+  const navigate=useNavigate();
   const menuButton = useRef<HTMLButtonElement>(null);
   const currentPage =
     nav.find(([to]) =>
@@ -134,6 +130,7 @@ export default function App() {
   useEffect(() => {
     if (user) api<Boot>("/bootstrap").then(setBoot);
   }, [user]);
+  useEffect(()=>{if(user&&user.moduleAccess==="food"&&(location.pathname==="/"||!moduleAllowed(user,location.pathname.startsWith("/food-hygiene")?"food":["/settings","/locations","/actions"].some(p=>location.pathname.startsWith(p))?"shared":"fire")))navigate(defaultLanding(user.moduleAccess),{replace:true});},[user,location.pathname,navigate]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: KeyboardEvent) => {
@@ -145,6 +142,7 @@ export default function App() {
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
   }, [menu]);
+  if (!user&&location.pathname==="/set-password") return <SetPassword/>;
   if (!user) return <Login done={setUser} />;
   return (
     <div className="shell">
@@ -171,7 +169,7 @@ export default function App() {
           </button>
         </header>
         <nav>
-          {nav.map(([to, label]) => (
+          {nav.filter(([, ,module])=>moduleAllowed(user,module)).map(([to, label]) => (
             <NavLink
               key={to}
               to={to}
@@ -224,7 +222,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route
             path="/food-hygiene/*"
-            element={<FoodHygiene boot={boot} user={user} />}
+            element={moduleAllowed(user,"food")?<FoodHygiene boot={boot} user={user} />:<AccessDenied/>}
           />
           <Route
             path="/assets"
@@ -291,6 +289,7 @@ export default function App() {
     </div>
   );
 }
+function AccessDenied(){return <Page title="Access denied" subtitle="Your account does not have access to this module"><section className="panel">Contact a Compliance Hub administrator if your responsibilities have changed.</section></Page>}
 function Dashboard() {
   const [d, setD] = useState<any>();
   useEffect(() => {
@@ -2209,9 +2208,11 @@ function Settings({ boot, user }: { boot: Boot | null; user: User }) {
           every request.
         </p>
       </section>
+      <UserManagement venues={boot?.venues||[]}/>
     </Page>
   );
 }
+function UserManagement({venues}:{venues:any[]}){const [users,setUsers]=useState<any[]>([]),[editing,setEditing]=useState<any>(),[setup,setSetup]=useState(""),[error,setError]=useState("");const load=()=>api<any[]>("/users").then(setUsers);useEffect(()=>{void load();},[]);async function save(e:any){e.preventDefault();setError("");const f=e.currentTarget,d=Object.fromEntries(new FormData(f));try{const result=await api<any>(editing?.id?`/users/${editing.id}`:"/users",{method:editing?.id?"PATCH":"POST",body:JSON.stringify({...d,venue_id:Number(d.venue_id),active:Number(d.active)})});if(result.setup_url)setSetup(result.setup_url);setEditing(undefined);f.reset();await load();}catch(err){setError(err instanceof Error?err.message:"User could not be saved");}}async function token(user:any,purpose:"invitation"|"password_reset"){const result=await api<any>(`/users/${user.id}/access-token`,{method:"POST",body:JSON.stringify({purpose})});setSetup(result.setup_url);}return <section className="panel"><div className="sectionhead"><div><h2>Users</h2><p>Roles and module access are enforced by the server on every request.</p></div><button onClick={()=>setEditing({venue_id:venues[0]?.id,role:"staff",module_access:"fire",active:1})}>Add user</button></div>{setup&&<div className="active-filter"><div><b>One-time setup link</b><p>Copy this link securely. It is shown only now.</p><input readOnly value={setup}/></div><button onClick={()=>void navigator.clipboard.writeText(setup)}>Copy link</button></div>}{editing&&<form className="gridform" onSubmit={save}><label>Name<input name="name" required defaultValue={editing.name}/></label><label>Email<input name="email" type="email" required defaultValue={editing.email}/></label><label>Role<select name="role" defaultValue={editing.role}>{[["administrator","Administrator"],["venue_manager","Manager"],["staff","Staff"],["contractor","Contractor / Read only"],["auditor","Auditor"]].map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></label><label>Module access<select name="module_access" defaultValue={editing.module_access}><option value="fire">Fire & General Compliance</option><option value="food">Food Hygiene</option><option value="both">Both</option></select></label><label>Venue<select name="venue_id" defaultValue={editing.venue_id}>{venues.map(v=><option value={v.id} key={v.id}>{v.name}</option>)}</select></label><label>Status<select name="active" defaultValue={editing.active??1}><option value="1">Active</option><option value="0">Inactive</option></select></label>{error&&<p className="error">{error}</p>}<div className="formactions"><button type="button" className="secondary" onClick={()=>setEditing(undefined)}>Cancel</button><button>Save user</button></div></form>}<div className="usercards">{users.map(u=><article className={`food-task ${u.active?"":"inactive"}`} key={u.id}><div><h3>{u.name}</h3><p>{u.email}</p><small>{u.role.replace("_"," ")} · {u.module_access==="both"?"Both modules":u.module_access==="food"?"Food Hygiene":"Fire & General"}<br/>{u.active?"Active":"Inactive"} · Created {new Date(u.created_at).toLocaleDateString()} · Last login {u.last_login_at?new Date(u.last_login_at).toLocaleString():"Never"}</small></div><div className="food-actions"><button className="secondary" onClick={()=>setEditing(u)}>Edit</button><button className="secondary" onClick={()=>void api(`/users/${u.id}`,{method:"PATCH",body:JSON.stringify({active:u.active?0:1})}).then(load).catch(err=>setError(err.message))}>{u.active?"Deactivate":"Reactivate"}</button><button className="secondary" onClick={()=>void token(u,"password_reset")}>Create password reset</button></div></article>)}</div></section>}
 function Page({
   title,
   subtitle,
