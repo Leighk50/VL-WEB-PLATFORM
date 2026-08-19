@@ -1364,6 +1364,10 @@ app.post(
         "fire_alarm_call_point",
         "fire_alarm_test",
         "risk_assessment",
+        "food_temperature_reading",
+        "food_delivery_record",
+        "food_probe_calibration",
+        "food_checklist_completion",
       ].includes(type)
     )
       return res.status(400).json({ error: "Unsupported photo target" });

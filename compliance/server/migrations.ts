@@ -222,4 +222,68 @@ ALTER TABLE risk_assessments ADD COLUMN content_review_note TEXT;`,
 IF COL_LENGTH('risk_assessments','content_review_note') IS NULL ALTER TABLE risk_assessments ADD content_review_note NVARCHAR(1000) NULL;`,
     ],
   },
+  {
+    version: 8,
+    name: "village_limits_food_operations",
+    sqlite: `
+CREATE TABLE food_operating_limits(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),limit_key TEXT NOT NULL,label TEXT NOT NULL,lower_limit REAL,upper_limit REAL,target_minutes INTEGER,active INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,limit_key));
+ALTER TABLE food_temperature_readings ADD COLUMN exception_reason TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN temperature_category TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN delivery_condition TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN order_number TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN invoice_number TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN document_id INTEGER REFERENCES documents(id);
+ALTER TABLE food_delivery_records ADD COLUMN compliant INTEGER;
+ALTER TABLE food_delivery_records ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_delivery_records ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN resolved_by INTEGER REFERENCES users(id);
+ALTER TABLE food_probe_calibrations ADD COLUMN lower_limit_snapshot REAL;
+ALTER TABLE food_probe_calibrations ADD COLUMN upper_limit_snapshot REAL;
+ALTER TABLE food_probe_calibrations ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_probe_calibrations ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_probe_calibrations ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN cooling_method TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'open';
+ALTER TABLE food_cooling_events ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN resolved_at TEXT;
+CREATE TABLE food_hot_holding_events(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),product TEXT NOT NULL,started_at TEXT NOT NULL,lower_limit_snapshot REAL NOT NULL,target_minutes_snapshot INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'open',resolution_status TEXT NOT NULL DEFAULT 'open',corrective_action_type TEXT,corrective_action_notes TEXT,action_id INTEGER REFERENCES actions(id),created_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,resolved_at TEXT,resolved_by INTEGER REFERENCES users(id));
+CREATE TABLE food_hot_holding_readings(id INTEGER PRIMARY KEY,event_id INTEGER NOT NULL REFERENCES food_hot_holding_events(id),reading_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,temperature REAL NOT NULL,compliant INTEGER NOT NULL,notes TEXT,recorded_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE food_invoice_messages(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),microsoft_message_id TEXT NOT NULL,supplier TEXT,order_number TEXT,invoice_number TEXT,order_date TEXT,invoice_delivery_date TEXT,delivery_window TEXT,customer_reference TEXT,document_id INTEGER REFERENCES documents(id),total REAL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,UNIQUE(venue_id,microsoft_message_id));
+CREATE TABLE food_invoice_lines(id INTEGER PRIMARY KEY,invoice_message_id INTEGER NOT NULL REFERENCES food_invoice_messages(id),supplier_product_code TEXT,product_description TEXT NOT NULL,pack_size TEXT,quantity REAL,line_value REAL);
+CREATE TABLE food_supplier_product_classifications(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),supplier TEXT NOT NULL,supplier_product_code TEXT NOT NULL,product_description TEXT,classification TEXT NOT NULL DEFAULT 'Unknown',temperature_check_required INTEGER NOT NULL DEFAULT 0,confirmed_by INTEGER REFERENCES users(id),confirmed_at TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(venue_id,supplier,supplier_product_code));`,
+    azure: `
+IF OBJECT_ID('food_operating_limits','U') IS NULL CREATE TABLE food_operating_limits(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),limit_key NVARCHAR(100) NOT NULL,label NVARCHAR(300) NOT NULL,lower_limit FLOAT,upper_limit FLOAT,target_minutes INT,active BIT NOT NULL DEFAULT 1,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_food_operating_limit UNIQUE(venue_id,limit_key));
+IF COL_LENGTH('food_temperature_readings','exception_reason') IS NULL ALTER TABLE food_temperature_readings ADD exception_reason NVARCHAR(1000) NULL;
+IF COL_LENGTH('food_temperature_readings','corrective_action_notes') IS NULL ALTER TABLE food_temperature_readings ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_delivery_records','temperature_category') IS NULL ALTER TABLE food_delivery_records ADD temperature_category NVARCHAR(40) NULL;
+IF COL_LENGTH('food_delivery_records','delivery_condition') IS NULL ALTER TABLE food_delivery_records ADD delivery_condition NVARCHAR(500) NULL;
+IF COL_LENGTH('food_delivery_records','order_number') IS NULL ALTER TABLE food_delivery_records ADD order_number NVARCHAR(200) NULL;
+IF COL_LENGTH('food_delivery_records','invoice_number') IS NULL ALTER TABLE food_delivery_records ADD invoice_number NVARCHAR(200) NULL;
+IF COL_LENGTH('food_delivery_records','document_id') IS NULL ALTER TABLE food_delivery_records ADD document_id BIGINT NULL REFERENCES documents(id);
+IF COL_LENGTH('food_delivery_records','compliant') IS NULL ALTER TABLE food_delivery_records ADD compliant BIT NULL;
+IF COL_LENGTH('food_delivery_records','resolution_status') IS NULL ALTER TABLE food_delivery_records ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_delivery_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_delivery_records','corrective_action_type') IS NULL ALTER TABLE food_delivery_records ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_delivery_records','corrective_action_notes') IS NULL ALTER TABLE food_delivery_records ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_delivery_records','resolved_at') IS NULL ALTER TABLE food_delivery_records ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_delivery_records','resolved_by') IS NULL ALTER TABLE food_delivery_records ADD resolved_by BIGINT NULL REFERENCES users(id);
+IF COL_LENGTH('food_probe_calibrations','lower_limit_snapshot') IS NULL ALTER TABLE food_probe_calibrations ADD lower_limit_snapshot FLOAT NULL;
+IF COL_LENGTH('food_probe_calibrations','upper_limit_snapshot') IS NULL ALTER TABLE food_probe_calibrations ADD upper_limit_snapshot FLOAT NULL;
+IF COL_LENGTH('food_probe_calibrations','resolution_status') IS NULL ALTER TABLE food_probe_calibrations ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_probe_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_probe_calibrations','corrective_action_type') IS NULL ALTER TABLE food_probe_calibrations ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_probe_calibrations','resolved_at') IS NULL ALTER TABLE food_probe_calibrations ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_cooling_events','cooling_method') IS NULL ALTER TABLE food_cooling_events ADD cooling_method NVARCHAR(500) NULL;
+IF COL_LENGTH('food_cooling_events','resolution_status') IS NULL ALTER TABLE food_cooling_events ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_cooling_resolution DEFAULT 'open';
+IF COL_LENGTH('food_cooling_events','corrective_action_type') IS NULL ALTER TABLE food_cooling_events ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_cooling_events','corrective_action_notes') IS NULL ALTER TABLE food_cooling_events ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_cooling_events','resolved_at') IS NULL ALTER TABLE food_cooling_events ADD resolved_at DATETIME2 NULL;
+IF OBJECT_ID('food_hot_holding_events','U') IS NULL CREATE TABLE food_hot_holding_events(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),product NVARCHAR(500) NOT NULL,started_at DATETIME2 NOT NULL,lower_limit_snapshot FLOAT NOT NULL,target_minutes_snapshot INT NOT NULL,status NVARCHAR(30) NOT NULL DEFAULT 'open',resolution_status NVARCHAR(30) NOT NULL DEFAULT 'open',corrective_action_type NVARCHAR(60),corrective_action_notes NVARCHAR(MAX),action_id BIGINT REFERENCES actions(id),created_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),resolved_at DATETIME2,resolved_by BIGINT REFERENCES users(id));
+IF OBJECT_ID('food_hot_holding_readings','U') IS NULL CREATE TABLE food_hot_holding_readings(id BIGINT IDENTITY PRIMARY KEY,event_id BIGINT NOT NULL REFERENCES food_hot_holding_events(id),reading_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),temperature FLOAT NOT NULL,compliant BIT NOT NULL,notes NVARCHAR(MAX),recorded_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('food_invoice_messages','U') IS NULL CREATE TABLE food_invoice_messages(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),microsoft_message_id NVARCHAR(500) NOT NULL,supplier NVARCHAR(300),order_number NVARCHAR(200),invoice_number NVARCHAR(200),order_date DATE,invoice_delivery_date DATE,delivery_window NVARCHAR(200),customer_reference NVARCHAR(300),document_id BIGINT REFERENCES documents(id),total FLOAT,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,CONSTRAINT uq_food_invoice_message UNIQUE(venue_id,microsoft_message_id));
+IF OBJECT_ID('food_invoice_lines','U') IS NULL CREATE TABLE food_invoice_lines(id BIGINT IDENTITY PRIMARY KEY,invoice_message_id BIGINT NOT NULL REFERENCES food_invoice_messages(id),supplier_product_code NVARCHAR(200),product_description NVARCHAR(1000) NOT NULL,pack_size NVARCHAR(200),quantity FLOAT,line_value FLOAT);
+IF OBJECT_ID('food_supplier_product_classifications','U') IS NULL CREATE TABLE food_supplier_product_classifications(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),supplier NVARCHAR(300) NOT NULL,supplier_product_code NVARCHAR(200) NOT NULL,product_description NVARCHAR(1000),classification NVARCHAR(40) NOT NULL DEFAULT 'Unknown',temperature_check_required BIT NOT NULL DEFAULT 0,confirmed_by BIGINT REFERENCES users(id),confirmed_at DATETIME2,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT uq_food_product_classification UNIQUE(venue_id,supplier,supplier_product_code));`,
+  },
 ];
