@@ -35,6 +35,7 @@ import {
 import { RiskAssessments } from "./RiskAssessments";
 import { FoodHygiene } from "./FoodHygiene";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { resolveFireAlarmTestVenue } from "./fire-alarm";
 import { defaultLanding, moduleAllowed as hasModuleAccess, type ModuleAccess } from "./module-access";
 import {
   filterDocuments,
@@ -1436,8 +1437,16 @@ function FireAlarm({ boot, user }: { boot: Boot | null; user: User }) {
     data.delete("photo");
     data.delete("raise_action");
     const body: any = Object.fromEntries(data);
-    body.venue_id = Number(body.venue_id);
     body.call_point_id = Number(body.call_point_id);
+    const selectedPoint = points.find(
+      (item) => Number(item.id) === body.call_point_id,
+    );
+    try {
+      body.venue_id = resolveFireAlarmTestVenue(points, body.call_point_id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Select a valid active call point");
+      return;
+    }
     for (const key of [
       "alarm_operated",
       "sounders_activated",
@@ -1453,13 +1462,12 @@ function FireAlarm({ boot, user }: { boot: Boot | null; user: User }) {
       if (photo?.size)
         await uploadPhoto("fire-alarm-tests", test.id, photo, false);
       if (body.result === "Fail" && raiseAction) {
-        const point = points.find((item) => item.id === body.call_point_id);
         await api("/actions", {
           method: "POST",
           body: JSON.stringify({
-            description: `Failed weekly fire alarm test at ${point?.code || "call point"}: ${body.faults || "investigation required"}`,
+            description: `Failed weekly fire alarm test at ${selectedPoint.code || "call point"}: ${body.faults || "investigation required"}`,
             venue_id: body.venue_id,
-            location_id: point?.location_id,
+            location_id: selectedPoint.location_id,
             related_type: "fire_alarm_test",
             related_id: test.id,
             priority: "High",

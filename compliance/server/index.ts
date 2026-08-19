@@ -459,7 +459,11 @@ async function validateReferences(
       "SELECT venue_id venueId,active FROM fire_alarm_call_points WHERE id=?",
       [body.call_point_id],
     );
-    if (!point || point.venueId !== venueId || !point.active) {
+    if (
+      !point ||
+      Number(point.venueId) !== venueId ||
+      !point.active
+    ) {
       res.status(400).json({
         error:
           "Call point is invalid, inactive or outside the authorised venue",
