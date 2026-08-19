@@ -37,20 +37,24 @@
   gap: 0.8rem;
   margin-bottom: 1rem;
 }
-.food-metrics article {
+.food-metrics button {
   background: #fff;
   border-radius: 14px;
   padding: 1rem;
   border-left: 5px solid #70817a;
   box-shadow: 0 4px 18px #18372a12;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
 }
-.food-metrics article.ok {
+.food-metrics button.ok {
   border-color: #2c8b58;
 }
-.food-metrics article.warn {
+.food-metrics button.warn {
   border-color: #d49428;
 }
-.food-metrics article.bad {
+.food-metrics button.bad {
   border-color: #b9463e;
 }
 .food-metrics span {
@@ -473,6 +477,10 @@ aside footer .link {
   padding: 18px;
   border-left: 5px solid;
 }
+.card-link { color: inherit; text-decoration: none; border-radius: 12px; }
+.card-link .card { height: 100%; position: relative; transition: transform .15s, box-shadow .15s; }
+.card-link:hover .card, .card-link:focus-visible .card { transform: translateY(-2px); box-shadow: 0 7px 20px #17351f22; }
+.card-link .card i, .risk-dashboard i, .food-metrics i { position: absolute; right: 14px; bottom: 12px; font-style: normal; opacity: .55; }
 .card span {
   display: block;
   color: #637068;
@@ -1433,18 +1441,26 @@ dd {
   gap: 12px;
   margin-bottom: 18px;
 }
-.risk-dashboard article {
+.risk-dashboard button {
   background: #fff;
   border: 1px solid #d9e1dc;
   border-radius: 14px;
   padding: 15px;
   display: flex;
   flex-direction: column;
+  color: inherit;
+  text-align: left;
+  position: relative;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
 }
+.risk-dashboard button:hover, .risk-dashboard button:focus-visible, .food-metrics button:hover, .food-metrics button:focus-visible { transform: translateY(-2px); box-shadow: 0 7px 20px #17351f22; }
 .risk-dashboard strong {
   font-size: 1.8rem;
   color: #163c2b;
 }
+.active-filter { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:12px 16px; margin:12px 0; border:1px solid #d5dfd8; border-radius:10px; background:#f1f6f2; }
+.source-link + small { display:block; color:#66746c; }
 .risk-filters {
   display: flex;
   gap: 8px;

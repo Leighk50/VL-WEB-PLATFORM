@@ -11,7 +11,7 @@ export const assessmentFilters = [
 ] as const;
 
 export function filterAssessments(items: any[], value: string) {
-  const filter = assessmentFilters.find((item) => item.value === value) || assessmentFilters[0];
+  const filter = assessmentFilters.find((item) => item.value.toLowerCase() === value.toLowerCase()) || assessmentFilters[0];
   if (filter.kind === "all") return items;
   return items.filter((item) => item[filter.kind] === filter.value);
 }

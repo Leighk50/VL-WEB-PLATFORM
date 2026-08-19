@@ -17,6 +17,10 @@ describe("risk assessment navigation and filtering", () => {
     expect(filterAssessments(records, "Kitchen").map((item) => item.id)).toEqual([1, 2]);
   });
 
+  it("accepts bookmark-friendly lowercase category values", () => {
+    expect(filterAssessments([{ id: 1, area: "Kitchen" }, { id: 2, area: "External" }], "kitchen")).toEqual([{ id: 1, area: "Kitchen" }]);
+  });
+
   it("restores the complete list with All", () => {
     expect(filterAssessments(records, "All")).toHaveLength(3);
   });

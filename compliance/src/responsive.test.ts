@@ -19,4 +19,10 @@ describe("responsive UI contracts", () => {
     expect(app).toContain('className="mobile-page-title"');
     expect(app).toContain("{currentPage}");
   });
+
+  it("makes the full dashboard cards keyboard and touch interactive", () => {
+    expect(app).toContain('className="card-link"');
+    expect(app).toContain('aria-label={`${c[0]}: ${c[1]}`}');
+    expect(app).toContain('<article className={"card " + c[2]}>');
+  });
 });

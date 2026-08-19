@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   NavLink,
   Route,
   Routes,
   useLocation,
+  useNavigate,
   useSearchParams,
 } from "react-router-dom";
 import {
@@ -34,6 +35,13 @@ import {
 import { RiskAssessments } from "./RiskAssessments";
 import { FoodHygiene } from "./FoodHygiene";
 import { BarcodeScanner } from "./BarcodeScanner";
+import {
+  filterDocuments,
+  filterLabels,
+  filterPatAssets,
+  filterRegisterItems,
+  mainDashboardCards,
+} from "./dashboard-filters";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { name: string; role: string };
@@ -289,17 +297,7 @@ function Dashboard() {
     api("/dashboard").then(setD);
   }, []);
   if (!d) return <Loader />;
-  const cards = [
-    ["PAT overdue", d.patOverdue, "red"],
-    ["PAT due soon", d.patDueSoon, "amber"],
-    ["Open actions", d.openActions, d.openActions ? "amber" : "green"],
-    ["Expired certificates", d.expiredDocuments, "red"],
-    ["Certificates due soon", d.documentsDueSoon, "amber"],
-    ["PAT required", d.patRequired, "green"],
-    ["Extinguishers", d.extinguishers, "green"],
-    ["Furnishing evidence", d.furnishingEvidence, "amber"],
-    ["Total assets", d.assets, "green"],
-  ];
+  const cards = mainDashboardCards(d);
   return (
     <Page
       title="Compliance overview"
@@ -314,10 +312,13 @@ function Dashboard() {
       </div>
       <div className="cards">
         {cards.map((c) => (
-          <article className={"card " + c[2]} key={c[0]}>
+          <NavLink className="card-link" to={String(c[3])} key={c[0]} aria-label={`${c[0]}: ${c[1]}`}>
+          <article className={"card " + c[2]}>
             <span>{c[0]}</span>
             <strong>{c[1]}</strong>
+            <i aria-hidden="true">→</i>
           </article>
+          </NavLink>
         ))}
       </div>
       <section className="panel">
@@ -343,6 +344,10 @@ function Register({
   boot: Boot | null;
   fields: Field[];
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const activeFilter = searchParams.get("filter") || "";
+  const activeCategory = searchParams.get("category") || "";
   const [items, setItems] = useState<any[]>([]),
     [editing, setEditing] = useState<any | null>(null),
     [duplicateAsset, setDuplicateAsset] = useState<any | null>(null),
@@ -352,11 +357,25 @@ function Register({
       kind === "assets" &&
         new URLSearchParams(window.location.search).has("scan"),
     );
-  const load = () => api<any[]>("/" + kind).then(setItems);
+  const load = () => api<any[]>("/" + kind).then((loaded) => {
+    setItems(loaded);
+    const requested = Number(searchParams.get("record") || 0);
+    if (requested) setEditing(loaded.find((item) => item.id === requested) || null);
+  });
   useEffect(() => {
     void load();
-  }, [kind]);
+  }, [kind, searchParams.get("record")]);
   const venueId = Number(boot?.venues[0]?.id || 0);
+  const visibleItems = useMemo(
+    () => filterRegisterItems(items, kind, activeFilter, activeCategory),
+    [items, kind, activeFilter, activeCategory],
+  );
+  const clearFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("filter");
+    next.delete("category");
+    setSearchParams(next);
+  };
   async function useAssetReference(reference: string) {
     try {
       const asset = await api<any>(
@@ -409,8 +428,8 @@ function Register({
   }
   return (
     <Page
-      title={title}
-      subtitle={`${items.length} records`}
+      title={`${title}${activeFilter ? ` — ${filterLabels[activeFilter] || activeFilter}` : ""}`}
+      subtitle={`${visibleItems.length} matching record${visibleItems.length === 1 ? "" : "s"}`}
       actions={
         <div className="pageactions">
           {kind === "assets" && (
@@ -424,6 +443,7 @@ function Register({
         </div>
       }
     >
+      {activeFilter && <ActiveFilter label={filterLabels[activeFilter] || activeFilter} clear={clearFilter} />}
       {scanning && (
         <BarcodeScanner
           onCancel={() => setScanning(false)}
@@ -496,7 +516,7 @@ function Register({
             </tr>
           </thead>
           <tbody>
-            {items.map((x) => (
+            {visibleItems.map((x) => (
               <tr key={x.id}>
                 {fields.slice(0, 5).map((f) => (
                   <td key={f.key} data-label={f.label}>
@@ -505,6 +525,11 @@ function Register({
                       : f.key === "location_id"
                         ? x.location_name
                         : String(x[f.key] ?? "—")}
+                    {kind === "actions" && f.key === "description" && x.source_title && <><br/><button type="button" className="link source-link" onClick={() => {
+                      if (x.related_type === "risk_assessment" && x.related_id) navigate(`/risk/${x.related_id}`);
+                      else if (x.related_type === "risk_assessment_hazard" && x.source_record_id) navigate(`/risk/${x.source_record_id}`);
+                      else if (["asset", "pat_test"].includes(x.related_type) && x.source_record_id) navigate(`/assets?record=${x.source_record_id}`);
+                    }}>Source: {x.source_title}</button><small>{x.related_type?.replaceAll("_", " ")}{x.location_name ? ` · ${x.location_name}` : ""}</small></>}
                   </td>
                 ))}
                 <td data-label="Actions">
@@ -516,7 +541,7 @@ function Register({
             ))}
           </tbody>
         </table>
-        {!items.length && <Empty />}
+        {!visibleItems.length && (activeFilter ? <FilteredEmpty clear={clearFilter} /> : <Empty />)}
       </section>
     </Page>
   );
@@ -578,6 +603,7 @@ function FieldInput({
 }
 function CertificatesDocuments({ boot }: { boot: Boot | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeFilter = searchParams.get("filter") || "";
   const requestedDocumentId = Number(
     searchParams.get("document") ||
       localStorage.getItem("compliance_selected_document") ||
@@ -588,16 +614,18 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
     [creating, setCreating] = useState(false),
     [venueId, setVenueId] = useState<number>(),
     [error, setError] = useState("");
+  const visibleDocuments = useMemo(() => filterDocuments(documents, activeFilter), [documents, activeFilter]);
+  const clearDocumentFilter = () => { const next = new URLSearchParams(searchParams); next.delete("filter"); setSearchParams(next); };
   const openDocument = (document: any) => {
     setSelected(document);
     setCreating(false);
     localStorage.setItem("compliance_selected_document", String(document.id));
-    setSearchParams({ document: String(document.id) });
+    const next = new URLSearchParams(searchParams); next.set("document", String(document.id)); setSearchParams(next);
   };
   const closeDocument = () => {
     setSelected(undefined);
     localStorage.removeItem("compliance_selected_document");
-    setSearchParams({});
+    const next = new URLSearchParams(searchParams); next.delete("document"); setSearchParams(next);
   };
   const load = async () => {
     const list = await api<any[]>("/documents");
@@ -649,8 +677,8 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
   }
   return (
     <Page
-      title="Certificates & Documents"
-      subtitle={`${documents.length} certificate/document records`}
+      title={`Certificates & Documents${activeFilter ? ` — ${filterLabels[activeFilter] || activeFilter}` : ""}`}
+      subtitle={`${visibleDocuments.length} matching certificate/document record${visibleDocuments.length === 1 ? "" : "s"}`}
       actions={
         <button
           onClick={() => {
@@ -662,6 +690,7 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
         </button>
       }
     >
+      {activeFilter && <ActiveFilter label={filterLabels[activeFilter] || activeFilter} clear={clearDocumentFilter} />}
       {creating && (
         <section className="panel formpanel">
           <h2>New certificate / document</h2>
@@ -815,7 +844,7 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
             </tr>
           </thead>
           <tbody>
-            {documents.map((document) => (
+            {visibleDocuments.map((document) => (
               <tr key={document.id}>
                 <td data-label="Type / title">
                   <b>{document.title}</b>
@@ -856,7 +885,7 @@ function CertificatesDocuments({ boot }: { boot: Boot | null }) {
             ))}
           </tbody>
         </table>
-        {!documents.length && <Empty />}
+        {!visibleDocuments.length && (activeFilter ? <FilteredEmpty clear={clearDocumentFilter} /> : <Empty />)}
       </section>
     </Page>
   );
@@ -1901,14 +1930,14 @@ function ExtinguisherCheck() {
   );
 }
 function Pat({ boot: _boot }: { boot: Boot | null }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeFilter = searchParams.get("filter") || "";
   const [assets, setAssets] = useState<any[]>([]),
     [asset, setAsset] = useState<any>(),
     [history, setHistory] = useState<any[]>([]);
-  useEffect(() => {
-    api<any[]>("/assets").then((a) =>
-      setAssets(a.filter((x) => x.pat_status === "PAT Required")),
-    );
-  }, []);
+  useEffect(() => { api<any[]>("/assets").then(setAssets); }, []);
+  const visibleAssets = useMemo(() => filterPatAssets(assets, activeFilter), [assets, activeFilter]);
+  const clearPatFilter = () => { const next = new URLSearchParams(searchParams); next.delete("filter"); setSearchParams(next); };
   useEffect(() => {
     if (asset) api<any[]>(`/assets/${asset.id}/pat-tests`).then(setHistory);
   }, [asset]);
@@ -1923,7 +1952,8 @@ function Pat({ boot: _boot }: { boot: Boot | null }) {
     e.currentTarget.reset();
   }
   return (
-    <Page title="PAT Testing" subtitle="Append-only electrical safety history">
+    <Page title={`PAT Testing${activeFilter ? ` — ${filterLabels[activeFilter] || activeFilter}` : ""}`} subtitle={`${visibleAssets.length} matching PAT-required asset${visibleAssets.length === 1 ? "" : "s"}`}>
+      {activeFilter && <ActiveFilter label={filterLabels[activeFilter] || activeFilter} clear={clearPatFilter} />}
       <section className="panel">
         <label>
           Choose PAT-required asset
@@ -1933,7 +1963,7 @@ function Pat({ boot: _boot }: { boot: Boot | null }) {
             }
           >
             <option>Select asset…</option>
-            {assets.map((a) => (
+            {visibleAssets.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.barcode} — {a.description}
               </option>
@@ -1941,6 +1971,7 @@ function Pat({ boot: _boot }: { boot: Boot | null }) {
           </select>
         </label>
       </section>
+      {!visibleAssets.length && activeFilter && <section className="panel"><FilteredEmpty clear={clearPatFilter} /></section>}
       {asset && (
         <>
           <section className="panel">
@@ -2207,6 +2238,12 @@ function Page({
   );
 }
 const Loader = () => <p>Loading…</p>;
+function ActiveFilter({ label, clear }: { label: string; clear: () => void }) {
+  return <div className="active-filter" role="status"><b>Active filter: {label}</b><button type="button" className="link" onClick={clear}>Show all</button></div>;
+}
+function FilteredEmpty({ clear }: { clear: () => void }) {
+  return <div className="empty"><p>No records currently match this filter.</p><button type="button" className="secondary" onClick={clear}>Show all</button></div>;
+}
 const Empty = () => (
   <div className="empty">No records yet. Add the first record to begin.</div>
 );

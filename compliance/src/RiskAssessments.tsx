@@ -17,6 +17,7 @@ import {
   riskDetailPath,
   riskListPath,
 } from "./risk-navigation";
+import { filterLabels, filterRiskByStatus } from "./dashboard-filters";
 
 const statuses = ["Draft", "Requires Site Verification", "Current", "Review Due", "Action Required", "Archived"];
 const areas = ["Kitchen", "Restaurant", "Accommodation", "Bar/Cellar", "Events", "External", "General"];
@@ -25,7 +26,8 @@ const assessmentStatus = (assessment:any) => assessment.site_verification_requir
 
 export function RiskAssessments({ boot, user }: { boot: any; user: { name:string } }) {
   const navigate = useNavigate(), { assessmentId } = useParams(), [searchParams, setSearchParams] = useSearchParams();
-  const filter = searchParams.get("category") || "All";
+  const requestedCategory = searchParams.get("category") || "All";
+  const categoryFilter = assessmentFilters.find((item) => item.value.toLowerCase() === requestedCategory.toLowerCase())?.value || "All", statusFilter = searchParams.get("filter") || "";
   const [items, setItems] = useState<any[]>([]), [dashboard, setDashboard] = useState<any>(), [selected, setSelected] = useState<any>(), [editing, setEditing] = useState(false), [error, setError] = useState(""), [loadingDetail, setLoadingDetail] = useState(false);
   const load = async () => { setItems(await api("/risk-assessments")); setDashboard(await api("/risk-assessments/dashboard")); };
   useEffect(() => { void load(); }, []);
@@ -35,36 +37,38 @@ export function RiskAssessments({ boot, user }: { boot: any; user: { name:string
     void api(`/risk-assessments/${Number(assessmentId)}`).then(record => { if (active) { setSelected(record); setEditing(false); } }).catch(caught => { if (active) setError(caught instanceof Error ? caught.message : "Assessment could not be loaded"); }).finally(() => { if (active) setLoadingDetail(false); });
     return () => { active = false; };
   }, [assessmentId]);
-  const visible = useMemo(() => filterAssessments(items, filter), [items, filter]);
-  const open = (id: number) => navigate(riskDetailPath(id, filter));
-  const backToList = () => navigate(riskListPath(filter));
+  const visible = useMemo(() => filterRiskByStatus(filterAssessments(items, categoryFilter), statusFilter), [items, categoryFilter, statusFilter]);
+  const open = (id: number) => navigate(`${riskDetailPath(id, categoryFilter)}${statusFilter ? `${riskDetailPath(id, categoryFilter).includes("?") ? "&" : "?"}filter=${statusFilter}` : ""}`);
+  const backToList = () => navigate(`${riskListPath(categoryFilter)}${statusFilter ? `${riskListPath(categoryFilter).includes("?") ? "&" : "?"}filter=${statusFilter}` : ""}`);
   const refreshSavedVersion = async (id: number) => {
     await load();
     const current = await api(`/risk-assessments/${id}`);
     setSelected(current);
-    navigate(riskDetailPath(id, filter), { replace: true });
+    navigate(riskDetailPath(id, categoryFilter), { replace: true });
   };
   const saveAssessment = async (event: any) => {
     event.preventDefault(); const data: any = Object.fromEntries(new FormData(event.currentTarget)); data.venue_id = Number(data.venue_id); data.location_id = data.location_id ? Number(data.location_id) : null; data.site_verification_required = Number(data.site_verification_required || 0);
-    try { const saved:any = await api(selected?.id ? `/risk-assessments/${selected.id}` : "/risk-assessments", { method: selected?.id ? "PATCH" : "POST", body: JSON.stringify(data) }); await load(); navigate(riskDetailPath(saved.id, filter)); setError(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Assessment could not be saved"); }
+    try { const saved:any = await api(selected?.id ? `/risk-assessments/${selected.id}` : "/risk-assessments", { method: selected?.id ? "PATCH" : "POST", body: JSON.stringify(data) }); await load(); navigate(riskDetailPath(saved.id, categoryFilter)); setError(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Assessment could not be saved"); }
   };
   return <>
-    <header className="pagehead"><div><p className="eyebrow">Compliance Hub</p><h1>Risk Assessments</h1><p>Editable, versioned working assessments. Templates require responsible-person verification.</p></div><button onClick={() => { navigate(riskListPath(filter)); setSelected(undefined); setEditing(true); }}>+ New assessment</button></header>
+    <header className="pagehead"><div><p className="eyebrow">Compliance Hub</p><h1>{`Risk Assessments${statusFilter ? ` — ${filterLabels[statusFilter] || statusFilter}` : ""}`}</h1><p>Editable, versioned working assessments. Templates require responsible-person verification.</p></div><button onClick={() => { navigate(riskListPath(categoryFilter)); setSelected(undefined); setEditing(true); }}>+ New assessment</button></header>
     {dashboard && <section className="risk-dashboard" aria-label="Fire safety dashboard">
-      {[['Content reviewed',dashboard.contentReviewed],['Site verification',dashboard.siteVerification],['Current',dashboard.current],['Action required',dashboard.actionRequired],['Next review',formatUkDate(dashboard.nextReviewDate)],['Review due',dashboard.reviewDue],['Open fire actions',dashboard.openFireActions],['High-risk unresolved',dashboard.highRisk]].map(([label,value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}
+      {[
+        ['Content reviewed',dashboard.contentReviewed,'/risk?filter=content-reviewed'],['Site verification',dashboard.siteVerification,'/risk?filter=site-verification'],['Current',dashboard.current,'/risk?filter=current'],['Action required',dashboard.actionRequired,'/risk?filter=action-required'],['Next review',formatUkDate(dashboard.nextReviewDate),'/risk?filter=review-due'],['Review due',dashboard.reviewDue,'/risk?filter=review-due'],['Overdue',dashboard.overdue,'/risk?filter=overdue'],['Open fire actions',dashboard.openFireActions,'/actions?filter=open&category=fire'],['High-risk unresolved',dashboard.highRisk,'/risk?filter=high-risk']
+      ].map(([label,value,to]) => <button type="button" onClick={() => navigate(String(to))} key={String(label)}><span>{label}</span><strong>{value}</strong><i aria-hidden="true">→</i></button>)}
     </section>}
-    {!assessmentId && <><div className="risk-filters" aria-label="Assessment categories">{assessmentFilters.map(item => <button aria-pressed={filter === item.value} className={filter === item.value ? "active" : "secondary"} onClick={() => setSearchParams(item.value === "All" ? {} : { category:item.value })} key={item.value}>{item.label}</button>)}</div><p className="filter-count"><b>{visible.length}</b> matching assessment{visible.length === 1 ? "" : "s"}</p></>}
+    {!assessmentId && <>{statusFilter && <div className="active-filter"><b>Active filter: {filterLabels[statusFilter] || statusFilter}</b><button className="link" onClick={() => { const next=new URLSearchParams(searchParams);next.delete("filter");setSearchParams(next); }}>Show all</button></div>}<div className="risk-filters" aria-label="Assessment categories">{assessmentFilters.map(item => <button aria-pressed={categoryFilter === item.value} className={categoryFilter === item.value ? "active" : "secondary"} onClick={() => { const next=new URLSearchParams(searchParams);if(item.value === "All")next.delete("category");else next.set("category",item.value);setSearchParams(next); }} key={item.value}>{item.label}</button>)}</div><p className="filter-count"><b>{visible.length}</b> matching assessment{visible.length === 1 ? "" : "s"}</p></>}
     {editing && <AssessmentForm assessment={selected} boot={boot} user={user} onSubmit={saveAssessment} onCancel={() => setEditing(false)} error={error} />}
     {loadingDetail && <p>Loading assessment…</p>}
     {assessmentId && error && !selected && <p className="error">{error}</p>}
-    {selected && !editing && <AssessmentDetail assessment={selected} user={user} filter={filter} onRefresh={async () => setSelected(await api(`/risk-assessments/${selected.id}`))} onSaved={refreshSavedVersion} onEdit={() => setEditing(true)} onClose={backToList} onVersion={(id: number) => navigate(riskDetailPath(id, filter))} navigate={navigate} />}
+    {selected && !editing && <AssessmentDetail assessment={selected} user={user} filter={categoryFilter} onRefresh={async () => setSelected(await api(`/risk-assessments/${selected.id}`))} onSaved={refreshSavedVersion} onEdit={() => setEditing(true)} onClose={backToList} onVersion={(id: number) => navigate(riskDetailPath(id, categoryFilter))} navigate={navigate} />}
     {!assessmentId && !selected && !editing && <section className="risk-cards">{visible.map(item => <article className="risk-card" key={item.id}>
       <div className="risk-card-head"><span className={`badge ${String(assessmentStatus(item)).toLowerCase().replaceAll(' ','-')}`}>{assessmentStatus(item)}</span><span className={`risk ${riskLabel(Number(item.high_risk_count ? 10 : 1)).toLowerCase()}`}>{item.overall_risk_rating}</span></div>
       <h2>{item.title || "Legacy risk assessment"}</h2><p>{item.category || "General"} · {item.area || item.location_name || "General"} · Version {item.version || 1}</p>
       <p><b>{item.hazard_count}</b> hazards · <b>{item.unresolved_count}</b> unresolved · <b>{item.document_count + item.photo_count}</b> evidence items</p>
       {item.site_verification_required ? <p className="verification">Requires site verification</p> : null}
       <button onClick={() => open(item.id)}>Open assessment</button>
-    </article>)}{!visible.length && <div className="empty">No risk assessments match this category.</div>}</section>}
+    </article>)}{!visible.length && <div className="empty"><p>No records currently match this filter.</p>{statusFilter && <button className="secondary" onClick={() => { const next=new URLSearchParams(searchParams);next.delete("filter");setSearchParams(next); }}>Show all</button>}</div>}</section>}
   </>;
 }
 

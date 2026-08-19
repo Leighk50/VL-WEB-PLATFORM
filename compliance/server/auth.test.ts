@@ -684,4 +684,30 @@ describe("venue security, current authorization and immutable history", () => {
       .set(auth(tokens.staff))
       .expect(404);
   });
+
+  it("keeps dashboard counts aligned with authorised filtered drill-down records", async () => {
+    const [dashboard, assets, actions, documents, furnishings, riskDashboard, risks] = await Promise.all([
+      request(app).get("/api/dashboard").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/assets").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/actions").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/documents").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/furnishings").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/risk-assessments/dashboard").set(auth(tokens.staff)).expect(200),
+      request(app).get("/api/risk-assessments").set(auth(tokens.staff)).expect(200),
+    ]);
+    const today = new Date().toISOString().slice(0,10), soon = new Date(Date.now()+30*864e5).toISOString().slice(0,10), activeRisks = risks.body.filter((item:any)=>item.status!=="Archived");
+    expect(assets.body.filter((item:any)=>item.pat_status==="PAT Required"&&(!item.pat_next_date||item.pat_next_date<today))).toHaveLength(dashboard.body.patOverdue);
+    expect(assets.body.filter((item:any)=>item.pat_status==="PAT Required"&&item.pat_next_date>=today&&item.pat_next_date<=soon)).toHaveLength(dashboard.body.patDueSoon);
+    expect(actions.body.filter((item:any)=>!["Closed","Complete"].includes(item.status))).toHaveLength(dashboard.body.openActions);
+    expect(documents.body.filter((item:any)=>item.review_date&&item.review_date<today)).toHaveLength(dashboard.body.expiredDocuments);
+    expect(documents.body.filter((item:any)=>item.review_date>=today&&item.review_date<=soon)).toHaveLength(dashboard.body.documentsDueSoon);
+    expect(furnishings.body.filter((item:any)=>["Evidence required","Requires assessment"].includes(item.fire_status))).toHaveLength(dashboard.body.furnishingEvidence);
+    expect(activeRisks.filter((item:any)=>item.status==="Review Due"||(item.review_date>=today&&item.review_date<=soon))).toHaveLength(riskDashboard.body.reviewDue);
+    expect(activeRisks.filter((item:any)=>item.review_date&&item.review_date<today)).toHaveLength(riskDashboard.body.overdue);
+    expect(activeRisks.filter((item:any)=>item.status==="Action Required"||Number(item.open_action_count)>0)).toHaveLength(riskDashboard.body.actionRequired);
+    expect(activeRisks.filter((item:any)=>item.status==="Requires Site Verification"||Number(item.site_verification_required)===1)).toHaveLength(riskDashboard.body.siteVerification);
+    expect(activeRisks.filter((item:any)=>Number(item.high_risk_count)>0)).toHaveLength(riskDashboard.body.highRisk);
+    expect(actions.body.filter((item:any)=>!["Closed","Complete"].includes(item.status)&&item.source_category==="Fire Safety")).toHaveLength(riskDashboard.body.openFireActions);
+    expect(actions.body.filter((item:any)=>String(item.related_type||"").startsWith("risk_assessment")).every((item:any)=>item.source_title&&item.source_record_id)).toBe(true);
+  });
 });
