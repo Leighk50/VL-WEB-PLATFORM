@@ -87,4 +87,51 @@ describe("Azure SQL migration batching", () => {
     },markApplied)).rejects.toThrow("simulated migration 9 failure");
     expect(markApplied).not.toHaveBeenCalled();
   });
+
+  it("safely reruns migration 9 after a partially attempted Azure execution", async () => {
+    const migration = migrations.find((item) => item.version === 9)!;
+    const state = { moduleAccess: false, lastLogin: false, updated: false, index: false, tokens: false };
+    const execute = async (statement: string) => {
+      if (statement.includes("ADD module_access")) state.moduleAccess = true;
+      if (statement.includes("ADD last_login_at")) state.lastLogin = true;
+      if (statement.includes("UPDATE users SET module_access")) {
+        if (!state.moduleAccess) throw new Error("Invalid column name 'module_access'");
+        state.updated = true;
+      }
+      if (statement.includes("CREATE UNIQUE INDEX uq_users_email_ci")) state.index = true;
+      if (statement.includes("CREATE TABLE user_access_tokens")) state.tokens = true;
+    };
+    const batches = sqlBatches(migration, "azure-sql");
+    await execute(batches[0]);
+    await execute(batches[1]);
+    const markApplied = vi.fn(async () => undefined);
+    await executeAndMarkMigration(migration, "azure-sql", execute, markApplied);
+    expect(state).toEqual({ moduleAccess: true, lastLogin: true, updated: true, index: true, tokens: true });
+    expect(markApplied).toHaveBeenCalledOnce();
+  });
+
+  it("preserves existing identities, hashes and operational records through migration 9", async () => {
+    const database = new DatabaseSync(":memory:");
+    database.exec(`
+      CREATE TABLE users(id INTEGER PRIMARY KEY,email TEXT NOT NULL,password_hash TEXT NOT NULL,name TEXT,role TEXT,venue_id INTEGER,active INTEGER,created_at TEXT);
+      CREATE TABLE venues(id INTEGER PRIMARY KEY); CREATE TABLE locations(id INTEGER PRIMARY KEY);
+      CREATE TABLE assets(id INTEGER PRIMARY KEY); CREATE TABLE pat_tests(id INTEGER PRIMARY KEY);
+      CREATE TABLE extinguishers(id INTEGER PRIMARY KEY); CREATE TABLE fire_alarm_call_points(id INTEGER PRIMARY KEY); CREATE TABLE fire_alarm_tests(id INTEGER PRIMARY KEY);
+      CREATE TABLE documents(id INTEGER PRIMARY KEY); CREATE TABLE document_attachments(id INTEGER PRIMARY KEY);
+      CREATE TABLE risk_assessments(id INTEGER PRIMARY KEY); CREATE TABLE risk_hazards(id INTEGER PRIMARY KEY); CREATE TABLE risk_assessment_history(id INTEGER PRIMARY KEY);
+      CREATE TABLE food_task_templates(id INTEGER PRIMARY KEY); CREATE TABLE food_temperature_readings(id INTEGER PRIMARY KEY); CREATE TABLE food_delivery_records(id INTEGER PRIMARY KEY);
+      CREATE TABLE actions(id INTEGER PRIMARY KEY); CREATE TABLE audit_events(id INTEGER PRIMARY KEY);
+      INSERT INTO users VALUES(42,'admin@villagelimits.test','unchanged-hash','Administrator','administrator',1,1,'2026-01-01');
+      INSERT INTO venues VALUES(1); INSERT INTO locations VALUES(1); INSERT INTO assets VALUES(1); INSERT INTO pat_tests VALUES(1);
+      INSERT INTO extinguishers VALUES(1); INSERT INTO fire_alarm_call_points VALUES(1); INSERT INTO fire_alarm_tests VALUES(1);
+      INSERT INTO documents VALUES(1); INSERT INTO document_attachments VALUES(1); INSERT INTO risk_assessments VALUES(1); INSERT INTO risk_hazards VALUES(1); INSERT INTO risk_assessment_history VALUES(1);
+      INSERT INTO food_task_templates VALUES(1); INSERT INTO food_temperature_readings VALUES(1); INSERT INTO food_delivery_records VALUES(1); INSERT INTO actions VALUES(1); INSERT INTO audit_events VALUES(1);
+    `);
+    database.exec(migrations.find((item) => item.version === 9)!.sqlite);
+    const admin = database.prepare("SELECT id,password_hash,role,module_access FROM users WHERE id=42").get() as any;
+    expect(admin).toEqual({ id: 42, password_hash: "unchanged-hash", role: "administrator", module_access: "both" });
+    for (const table of ["venues","locations","assets","pat_tests","extinguishers","fire_alarm_call_points","fire_alarm_tests","documents","document_attachments","risk_assessments","risk_hazards","risk_assessment_history","food_task_templates","food_temperature_readings","food_delivery_records","actions","audit_events"])
+      expect((database.prepare(`SELECT count(*) count FROM ${table}`).get() as any).count, table).toBe(1);
+    database.close();
+  });
 });
