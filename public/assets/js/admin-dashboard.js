@@ -26,6 +26,26 @@
     return data;
   }
 
+  function toLocalInput(value){
+    if(!value)return "";
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime()))return "";
+    const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);
+    return local.toISOString().slice(0,16);
+  }
+
+  function fromLocalInput(value){
+    if(!value)return "";
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime()))return "";
+    const pad=n=>String(n).padStart(2,"0");
+    const offset=-d.getTimezoneOffset();
+    const sign=offset>=0?"+":"-";
+    const hh=pad(Math.floor(Math.abs(offset)/60));
+    const mm=pad(Math.abs(offset)%60);
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${sign}${hh}:${mm}`;
+  }
+
   function renderStats() {
     $("#menuCount").textContent = content.menus.filter(m => m.visible).length;
     $("#dishCount").textContent = content.menus.reduce(
@@ -143,28 +163,73 @@
     const box = $("#eventsEditor");
     box.innerHTML = "";
 
-    content.events.forEach((event, index) => {
-      const el = document.createElement("div");
-      el.className = "item-card";
-      el.innerHTML = `<div class="item-actions"><h3>${esc(event.title)}</h3>
-        <button type="button" data-delete class="danger-btn">Delete</button></div>
-        <label>Title<input data-event="title" value="${esc(event.title)}"></label>
-        <label>Date<input data-event="date" value="${esc(event.date || "")}"></label>
-        <label>Description<textarea data-event="description">${esc(event.description || "")}</textarea></label>
-        <label>Ticket Link<input data-event="ticketUrl" value="${esc(event.ticketUrl || "")}"></label>
-        <label class="switchline"><input type="checkbox" data-event="visible" ${event.visible ? "checked" : ""}> Show event</label>
-        <label class="switchline"><input type="checkbox" data-event="featured" ${event.featured ? "checked" : ""}> Feature on homepage</label>`;
+    content.events.forEach((event,index)=>{
+      const el=document.createElement("div");
+      el.className="item-card";
+      el.innerHTML=`<div class="item-actions">
+        <h3>${esc(event.title)}</h3>
+        <button type="button" data-delete class="danger-btn">Delete</button>
+      </div>
+
+      <label>Title
+        <input data-event="title" value="${esc(event.title)}">
+      </label>
+
+      <label>Display Date
+        <input data-event="date" value="${esc(event.date||"")}" placeholder="Friday 4 September · 7:00pm">
+      </label>
+
+      <div class="row-2">
+        <label>Google Start Date & Time
+          <input type="datetime-local" data-event="startDateLocal" value="${esc(toLocalInput(event.startDate))}">
+        </label>
+        <label>Google End Date & Time
+          <input type="datetime-local" data-event="endDateLocal" value="${esc(toLocalInput(event.endDate))}">
+        </label>
+      </div>
+
+      <div class="row-2">
+        <label>Price per person (£)
+          <input type="number" min="0" step="0.01" data-event="price" value="${esc(event.price??"")}">
+        </label>
+        <label>Performer / Entertainer
+          <input data-event="performer" value="${esc(event.performer||"")}">
+        </label>
+      </div>
+
+      <label>Description
+        <textarea data-event="description">${esc(event.description||"")}</textarea>
+      </label>
+
+      <label>Ticket Link
+        <input data-event="ticketUrl" value="${esc(event.ticketUrl||"")}">
+      </label>
+
+      <label>Event Image
+        <input data-event="image" value="${esc(event.image||"/assets/images/event.webp")}">
+      </label>
+
+      <label class="switchline">
+        <input type="checkbox" data-event="visible" ${event.visible?"checked":""}> Show event
+      </label>
+
+      <label class="switchline">
+        <input type="checkbox" data-event="featured" ${event.featured?"checked":""}> Feature on homepage
+      </label>`;
 
       box.appendChild(el);
 
-      $$("[data-event]", el).forEach(input => {
-        input.oninput = () => {
-          event[input.dataset.event] = input.type === "checkbox" ? input.checked : input.value;
+      $$("[data-event]",el).forEach(input=>{
+        input.oninput=()=>{
+          const key=input.dataset.event;
+          if(key==="startDateLocal")event.startDate=fromLocalInput(input.value);
+          else if(key==="endDateLocal")event.endDate=fromLocalInput(input.value);
+          else event[key]=input.type==="checkbox"?input.checked:input.value;
         };
       });
 
-      $("[data-delete]", el).onclick = () => {
-        content.events.splice(index, 1);
+      $("[data-delete]",el).onclick=()=>{
+        content.events.splice(index,1);
         renderEvents();
         renderStats();
       };
@@ -195,7 +260,7 @@
 
   $("#addEvent").onclick = () => {
     content.events.unshift({
-      id:uid(), title:"New Event", date:"", description:"",
+      id:uid(), title:"New Event", date:"", startDate:"", endDate:"", price:"", currency:"GBP", performer:"", description:"", image:"/assets/images/event.webp", eventStatus:"EventScheduled",
       ticketUrl:"https://villagelimits.touchtakeaway.net/menu",
       visible:true, featured:true
     });
