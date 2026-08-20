@@ -2,7 +2,7 @@ const http=require("http"),fs=require("fs"),path=require("path"),crypto=require(
 const PORT=process.env.PORT||8080,ROOT=path.join(__dirname,"public"),DEFAULT=path.join(__dirname,"data","default-content.json");
 const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,"site","data"):path.join(__dirname,"data")),CONTENT=path.join(DATA_DIR,"content.json"),UPLOADS_DIR=path.join(DATA_DIR,"uploads");
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.1.7",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.1.8",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -81,8 +81,8 @@ function canonicalRedirect(req,res,url){
   }
   return false;
 }
-function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
-function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Version ${VERSION} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Build ${BUILD}</small></div></footer>`}
+function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">&#9776;</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
+function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform &middot; Version ${VERSION} &middot; Build ${BUILD}</small></div></footer>`}
 function schema(c){return {"@context":"https://schema.org","@graph":[{"@type":"Restaurant","name":"Village Limits","url":SITE,"image":`${SITE}/assets/images/hero.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}},{"@type":"LodgingBusiness","name":"Village Limits Accommodation","url":`${SITE}/stay`,"image":`${SITE}/assets/images/rooms.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}}]}}
 function eventUrl(e){return `${SITE}/event/${encodeURIComponent(e.id)}`}
 function eventSchema(c,e){
@@ -151,34 +151,13 @@ function events(){
 }
 
 function eventDetail(id){
-  const c=read(),e=c.events.find(x=>x.id===id&&x.visible);
-  if(!e)return shell(
-    "Event unavailable | Village Limits",
-    "This event is currently unavailable.",
-    `/event/${encodeURIComponent(id)}`,
-    ph("What's On","Event unavailable","This event is no longer available."),
-    "noindex,follow"
-  );
-  const sc=eventSchema(c,e);
-  const price=e.price!==""?`<p><strong>Price:</strong> ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£${esc(e.price)} per person</p>`:"";
-  return shell(
-    `${e.title} | Village Limits Woodhall Spa`,
-    `${e.description} Book ${e.title} at Village Limits in Woodhall Spa.`,
-    `/event/${encodeURIComponent(e.id)}`,
-    `${ph("What's On",e.title,e.date)}
-    <section class="section"><div class="container narrow">
-      <img src="${esc(e.image||"/assets/images/event.webp")}" alt="${esc(e.title)} at Village Limits">
-      <h2>${esc(e.title)}</h2>
-      <p class="lead">${esc(e.description)}</p>
-      <p><strong>Date:</strong> ${esc(e.date)}</p>
-      ${price}
-      ${e.ticketUrl?`<p><a class="btn large" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Book / Buy Tickets</a></p>`:""}
-      <p><a href="/whats-on">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Ãƒâ€šÃ‚Â Back to What's On</a></p>
-    </div></section>`,
-    "index,follow",
-    e.image||"/assets/images/event.webp",
-    sc||schema(c)
-  )
+ const c=read(),e=c.events.find(x=>x.id===id&&x.visible);
+ if(!e)return shell("Event unavailable | Village Limits","This event is currently unavailable.",`/event/${encodeURIComponent(id)}`,ph("What's On","Event unavailable","This event is no longer available."),"noindex,follow");
+ const sc=eventSchema(c,e);
+ const price=e.price!==""?`<p><strong>Price:</strong> &pound;${esc(e.price)} per person</p>`:"";
+ return shell(`${e.title} | Village Limits Woodhall Spa`,`${e.description} Book ${e.title} at Village Limits in Woodhall Spa.`,`/event/${encodeURIComponent(e.id)}`,
+ `${ph("What's On",e.title,e.date)}<section class="section event-detail"><div class="container narrow"><img class="event-detail-image" src="${esc(e.image||"/assets/images/event.webp")}" alt="${esc(e.title)} at Village Limits"><h2>${esc(e.title)}</h2><p class="lead">${esc(e.description)}</p><p><strong>Date:</strong> ${esc(e.date)}</p>${price}${e.ticketUrl?`<p><a class="btn large" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Book / Buy Tickets</a></p>`:""}<p><a href="/whats-on">&larr; Back to What's On</a></p></div></section>`,
+ "index,follow",e.image||"/assets/images/event.webp",sc||schema(c))
 }
 function book(){return shell("Book a Table | Village Limits Restaurant Woodhall Spa","Reserve a table at Village Limits restaurant in Woodhall Spa using our secure online table booking system.","/book-table",`${ph("Restaurant","Book a Table","Reserve your table using our secure booking system.")}<section class="section"><div class="container booking-box"><script src="https://touchreservation.net/customer/javascript/embed.js?coalias=villagelimits&site=1"></script></div></section>`)}
 function contact(){const c=read();return shell("Contact Village Limits | Woodhall Spa","Contact Village Limits in Woodhall Spa for restaurant reservations, accommodation, events and private functions.","/contact",`${ph("Contact","Get in touch","We look forward to welcoming you.")}<section class="section"><div class="container split"><div><h2>Village Limits</h2><p>${esc(c.settings.address)}</p><p><strong>Telephone:</strong> ${esc(c.settings.telephone)}<br><strong>Email:</strong> ${esc(c.settings.email)}</p></div><img src="/assets/images/exterior.webp" alt="Village Limits in Woodhall Spa"></div></section>`)}
