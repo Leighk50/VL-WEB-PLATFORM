@@ -46,6 +46,20 @@
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${sign}${hh}:${mm}`;
   }
 
+  async function uploadEventImage(file,event,card){
+    if(!file)return;
+    const status=$("[data-upload-status]",card),preview=$("[data-image-preview]",card),pathField=$('[data-event="image"]',card);
+    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){status.textContent="Please choose a JPG, PNG or WebP image.";return}
+    if(file.size>6*1024*1024){status.textContent="Image must be 6 MB or smaller.";return}
+    status.textContent="Uploading image…";
+    const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||"").split(",")[1]||"");r.onerror=()=>reject(new Error("Could not read image."));r.readAsDataURL(file)});
+    try{
+      const result=await request("/api/admin/upload-image",{method:"POST",body:JSON.stringify({filename:file.name,mime:file.type,data})});
+      event.image=result.url;if(pathField)pathField.value=result.url;if(preview)preview.src=result.url+"?v="+Date.now();
+      status.textContent="Image uploaded. Click Save All Changes.";
+    }catch(err){status.textContent=err.message}
+  }
+
   function renderStats() {
     $("#menuCount").textContent = content.menus.filter(m => m.visible).length;
     $("#dishCount").textContent = content.menus.reduce(
@@ -205,9 +219,15 @@
         <input data-event="ticketUrl" value="${esc(event.ticketUrl||"")}">
       </label>
 
-      <label>Event Image
-        <input data-event="image" value="${esc(event.image||"/assets/images/event.webp")}">
-      </label>
+      <div class="event-image-editor">
+        <label>Event Image</label>
+        <img data-image-preview src="${esc(event.image||"/assets/images/event.webp")}" alt="Current event image" style="display:block;width:min(100%,520px);max-height:300px;object-fit:cover;margin:8px 0 12px;border:1px solid #ddd">
+        <div class="actions" style="align-items:center">
+          <label class="btn" style="cursor:pointer;margin:0">Upload Image<input type="file" data-event-upload accept="image/jpeg,image/png,image/webp" style="display:none"></label>
+          <span data-upload-status style="font-size:.9rem"></span>
+        </div>
+        <label style="margin-top:10px">Image path<input data-event="image" value="${esc(event.image||"/assets/images/event.webp")}" readonly></label>
+      </div>
 
       <label class="switchline">
         <input type="checkbox" data-event="visible" ${event.visible?"checked":""}> Show event
@@ -219,7 +239,7 @@
 
       box.appendChild(el);
 
-      $$("[data-event]",el).forEach(input=>{
+      $("[data-event]",el).forEach(input=>{
         input.oninput=()=>{
           const key=input.dataset.event;
           if(key==="startDateLocal")event.startDate=fromLocalInput(input.value);
@@ -227,6 +247,9 @@
           else event[key]=input.type==="checkbox"?input.checked:input.value;
         };
       });
+
+      const uploader=$("[data-event-upload]",el);
+      if(uploader)uploader.onchange=()=>{const file=uploader.files&&uploader.files[0];uploadEventImage(file,event,el);};
 
       $("[data-delete]",el).onclick=()=>{
         content.events.splice(index,1);
