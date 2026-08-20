@@ -65,8 +65,8 @@ function canonicalRedirect(req,res,url){
   }
   return false;
 }
-function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚Â°</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
-function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Version ${VERSION} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Build ${BUILD}</small></div></footer>`}
+function header(){return `<header class="site-header"><div class="container nav"><a class="brand" href="/"><img src="/assets/images/logo-white.png" alt="Village Limits"></a><button class="menu-toggle" aria-label="Open menu">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¹Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°</button><nav class="navlinks"><a href="/eat">Eat</a><a href="/stay">Stay</a><a href="/whats-on">What's On</a><a href="/private-events">Private Events</a><a href="/contact">Contact</a><a href="/book-table">Book a Table</a></nav><a class="btn" href="/stay">Book</a></div></header>`}
+function footer(c){return `<footer class="footer"><div class="container footer-grid"><div><img src="/assets/images/logo-white.png" alt="Village Limits"><p>A warm welcome, memorable dining, comfortable rooms and entertaining evenings in Woodhall Spa.</p></div><div><div class="eyebrow">Contact</div><p>${esc(c.settings.telephone)}<br>${esc(c.settings.email)}</p></div><div><div class="eyebrow">Opening</div><p>${esc(c.settings.openingHours)}</p></div></div><div class="container footer-bottom"><small>Village Limits Platform ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Version ${VERSION} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Build ${BUILD}</small></div></footer>`}
 function schema(c){return {"@context":"https://schema.org","@graph":[{"@type":"Restaurant","name":"Village Limits","url":SITE,"image":`${SITE}/assets/images/hero.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}},{"@type":"LodgingBusiness","name":"Village Limits Accommodation","url":`${SITE}/stay`,"image":`${SITE}/assets/images/rooms.webp`,"telephone":c.settings.telephone,"address":{"@type":"PostalAddress","addressLocality":"Woodhall Spa","addressRegion":"Lincolnshire","addressCountry":"GB"}}]}}
 function eventUrl(e){return `${SITE}/event/${encodeURIComponent(e.id)}`}
 function eventSchema(c,e){
@@ -144,7 +144,7 @@ function eventDetail(id){
     "noindex,follow"
   );
   const sc=eventSchema(c,e);
-  const price=e.price!==""?`<p><strong>Price:</strong> £${esc(e.price)} per person</p>`:"";
+  const price=e.price!==""?`<p><strong>Price:</strong> Â£${esc(e.price)} per person</p>`:"";
   return shell(
     `${e.title} | Village Limits Woodhall Spa`,
     `${e.description} Book ${e.title} at Village Limits in Woodhall Spa.`,
@@ -157,7 +157,7 @@ function eventDetail(id){
       <p><strong>Date:</strong> ${esc(e.date)}</p>
       ${price}
       ${e.ticketUrl?`<p><a class="btn large" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Book / Buy Tickets</a></p>`:""}
-      <p><a href="/whats-on">← Back to What's On</a></p>
+      <p><a href="/whats-on">â† Back to What's On</a></p>
     </div></section>`,
     "index,follow",
     e.image||"/assets/images/event.webp",
@@ -180,7 +180,7 @@ if(p==="/api/admin/login"&&req.method==="POST"){const b=await body(req),u1=Strin
 if(p==="/api/admin/logout"&&req.method==="POST"){res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Set-Cookie":"vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});return res.end('{"ok":true}')}
 if(p==="/api/admin/content"&&req.method==="GET"){if(!valid(req))return json(res,401,{error:"Your admin session is not authorised. Please sign in again."});return json(res,200,read())}
 if(p==="/api/admin/content"&&req.method==="PUT"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});write(await body(req));return json(res,200,{ok:true})}
-if(p==="/")return html(res,home()); if(p==="/eat")return html(res,eat()); if(p.startsWith("/menu/"))return html(res,menu(p.slice(6))); if(p==="/stay")return html(res,stay()); if(p==="/whats-on")return html(res,events()); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
+if(p==="/")return html(res,home()); if(p==="/eat")return html(res,eat()); if(p.startsWith("/menu/"))return html(res,menu(p.slice(6))); if(p==="/stay")return html(res,stay()); if(p==="/whats-on")return html(res,events()); if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
 if(p==="/admin/login"&&req.method==="POST"){const b=await formBody(req);const suppliedUser=String(b.username??"").trim(),suppliedPass=String(b.password??"");if(suppliedUser!==USER||suppliedPass!==PASS){res.writeHead(303,{"Location":"/admin?error=1","Cache-Control":"no-store"});return res.end()}const t=make();res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end()}
 if(p==="/admin/logout"&&req.method==="POST"){res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":"vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});return res.end()}
 if(p==="/admin.html"){res.writeHead(302,{"Location":"/admin","Cache-Control":"no-store"});return res.end()} return staticFile(p,res)
