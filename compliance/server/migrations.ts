@@ -1,0 +1,306 @@
+export type Migration = {
+  version: number;
+  name: string;
+  sqlite: string;
+  azure: string | readonly string[];
+};
+
+export function sqlBatches(migration: Migration, provider: "sqlite" | "azure-sql") {
+  const sql = provider === "sqlite" ? migration.sqlite : migration.azure;
+  return Array.isArray(sql) ? [...sql] : [sql as string];
+}
+
+export async function executeMigrationBatches(
+  migration: Migration,
+  provider: "sqlite" | "azure-sql",
+  execute: (statement: string) => Promise<unknown>,
+) {
+  for (const statement of sqlBatches(migration, provider)) await execute(statement);
+}
+
+export async function executeAndMarkMigration(
+  migration: Migration,
+  provider: "sqlite" | "azure-sql",
+  execute: (statement: string) => Promise<unknown>,
+  markApplied: () => Promise<unknown>,
+) {
+  await executeMigrationBatches(migration, provider, execute);
+  await markApplied();
+}
+const sqlite = `
+CREATE TABLE IF NOT EXISTS venues(id INTEGER PRIMARY KEY,name TEXT NOT NULL,is_demo INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS locations(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER DEFAULT 1,UNIQUE(venue_id,name));
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,venue_id INTEGER REFERENCES venues(id),active INTEGER DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS assets(id INTEGER PRIMARY KEY,barcode TEXT UNIQUE NOT NULL,description TEXT NOT NULL,category TEXT,manufacturer TEXT,model TEXT,serial_number TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),purchase_date TEXT,status TEXT DEFAULT 'Active',notes TEXT,pat_status TEXT DEFAULT 'Assessment Required',main_photo_id INTEGER,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS pat_tests(id INTEGER PRIMARY KEY,asset_id INTEGER NOT NULL REFERENCES assets(id),visual_result TEXT,result TEXT NOT NULL,test_date TEXT NOT NULL,next_date TEXT,tester TEXT,readings TEXT,notes TEXT,document_id INTEGER,action_required TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE TABLE IF NOT EXISTS extinguishers(id INTEGER PRIMARY KEY,barcode TEXT UNIQUE NOT NULL,type TEXT NOT NULL,capacity TEXT,manufacturer TEXT,model TEXT,serial_number TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),manufacture_date TEXT,commissioned_date TEXT,status TEXT DEFAULT 'In Service',last_service_date TEXT,next_service_date TEXT,pressure_condition TEXT,pin_seal_ok INTEGER,hose_ok INTEGER,signage_present INTEGER,positioned_ok INTEGER,accessible INTEGER,damage_corrosion TEXT,contractor TEXT,document_id INTEGER,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS extinguisher_checks(id INTEGER PRIMARY KEY,extinguisher_id INTEGER NOT NULL REFERENCES extinguishers(id),check_date TEXT NOT NULL,result TEXT NOT NULL,pressure_condition TEXT,pin_seal_ok INTEGER,hose_ok INTEGER,signage_present INTEGER,positioned_ok INTEGER,accessible INTEGER,damage_corrosion TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE TABLE IF NOT EXISTS fire_alarm_tests(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),test_datetime TEXT NOT NULL,call_point TEXT,zone TEXT,sounder_result TEXT,equipment_result TEXT,result TEXT NOT NULL,faults TEXT,completed_by TEXT,confirmed INTEGER DEFAULT 0,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS fire_alarm_services(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),contractor TEXT,service_date TEXT NOT NULL,next_service_date TEXT,interval_months INTEGER,document_id INTEGER,defects TEXT,remedial_actions TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE TABLE IF NOT EXISTS risk_assessments(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),assessment_date TEXT NOT NULL,assessor TEXT,review_date TEXT,document_id INTEGER,hazards TEXT,people_at_risk TEXT,escape_routes TEXT,detection_warning TEXT,doors_compartmentation TEXT,emergency_lighting TEXT,extinguishers TEXT,training TEXT,evacuation TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);
+CREATE TABLE IF NOT EXISTS furnishings(id INTEGER PRIMARY KEY,description TEXT NOT NULL,quantity INTEGER DEFAULT 1,category TEXT,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),supplier TEXT,purchase_date TEXT,fire_status TEXT NOT NULL,treatment_product TEXT,treatment_date TEXT,treatment_provider TEXT,batch_reference TEXT,document_id INTEGER,next_review_date TEXT,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS documents(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),type TEXT NOT NULL,title TEXT NOT NULL,reference TEXT,issue_date TEXT,review_date TEXT,issuer TEXT,notes TEXT,storage_key TEXT,mime_type TEXT,version INTEGER DEFAULT 1,previous_version_id INTEGER REFERENCES documents(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS document_links(id INTEGER PRIMARY KEY,document_id INTEGER NOT NULL REFERENCES documents(id),entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,UNIQUE(document_id,entity_type,entity_id));
+CREATE TABLE IF NOT EXISTS photos(id INTEGER PRIMARY KEY,entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,storage_key TEXT NOT NULL,mime_type TEXT,captured_at TEXT,caption TEXT,is_main INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE TABLE IF NOT EXISTS actions(id INTEGER PRIMARY KEY,description TEXT NOT NULL,venue_id INTEGER NOT NULL REFERENCES venues(id),location_id INTEGER REFERENCES locations(id),related_type TEXT,related_id INTEGER,priority TEXT DEFAULT 'Medium',responsible_person TEXT,created_date TEXT DEFAULT CURRENT_DATE,due_date TEXT,status TEXT DEFAULT 'Open',completion_notes TEXT,completion_document_id INTEGER,closed_date TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,is_demo INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,entity_type TEXT NOT NULL,entity_id INTEGER,action TEXT NOT NULL,before_json TEXT,after_json TEXT,user_id INTEGER,occurred_at TEXT DEFAULT CURRENT_TIMESTAMP,ip_address TEXT);
+CREATE INDEX IF NOT EXISTS idx_pat_asset ON pat_tests(asset_id); CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status); CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type,entity_id);`;
+
+const azure = `
+IF OBJECT_ID('venues','U') IS NULL CREATE TABLE venues(id BIGINT IDENTITY PRIMARY KEY,name NVARCHAR(250) NOT NULL,is_demo BIT NOT NULL DEFAULT 0,created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('locations','U') IS NULL CREATE TABLE locations(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(250) NOT NULL,active BIT NOT NULL DEFAULT 1,CONSTRAINT uq_locations_venue_name UNIQUE(venue_id,name));
+IF OBJECT_ID('users','U') IS NULL CREATE TABLE users(id BIGINT IDENTITY PRIMARY KEY,email NVARCHAR(254) NOT NULL UNIQUE,password_hash NVARCHAR(255) NOT NULL,name NVARCHAR(250) NOT NULL,role NVARCHAR(40) NOT NULL,venue_id BIGINT NULL REFERENCES venues(id),active BIT NOT NULL DEFAULT 1,created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('assets','U') IS NULL CREATE TABLE assets(id BIGINT IDENTITY PRIMARY KEY,barcode NVARCHAR(250) NOT NULL UNIQUE,description NVARCHAR(500) NOT NULL,category NVARCHAR(250),manufacturer NVARCHAR(250),model NVARCHAR(250),serial_number NVARCHAR(250),venue_id BIGINT NOT NULL REFERENCES venues(id),location_id BIGINT REFERENCES locations(id),purchase_date DATE,status NVARCHAR(40) DEFAULT 'Active',notes NVARCHAR(MAX),pat_status NVARCHAR(40) DEFAULT 'Assessment Required',main_photo_id BIGINT,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('pat_tests','U') IS NULL CREATE TABLE pat_tests(id BIGINT IDENTITY PRIMARY KEY,asset_id BIGINT NOT NULL REFERENCES assets(id),visual_result NVARCHAR(500),result NVARCHAR(20) NOT NULL,test_date DATE NOT NULL,next_date DATE,tester NVARCHAR(500),readings NVARCHAR(MAX),notes NVARCHAR(MAX),document_id BIGINT,action_required NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF OBJECT_ID('extinguishers','U') IS NULL CREATE TABLE extinguishers(id BIGINT IDENTITY PRIMARY KEY,barcode NVARCHAR(250) NOT NULL UNIQUE,type NVARCHAR(40) NOT NULL,capacity NVARCHAR(100),manufacturer NVARCHAR(250),model NVARCHAR(250),serial_number NVARCHAR(250),venue_id BIGINT NOT NULL REFERENCES venues(id),location_id BIGINT REFERENCES locations(id),manufacture_date DATE,commissioned_date DATE,status NVARCHAR(40) DEFAULT 'In Service',last_service_date DATE,next_service_date DATE,pressure_condition NVARCHAR(500),pin_seal_ok BIT,hose_ok BIT,signage_present BIT,positioned_ok BIT,accessible BIT,damage_corrosion NVARCHAR(MAX),contractor NVARCHAR(500),document_id BIGINT,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('extinguisher_checks','U') IS NULL CREATE TABLE extinguisher_checks(id BIGINT IDENTITY PRIMARY KEY,extinguisher_id BIGINT NOT NULL REFERENCES extinguishers(id),check_date DATE NOT NULL,result NVARCHAR(20) NOT NULL,pressure_condition NVARCHAR(500),pin_seal_ok BIT,hose_ok BIT,signage_present BIT,positioned_ok BIT,accessible BIT,damage_corrosion NVARCHAR(MAX),notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF OBJECT_ID('fire_alarm_tests','U') IS NULL CREATE TABLE fire_alarm_tests(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),test_datetime DATETIME2 NOT NULL,call_point NVARCHAR(500),zone NVARCHAR(250),sounder_result NVARCHAR(500),equipment_result NVARCHAR(500),result NVARCHAR(20) NOT NULL,faults NVARCHAR(MAX),completed_by NVARCHAR(500),confirmed BIT DEFAULT 0,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('fire_alarm_services','U') IS NULL CREATE TABLE fire_alarm_services(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),contractor NVARCHAR(500),service_date DATE NOT NULL,next_service_date DATE,interval_months INT,document_id BIGINT,defects NVARCHAR(MAX),remedial_actions NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF OBJECT_ID('risk_assessments','U') IS NULL CREATE TABLE risk_assessments(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),assessment_date DATE NOT NULL,assessor NVARCHAR(500),review_date DATE,document_id BIGINT,hazards NVARCHAR(MAX),people_at_risk NVARCHAR(MAX),escape_routes NVARCHAR(MAX),detection_warning NVARCHAR(MAX),doors_compartmentation NVARCHAR(MAX),emergency_lighting NVARCHAR(MAX),extinguishers NVARCHAR(MAX),training NVARCHAR(MAX),evacuation NVARCHAR(MAX),notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);
+IF OBJECT_ID('furnishings','U') IS NULL CREATE TABLE furnishings(id BIGINT IDENTITY PRIMARY KEY,description NVARCHAR(500) NOT NULL,quantity INT DEFAULT 1,category NVARCHAR(80),venue_id BIGINT NOT NULL REFERENCES venues(id),location_id BIGINT REFERENCES locations(id),supplier NVARCHAR(500),purchase_date DATE,fire_status NVARCHAR(80) NOT NULL,treatment_product NVARCHAR(500),treatment_date DATE,treatment_provider NVARCHAR(500),batch_reference NVARCHAR(250),document_id BIGINT,next_review_date DATE,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('documents','U') IS NULL CREATE TABLE documents(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),type NVARCHAR(100) NOT NULL,title NVARCHAR(500) NOT NULL,reference NVARCHAR(250),issue_date DATE,review_date DATE,issuer NVARCHAR(500),notes NVARCHAR(MAX),storage_key NVARCHAR(1000),mime_type NVARCHAR(150),version INT DEFAULT 1,previous_version_id BIGINT REFERENCES documents(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('document_links','U') IS NULL CREATE TABLE document_links(id BIGINT IDENTITY PRIMARY KEY,document_id BIGINT NOT NULL REFERENCES documents(id),entity_type NVARCHAR(80) NOT NULL,entity_id BIGINT NOT NULL,CONSTRAINT uq_document_links UNIQUE(document_id,entity_type,entity_id));
+IF OBJECT_ID('photos','U') IS NULL CREATE TABLE photos(id BIGINT IDENTITY PRIMARY KEY,entity_type NVARCHAR(80) NOT NULL,entity_id BIGINT NOT NULL,storage_key NVARCHAR(1000) NOT NULL,mime_type NVARCHAR(150),captured_at DATETIME2,caption NVARCHAR(500),is_main BIT DEFAULT 0,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF OBJECT_ID('actions','U') IS NULL CREATE TABLE actions(id BIGINT IDENTITY PRIMARY KEY,description NVARCHAR(500) NOT NULL,venue_id BIGINT NOT NULL REFERENCES venues(id),location_id BIGINT REFERENCES locations(id),related_type NVARCHAR(80),related_id BIGINT,priority NVARCHAR(20) DEFAULT 'Medium',responsible_person NVARCHAR(500),created_date DATE DEFAULT CAST(GETUTCDATE() AS DATE),due_date DATE,status NVARCHAR(40) DEFAULT 'Open',completion_notes NVARCHAR(MAX),completion_document_id BIGINT,closed_date DATE,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,is_demo BIT DEFAULT 0);
+IF OBJECT_ID('audit_events','U') IS NULL CREATE TABLE audit_events(id BIGINT IDENTITY PRIMARY KEY,entity_type NVARCHAR(80) NOT NULL,entity_id BIGINT,action NVARCHAR(80) NOT NULL,before_json NVARCHAR(MAX),after_json NVARCHAR(MAX),user_id BIGINT,occurred_at DATETIME2 DEFAULT SYSUTCDATETIME(),ip_address NVARCHAR(100));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_pat_asset') CREATE INDEX idx_pat_asset ON pat_tests(asset_id);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_actions_status') CREATE INDEX idx_actions_status ON actions(status);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_audit_entity') CREATE INDEX idx_audit_entity ON audit_events(entity_type,entity_id);`;
+
+export const migrations: Migration[] = [
+  { version: 1, name: "initial_compliance_schema", sqlite, azure },
+  {
+    version: 2,
+    name: "document_evidence_and_fire_alarm_call_points",
+    sqlite: `
+ALTER TABLE documents ADD COLUMN location_id INTEGER REFERENCES locations(id);
+ALTER TABLE documents ADD COLUMN updated_at TEXT;
+ALTER TABLE documents ADD COLUMN updated_by INTEGER;
+CREATE TABLE document_attachments(id INTEGER PRIMARY KEY,document_id INTEGER NOT NULL REFERENCES documents(id),storage_key TEXT NOT NULL,original_name TEXT NOT NULL,mime_type TEXT NOT NULL,file_size INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER NOT NULL REFERENCES users(id));
+CREATE INDEX idx_document_attachments_document ON document_attachments(document_id);
+CREATE TABLE fire_alarm_call_points(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),code TEXT NOT NULL,description TEXT NOT NULL,location_id INTEGER NOT NULL REFERENCES locations(id),panel_zone TEXT,active INTEGER NOT NULL DEFAULT 1,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,code));
+CREATE INDEX idx_call_points_venue_active ON fire_alarm_call_points(venue_id,active);
+ALTER TABLE fire_alarm_tests ADD COLUMN call_point_id INTEGER REFERENCES fire_alarm_call_points(id);
+ALTER TABLE fire_alarm_tests ADD COLUMN alarm_operated INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN sounders_activated INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN panel_indication_correct INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN reset_successful INTEGER;
+ALTER TABLE fire_alarm_tests ADD COLUMN action_id INTEGER REFERENCES actions(id);
+CREATE TABLE document_types(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,name));
+CREATE TABLE venue_settings(venue_id INTEGER PRIMARY KEY REFERENCES venues(id),call_point_warning_days INTEGER NOT NULL DEFAULT 28,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);`,
+    azure: `
+IF COL_LENGTH('documents','location_id') IS NULL ALTER TABLE documents ADD location_id BIGINT NULL REFERENCES locations(id);
+IF COL_LENGTH('documents','updated_at') IS NULL ALTER TABLE documents ADD updated_at DATETIME2 NULL DEFAULT SYSUTCDATETIME();
+IF COL_LENGTH('documents','updated_by') IS NULL ALTER TABLE documents ADD updated_by BIGINT NULL;
+IF OBJECT_ID('document_attachments','U') IS NULL CREATE TABLE document_attachments(id BIGINT IDENTITY PRIMARY KEY,document_id BIGINT NOT NULL REFERENCES documents(id),storage_key NVARCHAR(1000) NOT NULL,original_name NVARCHAR(500) NOT NULL,mime_type NVARCHAR(150) NOT NULL,file_size BIGINT NOT NULL,created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),created_by BIGINT NOT NULL REFERENCES users(id));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_document_attachments_document') CREATE INDEX idx_document_attachments_document ON document_attachments(document_id);
+IF OBJECT_ID('fire_alarm_call_points','U') IS NULL CREATE TABLE fire_alarm_call_points(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),code NVARCHAR(100) NOT NULL,description NVARCHAR(500) NOT NULL,location_id BIGINT NOT NULL REFERENCES locations(id),panel_zone NVARCHAR(250),active BIT NOT NULL DEFAULT 1,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_call_points_venue_code UNIQUE(venue_id,code));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_call_points_venue_active') CREATE INDEX idx_call_points_venue_active ON fire_alarm_call_points(venue_id,active);
+IF COL_LENGTH('fire_alarm_tests','call_point_id') IS NULL ALTER TABLE fire_alarm_tests ADD call_point_id BIGINT NULL REFERENCES fire_alarm_call_points(id);
+IF COL_LENGTH('fire_alarm_tests','alarm_operated') IS NULL ALTER TABLE fire_alarm_tests ADD alarm_operated BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','sounders_activated') IS NULL ALTER TABLE fire_alarm_tests ADD sounders_activated BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','panel_indication_correct') IS NULL ALTER TABLE fire_alarm_tests ADD panel_indication_correct BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','reset_successful') IS NULL ALTER TABLE fire_alarm_tests ADD reset_successful BIT NULL;
+IF COL_LENGTH('fire_alarm_tests','action_id') IS NULL ALTER TABLE fire_alarm_tests ADD action_id BIGINT NULL REFERENCES actions(id);
+IF OBJECT_ID('document_types','U') IS NULL CREATE TABLE document_types(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(250) NOT NULL,active BIT NOT NULL DEFAULT 1,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_document_types_venue_name UNIQUE(venue_id,name));
+IF OBJECT_ID('venue_settings','U') IS NULL CREATE TABLE venue_settings(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),call_point_warning_days INT NOT NULL DEFAULT 28,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);`,
+  },
+  {
+    version: 3,
+    name: "versioned_risk_assessment_library",
+    sqlite: `
+ALTER TABLE risk_assessments ADD COLUMN title TEXT;
+ALTER TABLE risk_assessments ADD COLUMN category TEXT;
+ALTER TABLE risk_assessments ADD COLUMN area TEXT;
+ALTER TABLE risk_assessments ADD COLUMN location_id INTEGER REFERENCES locations(id);
+ALTER TABLE risk_assessments ADD COLUMN responsible_person TEXT;
+ALTER TABLE risk_assessments ADD COLUMN status TEXT NOT NULL DEFAULT 'Draft';
+ALTER TABLE risk_assessments ADD COLUMN overall_risk_rating TEXT;
+ALTER TABLE risk_assessments ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE risk_assessments ADD COLUMN previous_version_id INTEGER REFERENCES risk_assessments(id);
+ALTER TABLE risk_assessments ADD COLUMN template_key TEXT;
+ALTER TABLE risk_assessments ADD COLUMN site_verification_required INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE risk_assessments ADD COLUMN signed_by TEXT;
+ALTER TABLE risk_assessments ADD COLUMN signed_at TEXT;
+ALTER TABLE risk_assessments ADD COLUMN signoff_notes TEXT;
+ALTER TABLE risk_assessments ADD COLUMN archived_at TEXT;
+CREATE TABLE risk_hazards(id INTEGER PRIMARY KEY,assessment_id INTEGER NOT NULL REFERENCES risk_assessments(id),hazard TEXT NOT NULL,who_may_be_harmed TEXT NOT NULL,how_harmed TEXT NOT NULL,existing_controls TEXT NOT NULL,initial_likelihood INTEGER NOT NULL,initial_severity INTEGER NOT NULL,initial_score INTEGER NOT NULL,further_action TEXT,responsible_person TEXT,target_date TEXT,residual_likelihood INTEGER NOT NULL,residual_severity INTEGER NOT NULL,residual_score INTEGER NOT NULL,status TEXT NOT NULL,completion_document_id INTEGER REFERENCES documents(id),site_verification_required INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER);
+CREATE INDEX idx_risk_hazards_assessment ON risk_hazards(assessment_id);
+CREATE TABLE risk_assessment_history(id INTEGER PRIMARY KEY,assessment_id INTEGER NOT NULL REFERENCES risk_assessments(id),version INTEGER NOT NULL,snapshot_json TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER);
+CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
+CREATE TABLE risk_template_registry(venue_id INTEGER NOT NULL REFERENCES venues(id),template_key TEXT NOT NULL,assessment_id INTEGER REFERENCES risk_assessments(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(venue_id,template_key));
+CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+    azure: [`
+IF COL_LENGTH('risk_assessments','title') IS NULL ALTER TABLE risk_assessments ADD title NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','category') IS NULL ALTER TABLE risk_assessments ADD category NVARCHAR(100) NULL;
+IF COL_LENGTH('risk_assessments','area') IS NULL ALTER TABLE risk_assessments ADD area NVARCHAR(100) NULL;
+IF COL_LENGTH('risk_assessments','location_id') IS NULL ALTER TABLE risk_assessments ADD location_id BIGINT NULL REFERENCES locations(id);
+IF COL_LENGTH('risk_assessments','responsible_person') IS NULL ALTER TABLE risk_assessments ADD responsible_person NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','status') IS NULL ALTER TABLE risk_assessments ADD status NVARCHAR(40) NOT NULL CONSTRAINT df_risk_status DEFAULT 'Draft';
+IF COL_LENGTH('risk_assessments','overall_risk_rating') IS NULL ALTER TABLE risk_assessments ADD overall_risk_rating NVARCHAR(80) NULL;
+IF COL_LENGTH('risk_assessments','version') IS NULL ALTER TABLE risk_assessments ADD version INT NOT NULL CONSTRAINT df_risk_version DEFAULT 1;
+IF COL_LENGTH('risk_assessments','previous_version_id') IS NULL ALTER TABLE risk_assessments ADD previous_version_id BIGINT NULL REFERENCES risk_assessments(id);
+IF COL_LENGTH('risk_assessments','template_key') IS NULL ALTER TABLE risk_assessments ADD template_key NVARCHAR(150) NULL;
+IF COL_LENGTH('risk_assessments','site_verification_required') IS NULL ALTER TABLE risk_assessments ADD site_verification_required BIT NOT NULL CONSTRAINT df_risk_verify DEFAULT 0;
+IF COL_LENGTH('risk_assessments','signed_by') IS NULL ALTER TABLE risk_assessments ADD signed_by NVARCHAR(500) NULL;
+IF COL_LENGTH('risk_assessments','signed_at') IS NULL ALTER TABLE risk_assessments ADD signed_at DATETIME2 NULL;
+IF COL_LENGTH('risk_assessments','signoff_notes') IS NULL ALTER TABLE risk_assessments ADD signoff_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('risk_assessments','archived_at') IS NULL ALTER TABLE risk_assessments ADD archived_at DATETIME2 NULL;
+IF OBJECT_ID('risk_hazards','U') IS NULL CREATE TABLE risk_hazards(id BIGINT IDENTITY PRIMARY KEY,assessment_id BIGINT NOT NULL REFERENCES risk_assessments(id),hazard NVARCHAR(500) NOT NULL,who_may_be_harmed NVARCHAR(MAX) NOT NULL,how_harmed NVARCHAR(MAX) NOT NULL,existing_controls NVARCHAR(MAX) NOT NULL,initial_likelihood INT NOT NULL,initial_severity INT NOT NULL,initial_score INT NOT NULL,further_action NVARCHAR(MAX),responsible_person NVARCHAR(500),target_date DATE,residual_likelihood INT NOT NULL,residual_severity INT NOT NULL,residual_score INT NOT NULL,status NVARCHAR(50) NOT NULL,completion_document_id BIGINT NULL REFERENCES documents(id),site_verification_required BIT NOT NULL DEFAULT 0,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_hazards_assessment') CREATE INDEX idx_risk_hazards_assessment ON risk_hazards(assessment_id);
+IF OBJECT_ID('risk_assessment_history','U') IS NULL CREATE TABLE risk_assessment_history(id BIGINT IDENTITY PRIMARY KEY,assessment_id BIGINT NOT NULL REFERENCES risk_assessments(id),version INT NOT NULL,snapshot_json NVARCHAR(MAX) NOT NULL,reason NVARCHAR(500) NOT NULL,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_risk_history_assessment') CREATE INDEX idx_risk_history_assessment ON risk_assessment_history(assessment_id,version);
+IF OBJECT_ID('risk_template_registry','U') IS NULL CREATE TABLE risk_template_registry(venue_id BIGINT NOT NULL REFERENCES venues(id),template_key NVARCHAR(150) NOT NULL,assessment_id BIGINT NULL REFERENCES risk_assessments(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT pk_risk_template_registry PRIMARY KEY(venue_id,template_key));`,
+      `IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_risk_template_assessment' AND object_id=OBJECT_ID('risk_assessments')) CREATE UNIQUE INDEX uq_risk_template_assessment ON risk_assessments(venue_id,template_key) WHERE template_key IS NOT NULL;`,
+    ],
+  },
+  {
+    version: 4,
+    name: "food_hygiene_module",
+    sqlite: `
+CREATE TABLE food_task_templates(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),template_key TEXT NOT NULL,title TEXT NOT NULL,category TEXT NOT NULL,task_type TEXT NOT NULL,location_id INTEGER REFERENCES locations(id),active INTEGER NOT NULL DEFAULT 1,frequency TEXT NOT NULL DEFAULT 'daily',days_of_week TEXT,scheduled_time TEXT,window_start TEXT,window_end TEXT,instructions TEXT,assigned_role TEXT,evidence_required INTEGER NOT NULL DEFAULT 0,corrective_action_behavior TEXT NOT NULL DEFAULT 'prompt',lower_limit REAL,upper_limit REAL,target_minutes INTEGER,effective_start_date TEXT NOT NULL,archived_at TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,template_key));
+CREATE TABLE food_task_instances(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),template_id INTEGER NOT NULL REFERENCES food_task_templates(id),due_date TEXT NOT NULL,due_at TEXT,status TEXT NOT NULL DEFAULT 'outstanding',title_snapshot TEXT NOT NULL,category_snapshot TEXT NOT NULL,task_type_snapshot TEXT NOT NULL,instructions_snapshot TEXT,lower_limit_snapshot REAL,upper_limit_snapshot REAL,target_minutes_snapshot INTEGER,completed_at TEXT,completed_by INTEGER REFERENCES users(id),skip_reason TEXT,exception INTEGER NOT NULL DEFAULT 0,corrective_action TEXT,action_id INTEGER REFERENCES actions(id),notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(template_id,due_date));
+CREATE INDEX idx_food_instances_venue_due ON food_task_instances(venue_id,due_date,status);
+CREATE TABLE food_equipment(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,location_id INTEGER REFERENCES locations(id),equipment_type TEXT NOT NULL,asset_id INTEGER REFERENCES assets(id),active INTEGER NOT NULL DEFAULT 1,lower_limit REAL,upper_limit REAL,notes TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,name));
+CREATE TABLE food_temperature_readings(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),task_instance_id INTEGER REFERENCES food_task_instances(id),equipment_id INTEGER REFERENCES food_equipment(id),reading_type TEXT NOT NULL,product TEXT,station TEXT,temperature REAL NOT NULL,lower_limit_snapshot REAL,upper_limit_snapshot REAL,compliant INTEGER NOT NULL,recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,recorded_by INTEGER NOT NULL REFERENCES users(id),notes TEXT,action_id INTEGER REFERENCES actions(id),recheck_of_id INTEGER REFERENCES food_temperature_readings(id));
+CREATE INDEX idx_food_temperatures_equipment ON food_temperature_readings(equipment_id,recorded_at);
+CREATE TABLE food_cooling_events(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),task_instance_id INTEGER REFERENCES food_task_instances(id),product TEXT NOT NULL,started_at TEXT NOT NULL,starting_temperature REAL NOT NULL,target_minutes_snapshot INTEGER,lower_limit_snapshot REAL,upper_limit_snapshot REAL,status TEXT NOT NULL DEFAULT 'open',notes TEXT,created_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,action_id INTEGER REFERENCES actions(id));
+CREATE TABLE food_cooling_readings(id INTEGER PRIMARY KEY,cooling_event_id INTEGER NOT NULL REFERENCES food_cooling_events(id),reading_at TEXT NOT NULL,temperature REAL NOT NULL,compliant INTEGER,notes TEXT,recorded_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE food_suppliers(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,notes TEXT,UNIQUE(venue_id,name));
+CREATE TABLE food_delivery_records(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),task_instance_id INTEGER REFERENCES food_task_instances(id),supplier_id INTEGER REFERENCES food_suppliers(id),delivery_type TEXT NOT NULL,product TEXT,temperature REAL,lower_limit_snapshot REAL,upper_limit_snapshot REAL,packaging_condition TEXT NOT NULL,date_code_condition TEXT NOT NULL,decision TEXT NOT NULL,reason TEXT,notes TEXT,recorded_at TEXT DEFAULT CURRENT_TIMESTAMP,recorded_by INTEGER NOT NULL REFERENCES users(id),action_id INTEGER REFERENCES actions(id));
+CREATE TABLE food_checklist_items(id INTEGER PRIMARY KEY,template_id INTEGER NOT NULL REFERENCES food_task_templates(id),item_key TEXT NOT NULL,label TEXT NOT NULL,instruction TEXT NOT NULL,location_id INTEGER REFERENCES locations(id),frequency TEXT,active INTEGER NOT NULL DEFAULT 1,allow_na INTEGER NOT NULL DEFAULT 1,sort_order INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(template_id,item_key));
+CREATE TABLE food_checklist_completions(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),task_instance_id INTEGER NOT NULL REFERENCES food_task_instances(id),item_id INTEGER NOT NULL REFERENCES food_checklist_items(id),label_snapshot TEXT NOT NULL,instruction_snapshot TEXT NOT NULL,status TEXT NOT NULL,note TEXT,completed_at TEXT DEFAULT CURRENT_TIMESTAMP,completed_by INTEGER NOT NULL REFERENCES users(id),action_id INTEGER REFERENCES actions(id),UNIQUE(task_instance_id,item_id));
+CREATE TABLE food_probes(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),name TEXT NOT NULL,code TEXT NOT NULL,location_id INTEGER REFERENCES locations(id),asset_id INTEGER REFERENCES assets(id),active INTEGER NOT NULL DEFAULT 1,notes TEXT,UNIQUE(venue_id,code));
+CREATE TABLE food_probe_calibrations(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),probe_id INTEGER NOT NULL REFERENCES food_probes(id),task_instance_id INTEGER REFERENCES food_task_instances(id),calibrated_at TEXT DEFAULT CURRENT_TIMESTAMP,method TEXT NOT NULL,expected_value REAL NOT NULL,measured_value REAL NOT NULL,result TEXT NOT NULL,corrective_action TEXT,notes TEXT,completed_by INTEGER NOT NULL REFERENCES users(id),action_id INTEGER REFERENCES actions(id));
+CREATE TABLE food_evidence_links(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,document_id INTEGER REFERENCES documents(id),photo_id INTEGER REFERENCES photos(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER NOT NULL REFERENCES users(id),CHECK(document_id IS NOT NULL OR photo_id IS NOT NULL));`,
+    azure: `
+IF OBJECT_ID('food_task_templates','U') IS NULL CREATE TABLE food_task_templates(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),template_key NVARCHAR(150) NOT NULL,title NVARCHAR(300) NOT NULL,category NVARCHAR(100) NOT NULL,task_type NVARCHAR(60) NOT NULL,location_id BIGINT NULL REFERENCES locations(id),active BIT NOT NULL DEFAULT 1,frequency NVARCHAR(40) NOT NULL DEFAULT 'daily',days_of_week NVARCHAR(100),scheduled_time NVARCHAR(10),window_start NVARCHAR(10),window_end NVARCHAR(10),instructions NVARCHAR(MAX),assigned_role NVARCHAR(60),evidence_required BIT NOT NULL DEFAULT 0,corrective_action_behavior NVARCHAR(40) NOT NULL DEFAULT 'prompt',lower_limit FLOAT,upper_limit FLOAT,target_minutes INT,effective_start_date DATE NOT NULL,archived_at DATETIME2,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_food_template_key UNIQUE(venue_id,template_key));
+IF OBJECT_ID('food_task_instances','U') IS NULL CREATE TABLE food_task_instances(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),template_id BIGINT NOT NULL REFERENCES food_task_templates(id),due_date DATE NOT NULL,due_at DATETIME2,status NVARCHAR(30) NOT NULL DEFAULT 'outstanding',title_snapshot NVARCHAR(300) NOT NULL,category_snapshot NVARCHAR(100) NOT NULL,task_type_snapshot NVARCHAR(60) NOT NULL,instructions_snapshot NVARCHAR(MAX),lower_limit_snapshot FLOAT,upper_limit_snapshot FLOAT,target_minutes_snapshot INT,completed_at DATETIME2,completed_by BIGINT REFERENCES users(id),skip_reason NVARCHAR(1000),exception BIT NOT NULL DEFAULT 0,corrective_action NVARCHAR(MAX),action_id BIGINT REFERENCES actions(id),notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT uq_food_instance UNIQUE(template_id,due_date));
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_food_instances_venue_due') CREATE INDEX idx_food_instances_venue_due ON food_task_instances(venue_id,due_date,status);
+IF OBJECT_ID('food_equipment','U') IS NULL CREATE TABLE food_equipment(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(300) NOT NULL,location_id BIGINT REFERENCES locations(id),equipment_type NVARCHAR(40) NOT NULL,asset_id BIGINT REFERENCES assets(id),active BIT NOT NULL DEFAULT 1,lower_limit FLOAT,upper_limit FLOAT,notes NVARCHAR(MAX),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_food_equipment UNIQUE(venue_id,name));
+IF OBJECT_ID('food_temperature_readings','U') IS NULL CREATE TABLE food_temperature_readings(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),task_instance_id BIGINT REFERENCES food_task_instances(id),equipment_id BIGINT REFERENCES food_equipment(id),reading_type NVARCHAR(40) NOT NULL,product NVARCHAR(500),station NVARCHAR(300),temperature FLOAT NOT NULL,lower_limit_snapshot FLOAT,upper_limit_snapshot FLOAT,compliant BIT NOT NULL,recorded_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),recorded_by BIGINT NOT NULL REFERENCES users(id),notes NVARCHAR(MAX),action_id BIGINT REFERENCES actions(id),recheck_of_id BIGINT REFERENCES food_temperature_readings(id));
+IF OBJECT_ID('food_cooling_events','U') IS NULL CREATE TABLE food_cooling_events(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),task_instance_id BIGINT REFERENCES food_task_instances(id),product NVARCHAR(500) NOT NULL,started_at DATETIME2 NOT NULL,starting_temperature FLOAT NOT NULL,target_minutes_snapshot INT,lower_limit_snapshot FLOAT,upper_limit_snapshot FLOAT,status NVARCHAR(30) NOT NULL DEFAULT 'open',notes NVARCHAR(MAX),created_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),action_id BIGINT REFERENCES actions(id));
+IF OBJECT_ID('food_cooling_readings','U') IS NULL CREATE TABLE food_cooling_readings(id BIGINT IDENTITY PRIMARY KEY,cooling_event_id BIGINT NOT NULL REFERENCES food_cooling_events(id),reading_at DATETIME2 NOT NULL,temperature FLOAT NOT NULL,compliant BIT,notes NVARCHAR(MAX),recorded_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('food_suppliers','U') IS NULL CREATE TABLE food_suppliers(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(300) NOT NULL,active BIT NOT NULL DEFAULT 1,notes NVARCHAR(MAX),CONSTRAINT uq_food_supplier UNIQUE(venue_id,name));
+IF OBJECT_ID('food_delivery_records','U') IS NULL CREATE TABLE food_delivery_records(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),task_instance_id BIGINT REFERENCES food_task_instances(id),supplier_id BIGINT REFERENCES food_suppliers(id),delivery_type NVARCHAR(30) NOT NULL,product NVARCHAR(500),temperature FLOAT,lower_limit_snapshot FLOAT,upper_limit_snapshot FLOAT,packaging_condition NVARCHAR(100) NOT NULL,date_code_condition NVARCHAR(100) NOT NULL,decision NVARCHAR(20) NOT NULL,reason NVARCHAR(MAX),notes NVARCHAR(MAX),recorded_at DATETIME2 DEFAULT SYSUTCDATETIME(),recorded_by BIGINT NOT NULL REFERENCES users(id),action_id BIGINT REFERENCES actions(id));
+IF OBJECT_ID('food_checklist_items','U') IS NULL CREATE TABLE food_checklist_items(id BIGINT IDENTITY PRIMARY KEY,template_id BIGINT NOT NULL REFERENCES food_task_templates(id),item_key NVARCHAR(150) NOT NULL,label NVARCHAR(300) NOT NULL,instruction NVARCHAR(MAX) NOT NULL,location_id BIGINT REFERENCES locations(id),frequency NVARCHAR(40),active BIT NOT NULL DEFAULT 1,allow_na BIT NOT NULL DEFAULT 1,sort_order INT NOT NULL DEFAULT 0,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT uq_food_checklist_item UNIQUE(template_id,item_key));
+IF OBJECT_ID('food_checklist_completions','U') IS NULL CREATE TABLE food_checklist_completions(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),task_instance_id BIGINT NOT NULL REFERENCES food_task_instances(id),item_id BIGINT NOT NULL REFERENCES food_checklist_items(id),label_snapshot NVARCHAR(300) NOT NULL,instruction_snapshot NVARCHAR(MAX) NOT NULL,status NVARCHAR(30) NOT NULL,note NVARCHAR(MAX),completed_at DATETIME2 DEFAULT SYSUTCDATETIME(),completed_by BIGINT NOT NULL REFERENCES users(id),action_id BIGINT REFERENCES actions(id),CONSTRAINT uq_food_checklist_completion UNIQUE(task_instance_id,item_id));
+IF OBJECT_ID('food_probes','U') IS NULL CREATE TABLE food_probes(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),name NVARCHAR(300) NOT NULL,code NVARCHAR(150) NOT NULL,location_id BIGINT REFERENCES locations(id),asset_id BIGINT REFERENCES assets(id),active BIT NOT NULL DEFAULT 1,notes NVARCHAR(MAX),CONSTRAINT uq_food_probe UNIQUE(venue_id,code));
+IF OBJECT_ID('food_probe_calibrations','U') IS NULL CREATE TABLE food_probe_calibrations(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),probe_id BIGINT NOT NULL REFERENCES food_probes(id),task_instance_id BIGINT REFERENCES food_task_instances(id),calibrated_at DATETIME2 DEFAULT SYSUTCDATETIME(),method NVARCHAR(200) NOT NULL,expected_value FLOAT NOT NULL,measured_value FLOAT NOT NULL,result NVARCHAR(20) NOT NULL,corrective_action NVARCHAR(MAX),notes NVARCHAR(MAX),completed_by BIGINT NOT NULL REFERENCES users(id),action_id BIGINT REFERENCES actions(id));
+IF OBJECT_ID('food_evidence_links','U') IS NULL CREATE TABLE food_evidence_links(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),entity_type NVARCHAR(80) NOT NULL,entity_id BIGINT NOT NULL,document_id BIGINT REFERENCES documents(id),photo_id BIGINT REFERENCES photos(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT NOT NULL REFERENCES users(id),CONSTRAINT ck_food_evidence CHECK(document_id IS NOT NULL OR photo_id IS NOT NULL));`,
+  },
+  {
+    version: 5,
+    name: "refrigeration_exception_resolution",
+    sqlite: `
+ALTER TABLE food_temperature_readings ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_temperature_readings ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN resolved_by INTEGER REFERENCES users(id);
+CREATE INDEX idx_food_temperature_exceptions ON food_temperature_readings(venue_id,resolution_status,recorded_at);`,
+    azure: `
+IF COL_LENGTH('food_temperature_readings','resolution_status') IS NULL ALTER TABLE food_temperature_readings ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_temp_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_temperature_readings','corrective_action_type') IS NULL ALTER TABLE food_temperature_readings ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_temperature_readings','resolved_at') IS NULL ALTER TABLE food_temperature_readings ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_temperature_readings','resolved_by') IS NULL ALTER TABLE food_temperature_readings ADD resolved_by BIGINT NULL REFERENCES users(id);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='idx_food_temperature_exceptions') CREATE INDEX idx_food_temperature_exceptions ON food_temperature_readings(venue_id,resolution_status,recorded_at);`,
+  },
+  {
+    version: 6,
+    name: "asset_reference_sequences",
+    sqlite: `CREATE TABLE asset_reference_sequences(venue_id INTEGER PRIMARY KEY REFERENCES venues(id),next_number INTEGER NOT NULL CHECK(next_number > 0));`,
+    azure: `IF OBJECT_ID('asset_reference_sequences','U') IS NULL CREATE TABLE asset_reference_sequences(venue_id BIGINT PRIMARY KEY REFERENCES venues(id),next_number BIGINT NOT NULL CHECK(next_number > 0));`,
+  },
+  {
+    version: 7,
+    name: "risk_content_review_tracking",
+    sqlite: `
+ALTER TABLE risk_assessments ADD COLUMN content_reviewed_at TEXT;
+ALTER TABLE risk_assessments ADD COLUMN content_review_note TEXT;`,
+    azure: [
+      `IF COL_LENGTH('risk_assessments','content_reviewed_at') IS NULL ALTER TABLE risk_assessments ADD content_reviewed_at DATE NULL;
+IF COL_LENGTH('risk_assessments','content_review_note') IS NULL ALTER TABLE risk_assessments ADD content_review_note NVARCHAR(1000) NULL;`,
+    ],
+  },
+  {
+    version: 8,
+    name: "village_limits_food_operations",
+    sqlite: `
+CREATE TABLE food_operating_limits(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),limit_key TEXT NOT NULL,label TEXT NOT NULL,lower_limit REAL,upper_limit REAL,target_minutes INTEGER,active INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,UNIQUE(venue_id,limit_key));
+ALTER TABLE food_temperature_readings ADD COLUMN exception_reason TEXT;
+ALTER TABLE food_temperature_readings ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN temperature_category TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN delivery_condition TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN order_number TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN invoice_number TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN document_id INTEGER REFERENCES documents(id);
+ALTER TABLE food_delivery_records ADD COLUMN compliant INTEGER;
+ALTER TABLE food_delivery_records ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_delivery_records ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_delivery_records ADD COLUMN resolved_by INTEGER REFERENCES users(id);
+ALTER TABLE food_probe_calibrations ADD COLUMN lower_limit_snapshot REAL;
+ALTER TABLE food_probe_calibrations ADD COLUMN upper_limit_snapshot REAL;
+ALTER TABLE food_probe_calibrations ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'resolved';
+ALTER TABLE food_probe_calibrations ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_probe_calibrations ADD COLUMN resolved_at TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN cooling_method TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN resolution_status TEXT NOT NULL DEFAULT 'open';
+ALTER TABLE food_cooling_events ADD COLUMN corrective_action_type TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN corrective_action_notes TEXT;
+ALTER TABLE food_cooling_events ADD COLUMN resolved_at TEXT;
+CREATE TABLE food_hot_holding_events(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),product TEXT NOT NULL,started_at TEXT NOT NULL,lower_limit_snapshot REAL NOT NULL,target_minutes_snapshot INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'open',resolution_status TEXT NOT NULL DEFAULT 'open',corrective_action_type TEXT,corrective_action_notes TEXT,action_id INTEGER REFERENCES actions(id),created_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP,resolved_at TEXT,resolved_by INTEGER REFERENCES users(id));
+CREATE TABLE food_hot_holding_readings(id INTEGER PRIMARY KEY,event_id INTEGER NOT NULL REFERENCES food_hot_holding_events(id),reading_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,temperature REAL NOT NULL,compliant INTEGER NOT NULL,notes TEXT,recorded_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE food_invoice_messages(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),microsoft_message_id TEXT NOT NULL,supplier TEXT,order_number TEXT,invoice_number TEXT,order_date TEXT,invoice_delivery_date TEXT,delivery_window TEXT,customer_reference TEXT,document_id INTEGER REFERENCES documents(id),total REAL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,created_by INTEGER,UNIQUE(venue_id,microsoft_message_id));
+CREATE TABLE food_invoice_lines(id INTEGER PRIMARY KEY,invoice_message_id INTEGER NOT NULL REFERENCES food_invoice_messages(id),supplier_product_code TEXT,product_description TEXT NOT NULL,pack_size TEXT,quantity REAL,line_value REAL);
+CREATE TABLE food_supplier_product_classifications(id INTEGER PRIMARY KEY,venue_id INTEGER NOT NULL REFERENCES venues(id),supplier TEXT NOT NULL,supplier_product_code TEXT NOT NULL,product_description TEXT,classification TEXT NOT NULL DEFAULT 'Unknown',temperature_check_required INTEGER NOT NULL DEFAULT 0,confirmed_by INTEGER REFERENCES users(id),confirmed_at TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(venue_id,supplier,supplier_product_code));`,
+    azure: `
+IF OBJECT_ID('food_operating_limits','U') IS NULL CREATE TABLE food_operating_limits(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),limit_key NVARCHAR(100) NOT NULL,label NVARCHAR(300) NOT NULL,lower_limit FLOAT,upper_limit FLOAT,target_minutes INT,active BIT NOT NULL DEFAULT 1,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_by BIGINT,CONSTRAINT uq_food_operating_limit UNIQUE(venue_id,limit_key));
+IF COL_LENGTH('food_temperature_readings','exception_reason') IS NULL ALTER TABLE food_temperature_readings ADD exception_reason NVARCHAR(1000) NULL;
+IF COL_LENGTH('food_temperature_readings','corrective_action_notes') IS NULL ALTER TABLE food_temperature_readings ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_delivery_records','temperature_category') IS NULL ALTER TABLE food_delivery_records ADD temperature_category NVARCHAR(40) NULL;
+IF COL_LENGTH('food_delivery_records','delivery_condition') IS NULL ALTER TABLE food_delivery_records ADD delivery_condition NVARCHAR(500) NULL;
+IF COL_LENGTH('food_delivery_records','order_number') IS NULL ALTER TABLE food_delivery_records ADD order_number NVARCHAR(200) NULL;
+IF COL_LENGTH('food_delivery_records','invoice_number') IS NULL ALTER TABLE food_delivery_records ADD invoice_number NVARCHAR(200) NULL;
+IF COL_LENGTH('food_delivery_records','document_id') IS NULL ALTER TABLE food_delivery_records ADD document_id BIGINT NULL REFERENCES documents(id);
+IF COL_LENGTH('food_delivery_records','compliant') IS NULL ALTER TABLE food_delivery_records ADD compliant BIT NULL;
+IF COL_LENGTH('food_delivery_records','resolution_status') IS NULL ALTER TABLE food_delivery_records ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_delivery_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_delivery_records','corrective_action_type') IS NULL ALTER TABLE food_delivery_records ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_delivery_records','corrective_action_notes') IS NULL ALTER TABLE food_delivery_records ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_delivery_records','resolved_at') IS NULL ALTER TABLE food_delivery_records ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_delivery_records','resolved_by') IS NULL ALTER TABLE food_delivery_records ADD resolved_by BIGINT NULL REFERENCES users(id);
+IF COL_LENGTH('food_probe_calibrations','lower_limit_snapshot') IS NULL ALTER TABLE food_probe_calibrations ADD lower_limit_snapshot FLOAT NULL;
+IF COL_LENGTH('food_probe_calibrations','upper_limit_snapshot') IS NULL ALTER TABLE food_probe_calibrations ADD upper_limit_snapshot FLOAT NULL;
+IF COL_LENGTH('food_probe_calibrations','resolution_status') IS NULL ALTER TABLE food_probe_calibrations ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_probe_resolution DEFAULT 'resolved';
+IF COL_LENGTH('food_probe_calibrations','corrective_action_type') IS NULL ALTER TABLE food_probe_calibrations ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_probe_calibrations','resolved_at') IS NULL ALTER TABLE food_probe_calibrations ADD resolved_at DATETIME2 NULL;
+IF COL_LENGTH('food_cooling_events','cooling_method') IS NULL ALTER TABLE food_cooling_events ADD cooling_method NVARCHAR(500) NULL;
+IF COL_LENGTH('food_cooling_events','resolution_status') IS NULL ALTER TABLE food_cooling_events ADD resolution_status NVARCHAR(30) NOT NULL CONSTRAINT df_food_cooling_resolution DEFAULT 'open';
+IF COL_LENGTH('food_cooling_events','corrective_action_type') IS NULL ALTER TABLE food_cooling_events ADD corrective_action_type NVARCHAR(60) NULL;
+IF COL_LENGTH('food_cooling_events','corrective_action_notes') IS NULL ALTER TABLE food_cooling_events ADD corrective_action_notes NVARCHAR(MAX) NULL;
+IF COL_LENGTH('food_cooling_events','resolved_at') IS NULL ALTER TABLE food_cooling_events ADD resolved_at DATETIME2 NULL;
+IF OBJECT_ID('food_hot_holding_events','U') IS NULL CREATE TABLE food_hot_holding_events(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),product NVARCHAR(500) NOT NULL,started_at DATETIME2 NOT NULL,lower_limit_snapshot FLOAT NOT NULL,target_minutes_snapshot INT NOT NULL,status NVARCHAR(30) NOT NULL DEFAULT 'open',resolution_status NVARCHAR(30) NOT NULL DEFAULT 'open',corrective_action_type NVARCHAR(60),corrective_action_notes NVARCHAR(MAX),action_id BIGINT REFERENCES actions(id),created_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME(),resolved_at DATETIME2,resolved_by BIGINT REFERENCES users(id));
+IF OBJECT_ID('food_hot_holding_readings','U') IS NULL CREATE TABLE food_hot_holding_readings(id BIGINT IDENTITY PRIMARY KEY,event_id BIGINT NOT NULL REFERENCES food_hot_holding_events(id),reading_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),temperature FLOAT NOT NULL,compliant BIT NOT NULL,notes NVARCHAR(MAX),recorded_by BIGINT NOT NULL REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('food_invoice_messages','U') IS NULL CREATE TABLE food_invoice_messages(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),microsoft_message_id NVARCHAR(500) NOT NULL,supplier NVARCHAR(300),order_number NVARCHAR(200),invoice_number NVARCHAR(200),order_date DATE,invoice_delivery_date DATE,delivery_window NVARCHAR(200),customer_reference NVARCHAR(300),document_id BIGINT REFERENCES documents(id),total FLOAT,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),created_by BIGINT,CONSTRAINT uq_food_invoice_message UNIQUE(venue_id,microsoft_message_id));
+IF OBJECT_ID('food_invoice_lines','U') IS NULL CREATE TABLE food_invoice_lines(id BIGINT IDENTITY PRIMARY KEY,invoice_message_id BIGINT NOT NULL REFERENCES food_invoice_messages(id),supplier_product_code NVARCHAR(200),product_description NVARCHAR(1000) NOT NULL,pack_size NVARCHAR(200),quantity FLOAT,line_value FLOAT);
+IF OBJECT_ID('food_supplier_product_classifications','U') IS NULL CREATE TABLE food_supplier_product_classifications(id BIGINT IDENTITY PRIMARY KEY,venue_id BIGINT NOT NULL REFERENCES venues(id),supplier NVARCHAR(300) NOT NULL,supplier_product_code NVARCHAR(200) NOT NULL,product_description NVARCHAR(1000),classification NVARCHAR(40) NOT NULL DEFAULT 'Unknown',temperature_check_required BIT NOT NULL DEFAULT 0,confirmed_by BIGINT REFERENCES users(id),confirmed_at DATETIME2,created_at DATETIME2 DEFAULT SYSUTCDATETIME(),updated_at DATETIME2 DEFAULT SYSUTCDATETIME(),CONSTRAINT uq_food_product_classification UNIQUE(venue_id,supplier,supplier_product_code));`,
+  },
+  {
+    version: 9,
+    name: "user_module_access_and_password_setup",
+    sqlite: `
+ALTER TABLE users ADD COLUMN module_access TEXT NOT NULL DEFAULT 'fire';
+ALTER TABLE users ADD COLUMN last_login_at TEXT;
+UPDATE users SET module_access='both' WHERE role='administrator';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_ci ON users(lower(email));
+CREATE TABLE user_access_tokens(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),purpose TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires_at TEXT NOT NULL,used_at TEXT,created_by INTEGER REFERENCES users(id),created_at TEXT DEFAULT CURRENT_TIMESTAMP);`,
+    azure: [
+      `IF COL_LENGTH('users','module_access') IS NULL ALTER TABLE users ADD module_access NVARCHAR(20) NOT NULL CONSTRAINT df_users_module_access DEFAULT 'fire';`,
+      `IF COL_LENGTH('users','last_login_at') IS NULL ALTER TABLE users ADD last_login_at DATETIME2 NULL;`,
+      `UPDATE users SET module_access='both' WHERE role='administrator' AND module_access<>'both';`,
+      `IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='uq_users_email_ci' AND object_id=OBJECT_ID('users')) CREATE UNIQUE INDEX uq_users_email_ci ON users(email);`,
+      `IF OBJECT_ID('user_access_tokens','U') IS NULL CREATE TABLE user_access_tokens(id BIGINT IDENTITY PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),purpose NVARCHAR(30) NOT NULL,token_hash NVARCHAR(64) NOT NULL UNIQUE,expires_at DATETIME2 NOT NULL,used_at DATETIME2,created_by BIGINT REFERENCES users(id),created_at DATETIME2 DEFAULT SYSUTCDATETIME());`,
+    ],
+  },
+];
