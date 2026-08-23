@@ -26,13 +26,13 @@ describe("venue security, current authorization and immutable history", () => {
     const before = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(before.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     await migrateDatabase();
     await migrateDatabase();
     const after = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations",
     );
-    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(after.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(await db.get("SELECT id FROM assets LIMIT 1")).toBeTruthy();
   });
 
@@ -789,5 +789,17 @@ describe("venue security, current authorization and immutable history", () => {
     expect(activeRisks.filter((item:any)=>Number(item.high_risk_count)>0)).toHaveLength(riskDashboard.body.highRisk);
     expect(actions.body.filter((item:any)=>!["Closed","Complete"].includes(item.status)&&item.source_category==="Fire Safety")).toHaveLength(riskDashboard.body.openFireActions);
     expect(actions.body.filter((item:any)=>String(item.related_type||"").startsWith("risk_assessment")).every((item:any)=>item.source_title&&item.source_record_id)).toBe(true);
+  });
+
+  it("shares venue-scoped employee training between fire and food users",async()=>{
+    const body={venue_id:venue1,employee_name:"Alex Example",job_title:"Chef",training_date:"2026-08-23",allergens_in_house:1,allergens_course:0,food_hygiene_2:1,food_hygiene_3:0,fire_alarm:1,fire_evacuation:1,fire_extinguisher:1,fire_exits:1,emergency_procedures:1,notes:"Induction complete"};
+    const created=await request(app).post("/api/training-log").set(auth(tokens.staff)).send(body).expect(201);
+    expect(created.body).toMatchObject({employee_name:"Alex Example",allergens_in_house:1,fire_evacuation:1});
+    const kitchenLogin=await request(app).post("/api/auth/login").send({email:"kitchen.user@test.local",password:"StrongPassword!234"}).expect(200);
+    const food=await request(app).get("/api/training-log").set(auth(kitchenLogin.body.token)).expect(200);
+    expect(food.body.some((row:any)=>row.id===created.body.id)).toBe(true);
+    await request(app).post("/api/training-log").set(auth(tokens.staff)).send({...body,venue_id:venue2,employee_name:"Denied"}).expect(403);
+    await request(app).patch(`/api/training-log/${created.body.id}`).set(auth(tokens.auditor)).send({notes:"Denied"}).expect(403);
+    expect(await db.get("SELECT action FROM audit_events WHERE entity_type='employee_training' AND entity_id=?",[created.body.id])).toMatchObject({action:"create"});
   });
 });

@@ -134,4 +134,15 @@ describe("Azure SQL migration batching", () => {
       expect((database.prepare(`SELECT count(*) count FROM ${table}`).get() as any).count, table).toBe(1);
     database.close();
   });
+
+  it("creates the shared employee training checklist for SQLite and Azure SQL",()=>{
+    const migration=migrations.find(item=>item.version===10)!;
+    const database=new DatabaseSync(":memory:");
+    database.exec("CREATE TABLE venues(id INTEGER PRIMARY KEY); CREATE TABLE users(id INTEGER PRIMARY KEY);");
+    database.exec(migration.sqlite);
+    const columns=(database.prepare("PRAGMA table_info(employee_training)").all() as any[]).map(row=>row.name);
+    expect(columns).toEqual(expect.arrayContaining(["allergens_in_house","allergens_course","food_hygiene_2","food_hygiene_3","fire_alarm","fire_evacuation","fire_extinguisher","fire_exits","emergency_procedures"]));
+    expect(String(migration.azure)).toContain("OBJECT_ID('employee_training','U') IS NULL");
+    database.close();
+  });
 });

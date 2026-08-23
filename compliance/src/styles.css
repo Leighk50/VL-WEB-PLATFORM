@@ -1411,6 +1411,7 @@ dd {
   border-top: 1px solid #dfe5de;
   padding-top: 14px;
 }
+.training-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem;margin-top:.75rem}.training-checks label{display:flex;align-items:center;gap:.6rem}.training-checks input{width:auto}
 @media (max-width: 640px) {
   .pageactions {
     flex-wrap: wrap;

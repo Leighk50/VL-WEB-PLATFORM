@@ -45,6 +45,7 @@ import {
   mainDashboardCards,
 } from "./dashboard-filters";
 import { formatPatDate, formatPatDueDate } from "./pat-display";
+import { TrainingLog } from "./TrainingLog";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { id:number; name: string; email:string; role: string; venueId:number|null; moduleAccess:ModuleAccess };
@@ -57,6 +58,7 @@ type Boot = {
 const nav: Array<[string,string,"fire"|"food"|"shared"]> = [
   ["/", "Dashboard","fire"], ["/food-hygiene", "Food Hygiene","food"],
   ["/assets", "Assets","fire"], ["/pat", "PAT Testing","fire"], ["/extinguishers", "Fire Extinguishers","fire"],
+  ["/training", "Employee Training","shared"],
   ["/alarm", "Fire Alarm","fire"], ["/risk", "Risk Assessments","fire"], ["/furnishings", "Soft Furnishings","fire"],
   ["/documents", "Certificates & Documents","fire"], ["/locations", "Locations","shared"], ["/actions", "Actions / Defects","shared"],
   ["/reports", "Reports","fire"], ["/settings", "Settings","shared"],
@@ -281,6 +283,7 @@ export default function App() {
             }
           />
           <Route path="/locations" element={<Locations boot={boot} />} />
+          <Route path="/training" element={<TrainingLog boot={boot} />} />
           <Route path="/reports" element={<Reports />} />
           <Route
             path="/settings"
