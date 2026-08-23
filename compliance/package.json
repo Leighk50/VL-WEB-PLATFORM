@@ -23,6 +23,8 @@
     "create-admin": "node dist-server/create-admin.js",
     "import-fire-alarm-history": "node dist-server/fire-alarm-history-import-cli.js",
     "import-fire-alarm-history:dry-run": "node dist-server/fire-alarm-history-import-cli.js --dry-run",
+    "import-pat-history": "node dist-server/pat-history-import-cli.js",
+    "import-pat-history:dry-run": "node dist-server/pat-history-import-cli.js --dry-run",
     "storage:diagnostic": "node dist-server/storage-diagnostic.js",
     "start": "node dist-server/index.js"
   },
