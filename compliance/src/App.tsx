@@ -44,6 +44,7 @@ import {
   filterRegisterItems,
   mainDashboardCards,
 } from "./dashboard-filters";
+import { formatPatDate, formatPatDueDate } from "./pat-display";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type User = { id:number; name: string; email:string; role: string; venueId:number|null; moduleAccess:ModuleAccess };
@@ -350,6 +351,7 @@ function Register({
   const activeCategory = searchParams.get("category") || "";
   const [items, setItems] = useState<any[]>([]),
     [editing, setEditing] = useState<any | null>(null),
+    [assetPatHistory, setAssetPatHistory] = useState<any[]>([]),
     [duplicateAsset, setDuplicateAsset] = useState<any | null>(null),
     [error, setError] = useState(""),
     [choosingAssetReference, setChoosingAssetReference] = useState(false),
@@ -365,6 +367,11 @@ function Register({
   useEffect(() => {
     void load();
   }, [kind, searchParams.get("record")]);
+  useEffect(() => {
+    if (kind === "assets" && editing?.id)
+      api<any[]>(`/assets/${editing.id}/pat-tests`).then(setAssetPatHistory);
+    else setAssetPatHistory([]);
+  }, [kind, editing?.id]);
   const venueId = Number(boot?.venues[0]?.id || 0);
   const visibleItems = useMemo(
     () => filterRegisterItems(items, kind, activeFilter, activeCategory),
@@ -502,6 +509,19 @@ function Register({
           </form>
           {editing.id && ["assets", "furnishings"].includes(kind) && (
             <PhotoManager entityType={kind} entityId={editing.id} />
+          )}
+          {kind === "assets" && editing.id && (
+            <section className="history" aria-label="PAT test history">
+              <h3>PAT test history</h3>
+              {assetPatHistory.length ? assetPatHistory.map((test) => (
+                <p key={test.id}>
+                  <b className={test.result === "Fail" ? "bad" : ""}>{test.result}</b>
+                  {" · Tested "}{formatPatDate(test.test_date)}
+                  {" · Next PAT due "}{formatPatDueDate(test.next_date)}
+                  {test.notes ? <> · {test.notes}</> : null}
+                </p>
+              )) : <p>No PAT tests recorded.</p>}
+            </section>
           )}
         </section>
       )}
