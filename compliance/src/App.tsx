@@ -507,9 +507,6 @@ function Register({
               <button>Save record</button>
             </div>
           </form>
-          {editing.id && ["assets", "furnishings"].includes(kind) && (
-            <PhotoManager entityType={kind} entityId={editing.id} />
-          )}
           {kind === "assets" && editing.id && (
             <section className="history" aria-label="PAT test history">
               <h3>PAT test history</h3>
@@ -522,6 +519,9 @@ function Register({
                 </p>
               )) : <p>No PAT tests recorded.</p>}
             </section>
+          )}
+          {editing.id && ["assets", "furnishings"].includes(kind) && (
+            <PhotoManager entityType={kind} entityId={editing.id} />
           )}
         </section>
       )}
