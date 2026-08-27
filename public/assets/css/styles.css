@@ -80,3 +80,12 @@ body{overflow-x:hidden}
 .christmas-enquiry-card input,.christmas-enquiry-card textarea{width:100%;padding:13px;margin-top:6px;border:1px solid #cfc3b2;font:inherit}
 .honeypot{position:absolute;left:-9999px}.enquiry-success{background:#edf6ed;border:1px solid #9dbe9d;padding:18px;margin-bottom:20px}.enquiry-error{background:#fff0f0;border:1px solid #cf9999;padding:16px;margin-bottom:20px}
 @media(max-width:900px){.christmas-hero{min-height:500px}.christmas-menu-grid{grid-template-columns:1fr}.christmas-desserts{grid-column:auto}.christmas-course{padding:26px 20px}.christmas-enquiry-card{padding:22px 18px}}
+
+/* Version 2.2.5 Christmas SEO */
+.christmas-seo-intro{background:#fff}
+.christmas-seo-intro .narrow{max-width:900px}
+.christmas-home-link{background:#f5f0e7}
+@media(max-width:900px){
+  .christmas-seo-intro{text-align:left}
+  .christmas-home-link .split{grid-template-columns:1fr}
+}

@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.4",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.5",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -207,11 +207,39 @@ function christmasPage(sent=false,error=""){
  const desserts=[["Steamed Christmas sponge","Brandy cream"],["Winter berry pavlova","Candied pistachios, maple and crème Chantilly"],["Orange, lemon & ginger posset","Strawberries and homemade shortbread"],["Triple chocolate brownie","Chocolate ice cream and chocolate sauce"],["Cheese board","Black Bomber cheddar, Shropshire Blue and Lincolnshire Poacher, figs, grapes and artisan crackers"],["Plum & cinnamon crème brûlée","Shortbread"],["Spiced apple & cranberry crumble","Custard"]];
  const items=a=>a.map(([n,d])=>`<article class="christmas-dish"><h3>${esc(n)}</h3><p>${esc(d)}</p></article>`).join("");
  const note=sent?`<div class="enquiry-success"><h2>Thank you</h2><p>Your enquiry has been sent to our events team.</p></div>`:error?`<div class="enquiry-error">${esc(error)}</div>`:"";
- return shell("Christmas Party Menu | Village Limits Woodhall Spa","Celebrate Christmas at Village Limits in Woodhall Spa. View our Christmas Party Menu and enquire about your preferred date.","/christmas",
- `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas at Village Limits</div><h1>Christmas Party Menu</h1><p>Festive food, good company and memorable celebrations.</p><div class="christmas-price">£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
- <section class="section christmas-menu-section"><div class="container"><div class="christmas-menu-grid"><section class="christmas-course"><h2>Starters</h2>${items(starters)}</section><section class="christmas-course"><h2>Mains</h2>${items(mains)}</section><section class="christmas-course christmas-desserts"><h2>Desserts</h2>${items(desserts)}</section></div></div></section>
- <section id="christmas-enquiry" class="section christmas-enquiry-section"><div class="container split"><div><div class="eyebrow">Plan your celebration</div><h2>Christmas party enquiry</h2><p class="lead">Tell us your preferred date and party size and our events team will contact you.</p></div><div class="christmas-enquiry-card">${note}<form method="post" action="/christmas/enquire"><div class="honeypot"><input name="website" tabindex="-1" autocomplete="off"></div><label>Name<input name="name" required></label><label>Email<input name="email" type="email" required></label><label>Phone number<input name="phone" type="tel" required></label><div class="row-2"><label>Preferred date<input name="preferredDate" type="date" required></label><label>Number in party<input name="partySize" type="number" min="2" max="250" required></label></div><label>Additional information<textarea name="message" rows="4"></textarea></label><button class="btn large" type="submit">Send Christmas Enquiry</button></form></div></div></section>`,
- "index,follow","/assets/images/christmas-festive-hero.jpg")
+ const seoSchema={
+   "@context":"https://schema.org",
+   "@type":["Restaurant","LocalBusiness"],
+   "name":"Village Limits",
+   "url":SITE+"/christmas",
+   "image":SITE+"/assets/images/christmas-festive-hero.jpg",
+   "telephone":"01526 353525",
+   "email":"events@villagelimits.co.uk",
+   "servesCuisine":["British","Modern British"],
+   "priceRange":"££",
+   "address":{
+     "@type":"PostalAddress",
+     "streetAddress":"Village Limits",
+     "addressLocality":"Woodhall Spa",
+     "addressRegion":"Lincolnshire",
+     "postalCode":"LN10 6QH",
+     "addressCountry":"GB"
+   },
+   "areaServed":["Woodhall Spa","Lincolnshire"],
+   "description":"Christmas parties, festive dining and Christmas party menus at Village Limits in Woodhall Spa, Lincolnshire."
+ };
+ return shell(
+   "Christmas Parties Woodhall Spa | Christmas Party Menu | Village Limits",
+   "Book your Christmas party in Woodhall Spa at Village Limits. Festive dining, Christmas party menu, group celebrations and enquiries for parties across Lincolnshire.",
+   "/christmas",
+   `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1><p>Celebrate Christmas at Village Limits in Woodhall Spa, Lincolnshire — perfect for staff parties, family gatherings and festive get-togethers.</p><div class="christmas-price">£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
+   <section class="section christmas-seo-intro"><div class="container narrow"><div class="eyebrow">Christmas at Village Limits</div><h2>Christmas parties and festive dining in Woodhall Spa</h2><p class="lead">Planning a Christmas meal, office Christmas party or festive celebration in Lincolnshire? Village Limits offers a relaxed Christmas party venue in Woodhall Spa with a three-course festive menu, warm hospitality and easy online enquiry.</p><p>Whether you are organising a work Christmas party, a family celebration or a festive meal with friends, our team can help you plan your preferred date and party size.</p></div></section>
+   <section class="section christmas-menu-section"><div class="container"><div class="christmas-menu-grid"><section class="christmas-course"><h2>Starters</h2>${items(starters)}</section><section class="christmas-course"><h2>Mains</h2>${items(mains)}</section><section class="christmas-course christmas-desserts"><h2>Desserts</h2>${items(desserts)}</section></div></div></section>
+   <section id="christmas-enquiry" class="section christmas-enquiry-section"><div class="container split"><div><div class="eyebrow">Plan your celebration</div><h2>Christmas party enquiry</h2><p class="lead">Tell us your preferred date and party size and our events team will contact you.</p><p>Christmas party enquiries are sent directly to <strong>events@villagelimits.co.uk</strong>.</p></div><div class="christmas-enquiry-card">${note}<form method="post" action="/christmas/enquire"><div class="honeypot"><input name="website" tabindex="-1" autocomplete="off"></div><label>Name<input name="name" required></label><label>Email<input name="email" type="email" required></label><label>Phone number<input name="phone" type="tel" required></label><div class="row-2"><label>Preferred date<input name="preferredDate" type="date" required></label><label>Number in party<input name="partySize" type="number" min="2" max="250" required></label></div><label>Additional information<textarea name="message" rows="4"></textarea></label><button class="btn large" type="submit">Send Christmas Enquiry</button></form></div></div></section>`,
+   "index,follow",
+   "/assets/images/christmas-festive-hero.jpg",
+   seoSchema
+ )
 }
 async function christmasEnquiry(req){
  const q=await formBody(req); if(q.website)return;
