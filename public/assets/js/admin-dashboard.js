@@ -60,6 +60,22 @@
     }catch(err){status.textContent=err.message}
   }
 
+  async function testWebsiteEmail(){
+    const btn=$("#testEmailBtn");
+    const status=$("#testEmailStatus");
+    if(!btn||!status)return;
+    btn.disabled=true;
+    status.textContent="Sending test email...";
+    try{
+      const result=await request("/api/admin/test-email",{method:"POST",body:"{}"});
+      status.textContent=result.message||"Test email sent successfully.";
+    }catch(err){
+      status.textContent="Email test failed: "+err.message;
+    }finally{
+      btn.disabled=false;
+    }
+  }
+
   function renderStats() {
     $("#menuCount").textContent = content.menus.filter(m => m.visible).length;
     $("#dishCount").textContent = content.menus.reduce(
@@ -302,6 +318,7 @@
     }
   };
 
+  const testEmailBtn=$("#testEmailBtn"); if(testEmailBtn)testEmailBtn.onclick=testWebsiteEmail;
   const saveEvents = $("#saveEvents");
   if (saveEvents) saveEvents.onclick = () => $("#saveAll").click();
   request("/api/admin/content")

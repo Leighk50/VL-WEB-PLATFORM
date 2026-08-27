@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.3",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.4",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -38,6 +38,31 @@ async function sendChristmasEnquiry(q){
  const r=await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(EVENT_SENDER)}/sendMail`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(payload)});
  if(!r.ok){const details=await r.text();console.error("Christmas enquiry email failed",r.status,details);throw new Error("We could not send your enquiry just now.");}
 }
+async function sendTestEmail(){
+  const token=await graphToken();
+  const payload={
+    message:{
+      subject:"Village Limits Website Email Test",
+      body:{
+        contentType:"Text",
+        content:"This is a test email sent from the Village Limits website through Microsoft Graph. If you received this, the website email configuration is working."
+      },
+      toRecipients:[{emailAddress:{address:EVENT_ENQUIRY_TO}}]
+    },
+    saveToSentItems:true
+  };
+  const r=await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(EVENT_SENDER)}/sendMail`,{
+    method:"POST",
+    headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  });
+  if(!r.ok){
+    const details=await r.text();
+    console.error("Website email test failed",r.status,details);
+    throw new Error(`Microsoft Graph returned ${r.status}: ${details.slice(0,800)}`);
+  }
+}
+
 function json(res,code,b){res.writeHead(code,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(b))}
 function html(res,b,code=200,h={}){res.writeHead(code,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store",...h});res.end(b)}
 function body(req){return new Promise((ok,no)=>{let b="";req.on("data",c=>{b+=c;if(b.length>1e6)no(new Error("Request too large"))});req.on("end",()=>{try{ok(b?JSON.parse(b):{})}catch{no(new Error("Invalid JSON"))}});req.on("error",no)})}
@@ -214,7 +239,16 @@ if(p==="/api/version")return json(res,200,{version:VERSION,build:BUILD,label:"SE
 if(p==="/api/admin/login"&&req.method==="POST"){const b=await body(req),u1=String(b.username??"").trim(),p1=String(b.password??"");if(u1!==USER||p1!==PASS)return json(res,401,{error:"Incorrect username or password"});const t=make();res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end(JSON.stringify({ok:true,token:t}))}
 if(p==="/api/admin/logout"&&req.method==="POST"){res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Set-Cookie":"vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});return res.end('{"ok":true}')}
 if(p==="/api/admin/content"&&req.method==="GET"){if(!valid(req))return json(res,401,{error:"Your admin session is not authorised. Please sign in again."});return json(res,200,read())}
-if(p==="/api/admin/content"&&req.method==="PUT"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});write(await body(req));return json(res,200,{ok:true})}
+if(p==="/api/admin/test-email"&&req.method==="POST"){
+    if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});
+    try{
+      await sendTestEmail();
+      return json(res,200,{ok:true,message:"Test email sent successfully."});
+    }catch(e){
+      return json(res,500,{ok:false,error:e.message});
+    }
+  }
+  if(p==="/api/admin/content"&&req.method==="PUT"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});write(await body(req));return json(res,200,{ok:true})}
 if(p==="/api/admin/upload-image"&&req.method==="POST"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});const payload=await largeBody(req);const url=saveUploadedImage(payload);return json(res,200,{ok:true,url})}
 if(p.startsWith("/uploads/"))return uploadFile(p.slice(9),res); if(p==="/")return html(res,home()); if(p==="/eat")return html(res,eat()); if(p.startsWith("/menu/"))return html(res,menu(p.slice(6))); if(p==="/stay")return html(res,stay()); if(p==="/whats-on")return html(res,events());if(p==="/api/christmas-email-health"&&req.method==="GET")return json(res,200,{configured:Boolean(MS_TENANT_ID&&MS_CLIENT_ID&&MS_CLIENT_SECRET),sender:EVENT_SENDER,recipient:EVENT_ENQUIRY_TO,tenant:Boolean(MS_TENANT_ID),client:Boolean(MS_CLIENT_ID),secret:Boolean(MS_CLIENT_SECRET)});if(p==="/christmas"&&req.method==="GET")return html(res,christmasPage(new URL(req.url,"http://localhost").searchParams.get("sent")==="1"));if(p==="/christmas/enquire"&&req.method==="POST"){try{await christmasEnquiry(req);res.writeHead(303,{"Location":"/christmas?sent=1#christmas-enquiry"});return res.end()}catch(e){return html(res,christmasPage(false,e.message),400)}} if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
 if(p==="/admin/login"&&req.method==="POST"){const b=await formBody(req);const suppliedUser=String(b.username??"").trim(),suppliedPass=String(b.password??"");if(suppliedUser!==USER||suppliedPass!==PASS){res.writeHead(303,{"Location":"/admin?error=1","Cache-Control":"no-store"});return res.end()}const t=make();res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end()}
