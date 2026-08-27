@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.1",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.2",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -186,7 +186,7 @@ function christmasPage(sent=false,error=""){
  `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas at Village Limits</div><h1>Christmas Party Menu</h1><p>Festive food, good company and memorable celebrations.</p><div class="christmas-price">£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
  <section class="section christmas-menu-section"><div class="container"><div class="christmas-menu-grid"><section class="christmas-course"><h2>Starters</h2>${items(starters)}</section><section class="christmas-course"><h2>Mains</h2>${items(mains)}</section><section class="christmas-course christmas-desserts"><h2>Desserts</h2>${items(desserts)}</section></div></div></section>
  <section id="christmas-enquiry" class="section christmas-enquiry-section"><div class="container split"><div><div class="eyebrow">Plan your celebration</div><h2>Christmas party enquiry</h2><p class="lead">Tell us your preferred date and party size and our events team will contact you.</p></div><div class="christmas-enquiry-card">${note}<form method="post" action="/christmas/enquire"><div class="honeypot"><input name="website" tabindex="-1" autocomplete="off"></div><label>Name<input name="name" required></label><label>Email<input name="email" type="email" required></label><label>Phone number<input name="phone" type="tel" required></label><div class="row-2"><label>Preferred date<input name="preferredDate" type="date" required></label><label>Number in party<input name="partySize" type="number" min="2" max="250" required></label></div><label>Additional information<textarea name="message" rows="4"></textarea></label><button class="btn large" type="submit">Send Christmas Enquiry</button></form></div></div></section>`,
- "index,follow","/assets/images/event.webp")
+ "index,follow","/assets/images/christmas-hero.png")
 }
 async function christmasEnquiry(req){
  const q=await formBody(req); if(q.website)return;
