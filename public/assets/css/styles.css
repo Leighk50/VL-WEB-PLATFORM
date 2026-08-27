@@ -64,7 +64,7 @@ body{overflow-x:hidden}
 }
 
 /* Version 2.2.0 Christmas page */
-.christmas-hero{min-height:620px;display:flex;align-items:center;color:#fff;background:linear-gradient(90deg,rgba(5,8,7,.88),rgba(5,8,7,.35)),url('/assets/images/christmas-hero.png') center/cover no-repeat}
+.christmas-hero{min-height:620px;display:flex;align-items:center;color:#fff;background:linear-gradient(90deg,rgba(5,8,7,.88),rgba(5,8,7,.35)),url('/assets/images/christmas-festive-hero.jpg') center/cover no-repeat}
 .christmas-hero-copy{padding:70px 0;max-width:760px}
 .christmas-hero h1{font-size:clamp(3.6rem,8vw,7rem);line-height:.94}
 .christmas-price{font:500 2.2rem Georgia,serif;color:#e7bd72;margin:22px 0}
