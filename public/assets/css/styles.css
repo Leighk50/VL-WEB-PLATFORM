@@ -89,3 +89,53 @@ body{overflow-x:hidden}
   .christmas-seo-intro{text-align:left}
   .christmas-home-link .split{grid-template-columns:1fr}
 }
+
+/* Version 2.3.0 Afternoon Tea */
+.tea-hero{
+  min-height:650px;
+  display:flex;
+  align-items:center;
+  color:#fff;
+  background:
+    linear-gradient(90deg,rgba(10,8,6,.82),rgba(10,8,6,.24)),
+    url('/assets/images/afternoon-tea/afternoon-tea-tiered-cakes.jpg') center/cover no-repeat;
+}
+.tea-hero-copy{padding:80px 0;max-width:780px}
+.tea-hero h1{font-size:clamp(3.5rem,7.5vw,7rem);line-height:.94}
+.tea-hero p{font-size:1.2rem;max-width:650px}
+.tea-price,.tea-main-price{font:500 2rem Georgia,serif;color:#bd8b3a;margin:20px 0}
+.tea-intro{background:#fff}
+.tea-feature-image{width:100%;height:480px;object-fit:cover}
+.tea-menu-section{background:#10100f;color:#fff}
+.tea-menu-head{text-align:center;max-width:800px;margin:0 auto 45px}
+.tea-menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.tea-course{border:1px solid rgba(189,139,58,.45);padding:34px}
+.tea-course h2{color:#d7a64d}
+.tea-course p{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+.tea-packages{background:#f5f0e7}
+.tea-package-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.tea-package-grid>div{background:#fff;border:1px solid #ddd2c2;text-align:center;padding:30px 15px}
+.tea-package-grid h3{font-size:1.5rem}
+.tea-package-grid strong{display:block;font:500 2rem Georgia,serif;color:#bd8b3a}
+.tea-package-grid small{display:block;margin-top:6px}
+.tea-premium{background:#fff}
+.tea-gallery{padding-top:0}
+.tea-gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.tea-gallery-grid img{width:100%;height:330px;object-fit:cover}
+.tea-enquiry{background:#f5f0e7}
+.christmas-enquiry-card select{
+  display:block;
+  width:100%;
+  padding:13px;
+  margin-top:7px;
+  border:1px solid #cfc3b2;
+  font:inherit;
+  background:#fff;
+}
+.tea-check{display:flex!important;gap:10px;align-items:flex-start}
+.tea-check input{width:auto!important;margin-top:4px!important}
+@media(max-width:900px){
+  .tea-hero{min-height:520px}
+  .tea-menu-grid,.tea-package-grid,.tea-gallery-grid{grid-template-columns:1fr}
+  .tea-feature-image{height:auto}
+}
