@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.1",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.2",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -257,101 +257,74 @@ function afternoonTeaPage(sent=false,error=""){
 
   return shell(
     "Afternoon Tea Woodhall Spa | Village Limits",
-    "Enjoy Afternoon Tea in Woodhall Spa at Village Limits from &pound;27.50 per person, with G&T, Prosecco and Champagne options. Enquire online.",
+    "Afternoon Tea in Woodhall Spa from £27.50 at Village Limits, with G&T, Prosecco and Champagne options. Enquire online.",
     "/afternoon-tea",
     `
-    <section class="tea-hero">
-      <div class="container tea-hero-copy">
-        <div class="eyebrow">Afternoon Tea in Woodhall Spa</div>
-        <h1>Afternoon Tea<br>at Village Limits</h1>
-        <p>Handmade savouries, freshly prepared sandwiches, indulgent sweet treats and traditional British scones.</p>
-        <div class="tea-price">From &pound;27.50 per person</div>
+    <section class="tea2-hero">
+      <div class="tea2-hero-copy">
+        <div class="eyebrow">Afternoon Tea &middot; Woodhall Spa</div>
+        <h1>Afternoon Tea</h1>
+        <div class="tea2-script">At Village Limits</div>
+        <div class="tea2-rule"></div>
+        <p>Enjoy a delightful selection of handmade savouries, freshly prepared sandwiches, indulgent pastries and cakes, and warm British scones with Cornish clotted cream and strawberry preserve.</p>
+        <div class="tea2-icons">
+          <span>Fine teas &amp;<br>fresh coffee</span>
+          <span>British<br>scones</span>
+          <span>Handmade<br>sweet treats</span>
+          <span>Make it<br>special</span>
+        </div>
         <a class="btn large" href="#tea-enquiry">Enquire now</a>
       </div>
-    </section>
-
-    <section class="section tea-intro">
-      <div class="container split">
-        <div>
-          <div class="eyebrow">A little time well spent</div>
-          <h2>Made for sharing</h2>
-          <p class="lead">Join us for a generous Afternoon Tea in Woodhall Spa, whether you are celebrating a birthday, gathering with friends or simply treating yourselves.</p>
-        </div>
-        <img class="tea-feature-image" src="/assets/images/afternoon-tea/afternoon-tea-scones-eton-mess.jpg" alt="Afternoon Tea with homemade scones, cakes and Eton mess at Village Limits Woodhall Spa">
+      <div class="tea2-hero-image">
+        <img src="/assets/images/afternoon-tea/hero-clean.jpg" alt="Afternoon Tea stand with cakes, scones and pastries at Village Limits">
       </div>
     </section>
 
-    <section class="section tea-menu-section">
+    <section class="section tea2-menu">
       <div class="container">
-        <div class="tea-menu-head">
-          <div class="eyebrow">The Menu</div>
+        <div class="tea2-menu-head">
+          <div class="eyebrow">The menu</div>
           <h2>Village Limits Afternoon Tea</h2>
-          <div class="tea-main-price">&pound;27.50 per person</div>
+          <div class="tea2-price">&pound;27.50 per person</div>
         </div>
-
-        <div class="tea-menu-grid">
-          <div class="tea-course">
-            <h2>Savouries</h2>
-            <p>No Limits sausage rolls</p>
-            <p>Limits Scotch egg</p>
-            <p>Caramelised onion, feta &amp; spinach quiche</p>
-          </div>
-
-          <div class="tea-course">
-            <h2>Sandwiches</h2>
-            <p>Smoked salmon, cream cheese, dill &amp; lemon on malted bread</p>
-            <p>Tuna mayonnaise &amp; cucumber on white bloomer</p>
-            <p>Free-range egg mayonnaise &amp; British watercress on white bloomer</p>
-            <p>Home-cooked ham &amp; English mustard on malted bread</p>
-          </div>
-
-          <div class="tea-course">
-            <h2>Pastries &amp; Cakes</h2>
-            <p>Passion fruit, white chocolate &amp; vanilla cheesecake</p>
-            <p>Mini Eton mess with summer strawberries, coulis &amp; meringue</p>
-            <p>British scones with Cornish clotted cream &amp; strawberry preserve</p>
-          </div>
+        <div class="tea2-menu-grid">
+          <article><h3>Savouries</h3><p>No Limits sausage rolls</p><p>Limits Scotch egg</p><p>Caramelised onion, feta &amp; spinach quiche</p></article>
+          <article><h3>Sandwiches</h3><p>Smoked salmon, cream cheese, dill &amp; lemon on malted bread</p><p>Tuna mayonnaise &amp; cucumber on white bloomer</p><p>Free-range egg mayonnaise &amp; British watercress on white bloomer</p><p>Home-cooked ham &amp; English mustard on malted bread</p></article>
+          <article><h3>Pastries &amp; Cakes</h3><p>Passion fruit, white chocolate &amp; vanilla cheesecake</p><p>Mini Eton mess with summer strawberries, coulis &amp; meringue</p><p>British scones with Cornish clotted cream &amp; strawberry preserve</p></article>
         </div>
       </div>
     </section>
 
-    <section class="section tea-packages">
-      <div class="container">
-        <div class="tea-menu-head">
-          <div class="eyebrow">Make it a celebration</div>
-          <h2>Choose your Afternoon Tea</h2>
-        </div>
-
-        <div class="tea-package-grid">
-          <div><h3>Classic</h3><strong>&pound;27.50</strong></div>
-          <div><h3>G&amp;T</h3><strong>&pound;33.50</strong><small>125ml equivalent serve</small></div>
-          <div><h3>Prosecco</h3><strong>&pound;33.50</strong><small>125ml glass</small></div>
-          <div><h3>Champagne</h3><strong>&pound;39.50</strong><small>125ml glass</small></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section tea-premium">
-      <div class="container split">
-        <img class="tea-feature-image" src="/assets/images/afternoon-tea/afternoon-tea-canapes-table.jpg" alt="Afternoon Tea savouries and canap&eacute;s at Village Limits">
+    <section class="section tea2-premium">
+      <div class="container tea2-premium-grid">
+        <img src="/assets/images/afternoon-tea/canapes-clean.jpg" alt="Premium Afternoon Tea canapés">
         <div>
           <div class="eyebrow">For parties of 8 or more</div>
           <h2>Premium Canap&eacute; Selection</h2>
-          <div class="tea-main-price">+&pound;6 per person</div>
-          <p>Smoked salmon blini</p>
-          <p>Devilled eggs</p>
-          <p>Beetroot hummus &amp; cracker</p>
-          <p>Butterflied king prawns</p>
+          <div class="tea2-price">+&pound;6 per person</div>
+          <div class="tea2-canapes">
+            <span>Smoked salmon blini</span>
+            <span>Devilled eggs</span>
+            <span>Beetroot hummus &amp; cracker</span>
+            <span>Butterflied king prawns</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section tea-gallery">
+    <section class="section tea2-packages">
       <div class="container">
-        <div class="tea-gallery-grid">
-          <img src="/assets/images/afternoon-tea/afternoon-tea-tiered-cakes.jpg" alt="Tiered Afternoon Tea cakes at Village Limits">
-          <img src="/assets/images/afternoon-tea/afternoon-tea-savouries-table.jpg" alt="Afternoon Tea savouries at Village Limits">
-          <img src="/assets/images/afternoon-tea/afternoon-tea-party-table.jpg" alt="Afternoon Tea celebration at Village Limits">
+        <div class="tea2-package-grid">
+          <article><img src="/assets/images/afternoon-tea/classic-clean.jpg" alt="Classic Afternoon Tea"><h3>Classic Afternoon Tea</h3><strong>&pound;27.50</strong><small>per person</small></article>
+          <article><img src="/assets/images/afternoon-tea/gt-clean.jpg" alt="G and T Afternoon Tea"><h3>G&amp;T Afternoon Tea</h3><strong>&pound;33.50</strong><small>per person</small></article>
+          <article><img src="/assets/images/afternoon-tea/prosecco-clean.jpg" alt="Prosecco Afternoon Tea"><h3>Prosecco Afternoon Tea</h3><strong>&pound;33.50</strong><small>125ml glass</small></article>
+          <article><img src="/assets/images/afternoon-tea/champagne-clean.jpg" alt="Champagne Afternoon Tea"><h3>Champagne Afternoon Tea</h3><strong>&pound;39.50</strong><small>125ml glass</small></article>
+        </div>
+        <div class="tea2-facts">
+          <span>Parties of 2 to 40</span>
+          <span>Booking essential</span>
+          <span>Dietary requirements catered for</span>
+          <span>Woodhall Spa, Lincolnshire</span>
         </div>
       </div>
     </section>
@@ -361,40 +334,30 @@ function afternoonTeaPage(sent=false,error=""){
         <div>
           <div class="eyebrow">Plan your Afternoon Tea</div>
           <h2>Make an enquiry</h2>
-          <p class="lead">Tell us when you would like to visit and our events team will contact you to confirm availability.</p>
+          <p class="lead">Tell us your preferred date, time and party size and our events team will contact you to confirm availability.</p>
         </div>
-
         <div class="christmas-enquiry-card">
           ${note}
           <form method="post" action="/afternoon-tea/enquire">
             <label>Name<input name="name" required></label>
             <label>Email<input name="email" type="email" required></label>
             <label>Phone number<input name="phone" type="tel" required></label>
-
             <div class="row-2">
               <label>Preferred date<input name="preferredDate" type="date" required></label>
               <label>Preferred time<input name="preferredTime" type="time" required></label>
             </div>
-
-            <label>Number in party<input name="partySize" type="number" min="2" max="100" required></label>
-
+            <label>Number in party<input name="partySize" type="number" min="2" max="40" required></label>
             <label>Afternoon Tea package
               <select name="packageName" required>
-                <option value="Classic Afternoon Tea - &pound;27.50">Classic Afternoon Tea &mdash; &pound;27.50</option>
-                <option value="G&T Afternoon Tea - &pound;33.50">G&amp;T Afternoon Tea &mdash; &pound;33.50</option>
-                <option value="Prosecco Afternoon Tea - &pound;33.50">Prosecco Afternoon Tea &mdash; &pound;33.50</option>
-                <option value="Champagne Afternoon Tea - &pound;39.50">Champagne Afternoon Tea &mdash; &pound;39.50</option>
+                <option value="Classic Afternoon Tea - £27.50">Classic Afternoon Tea &mdash; &pound;27.50</option>
+                <option value="G&T Afternoon Tea - £33.50">G&amp;T Afternoon Tea &mdash; &pound;33.50</option>
+                <option value="Prosecco Afternoon Tea - £33.50">Prosecco Afternoon Tea &mdash; &pound;33.50</option>
+                <option value="Champagne Afternoon Tea - £39.50">Champagne Afternoon Tea &mdash; &pound;39.50</option>
               </select>
             </label>
-
-            <label class="tea-check">
-              <input type="checkbox" name="canapes" value="yes">
-              Add Premium Canap&eacute; Selection (+&pound;6 pp, parties of 8+)
-            </label>
-
+            <label class="tea-check"><input type="checkbox" name="canapes" value="yes"> Add Premium Canap&eacute; Selection (+&pound;6 pp, parties of 8+)</label>
             <label>Dietary requirements / allergens<textarea name="dietary" rows="3"></textarea></label>
             <label>Additional information<textarea name="message" rows="4"></textarea></label>
-
             <button class="btn large" type="submit">Send Afternoon Tea Enquiry</button>
           </form>
         </div>
@@ -402,7 +365,7 @@ function afternoonTeaPage(sent=false,error=""){
     </section>
     `,
     "index,follow",
-    "/assets/images/afternoon-tea/afternoon-tea-scones-eton-mess.jpg"
+    "/assets/images/afternoon-tea/hero-clean.jpg"
   );
 }
 

@@ -139,3 +139,79 @@ body{overflow-x:hidden}
   .tea-menu-grid,.tea-package-grid,.tea-gallery-grid{grid-template-columns:1fr}
   .tea-feature-image{height:auto}
 }
+
+/* Version 2.3.2 Afternoon Tea redesign */
+.tea2-hero{display:grid;grid-template-columns:42% 58%;min-height:650px;background:#fff}
+.tea2-hero-copy{padding:70px 7vw;display:flex;flex-direction:column;justify-content:center}
+.tea2-hero-copy h1{font-size:clamp(3.5rem,6vw,6.6rem);line-height:.95;margin:10px 0 0}
+.tea2-script{font:italic 2.7rem Georgia,serif;color:#c78d2b;margin:0 0 20px 60px}
+.tea2-rule{height:1px;background:#d6a54d;width:80%;margin:10px 0 24px}
+.tea2-hero-copy>p{font:1.12rem/1.7 Georgia,serif;max-width:620px}
+.tea2-hero-image img{width:100%;height:100%;object-fit:cover;display:block}
+.tea2-icons{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;text-transform:uppercase;font-size:.75rem;margin:28px 0}
+.tea2-menu{background:#fff}
+.tea2-menu-head{text-align:center;max-width:800px;margin:0 auto 35px}
+.tea2-price{font:500 1.9rem Georgia,serif;color:#c78d2b;margin:14px 0}
+.tea2-menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.tea2-menu-grid article{padding:30px;border-top:2px solid #d6a54d;background:#faf8f4}
+.tea2-menu-grid h3{font-size:1.7rem;margin-bottom:20px}
+.tea2-menu-grid p{margin:0;padding:9px 0;border-bottom:1px solid #e6dfd4}
+.tea2-premium{background:#faf8f4}
+.tea2-premium-grid{display:grid;grid-template-columns:46% 54%;gap:48px;align-items:center}
+.tea2-premium-grid img{width:100%;height:390px;object-fit:cover}
+.tea2-canapes{display:grid;grid-template-columns:1fr 1fr;gap:18px 32px;margin-top:20px}
+.tea2-canapes span:before{content:"✓";color:#c78d2b;margin-right:10px}
+.tea2-packages{background:#fff;padding-top:20px}
+.tea2-package-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tea2-package-grid article{text-align:center}
+.tea2-package-grid img{width:100%;height:190px;object-fit:cover}
+.tea2-package-grid h3{font-size:1rem;text-transform:uppercase;margin:15px 0 6px}
+.tea2-package-grid strong{display:block;font:500 1.4rem Georgia,serif}
+.tea2-package-grid small{display:block}
+.tea2-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;text-transform:uppercase;font-size:.8rem;border-top:1px solid #e5dccf;margin-top:35px;padding-top:25px}
+@media(max-width:900px){
+  .tea2-hero,.tea2-premium-grid{grid-template-columns:1fr}
+  .tea2-hero-copy{padding:45px 24px}
+  .tea2-hero-image img{height:420px}
+  .tea2-menu-grid,.tea2-package-grid,.tea2-facts,.tea2-canapes{grid-template-columns:1fr}
+  .tea2-package-grid img{height:auto}
+  .tea2-icons{grid-template-columns:1fr 1fr}
+}
+
+/* Version 2.3.2 Afternoon Tea redesign */
+.tea2-hero{display:grid;grid-template-columns:42% 58%;min-height:650px;background:#fff}
+.tea2-hero-copy{padding:70px 7vw;display:flex;flex-direction:column;justify-content:center}
+.tea2-hero-copy h1{font-size:clamp(3.5rem,6vw,6.6rem);line-height:.95;margin:10px 0 0}
+.tea2-script{font:italic 2.7rem Georgia,serif;color:#c78d2b;margin:0 0 20px 60px}
+.tea2-rule{height:1px;background:#d6a54d;width:80%;margin:10px 0 24px}
+.tea2-hero-copy>p{font:1.12rem/1.7 Georgia,serif;max-width:620px}
+.tea2-hero-image img{width:100%;height:100%;object-fit:cover;display:block}
+.tea2-icons{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;text-transform:uppercase;font-size:.75rem;margin:28px 0}
+.tea2-menu{background:#fff}
+.tea2-menu-head{text-align:center;max-width:800px;margin:0 auto 35px}
+.tea2-price{font:500 1.9rem Georgia,serif;color:#c78d2b;margin:14px 0}
+.tea2-menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.tea2-menu-grid article{padding:30px;border-top:2px solid #d6a54d;background:#faf8f4}
+.tea2-menu-grid h3{font-size:1.7rem;margin-bottom:20px}
+.tea2-menu-grid p{margin:0;padding:9px 0;border-bottom:1px solid #e6dfd4}
+.tea2-premium{background:#faf8f4}
+.tea2-premium-grid{display:grid;grid-template-columns:46% 54%;gap:48px;align-items:center}
+.tea2-premium-grid img{width:100%;height:390px;object-fit:cover}
+.tea2-canapes{display:grid;grid-template-columns:1fr 1fr;gap:18px 32px;margin-top:20px}
+.tea2-canapes span:before{content:"✓";color:#c78d2b;margin-right:10px}
+.tea2-packages{background:#fff;padding-top:20px}
+.tea2-package-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tea2-package-grid article{text-align:center}
+.tea2-package-grid img{width:100%;height:190px;object-fit:cover}
+.tea2-package-grid h3{font-size:1rem;text-transform:uppercase;margin:15px 0 6px}
+.tea2-package-grid strong{display:block;font:500 1.4rem Georgia,serif}
+.tea2-package-grid small{display:block}
+.tea2-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;text-transform:uppercase;font-size:.8rem;border-top:1px solid #e5dccf;margin-top:35px;padding-top:25px}
+@media(max-width:900px){
+  .tea2-hero,.tea2-premium-grid{grid-template-columns:1fr}
+  .tea2-hero-copy{padding:45px 24px}
+  .tea2-hero-image img{height:420px}
+  .tea2-menu-grid,.tea2-package-grid,.tea2-facts,.tea2-canapes{grid-template-columns:1fr}
+  .tea2-package-grid img{height:auto}
+  .tea2-icons{grid-template-columns:1fr 1fr}
+}
