@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.0",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.1",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -50,7 +50,7 @@ async function sendAfternoonTeaEnquiry(q){
     `Preferred time: ${q.preferredTime}`,
     `Number in party: ${q.partySize}`,
     `Package: ${q.packageName}`,
-    `Premium canapÃ© selection: ${q.canapes?"Yes":"No"}`,
+    `Premium canap&eacute; selection: ${q.canapes?"Yes":"No"}`,
     q.dietary?`Dietary requirements / allergens: ${q.dietary}`:"",
     q.message?`Additional information: ${q.message}`:""
   ].filter(Boolean).join("\n");
@@ -257,7 +257,7 @@ function afternoonTeaPage(sent=false,error=""){
 
   return shell(
     "Afternoon Tea Woodhall Spa | Village Limits",
-    "Enjoy Afternoon Tea in Woodhall Spa at Village Limits from Â£27.50 per person, with G&T, Prosecco and Champagne options. Enquire online.",
+    "Enjoy Afternoon Tea in Woodhall Spa at Village Limits from &pound;27.50 per person, with G&T, Prosecco and Champagne options. Enquire online.",
     "/afternoon-tea",
     `
     <section class="tea-hero">
@@ -333,10 +333,10 @@ function afternoonTeaPage(sent=false,error=""){
 
     <section class="section tea-premium">
       <div class="container split">
-        <img class="tea-feature-image" src="/assets/images/afternoon-tea/afternoon-tea-canapes-table.jpg" alt="Afternoon Tea savouries and canapÃ©s at Village Limits">
+        <img class="tea-feature-image" src="/assets/images/afternoon-tea/afternoon-tea-canapes-table.jpg" alt="Afternoon Tea savouries and canap&eacute;s at Village Limits">
         <div>
           <div class="eyebrow">For parties of 8 or more</div>
-          <h2>Premium CanapÃ© Selection</h2>
+          <h2>Premium Canap&eacute; Selection</h2>
           <div class="tea-main-price">+&pound;6 per person</div>
           <p>Smoked salmon blini</p>
           <p>Devilled eggs</p>
@@ -380,16 +380,16 @@ function afternoonTeaPage(sent=false,error=""){
 
             <label>Afternoon Tea package
               <select name="packageName" required>
-                <option value="Classic Afternoon Tea - Â£27.50">Classic Afternoon Tea â€” Â£27.50</option>
-                <option value="G&T Afternoon Tea - Â£33.50">G&amp;T Afternoon Tea â€” Â£33.50</option>
-                <option value="Prosecco Afternoon Tea - Â£33.50">Prosecco Afternoon Tea â€” Â£33.50</option>
-                <option value="Champagne Afternoon Tea - Â£39.50">Champagne Afternoon Tea â€” Â£39.50</option>
+                <option value="Classic Afternoon Tea - &pound;27.50">Classic Afternoon Tea &mdash; &pound;27.50</option>
+                <option value="G&T Afternoon Tea - &pound;33.50">G&amp;T Afternoon Tea &mdash; &pound;33.50</option>
+                <option value="Prosecco Afternoon Tea - &pound;33.50">Prosecco Afternoon Tea &mdash; &pound;33.50</option>
+                <option value="Champagne Afternoon Tea - &pound;39.50">Champagne Afternoon Tea &mdash; &pound;39.50</option>
               </select>
             </label>
 
             <label class="tea-check">
               <input type="checkbox" name="canapes" value="yes">
-              Add Premium CanapÃ© Selection (+Â£6 pp, parties of 8+)
+              Add Premium Canap&eacute; Selection (+&pound;6 pp, parties of 8+)
             </label>
 
             <label>Dietary requirements / allergens<textarea name="dietary" rows="3"></textarea></label>
@@ -438,7 +438,7 @@ async function afternoonTeaEnquiry(req){
   }
 
   if(canapes&&partySize<8){
-    throw new Error("The Premium CanapÃ© Selection is available for parties of 8 or more.");
+    throw new Error("The Premium Canap&eacute; Selection is available for parties of 8 or more.");
   }
 
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
@@ -453,9 +453,9 @@ async function afternoonTeaEnquiry(req){
 }
 
 function christmasPage(sent=false,error=""){
- const starters=[["Winter carrot & ginger soup","Pumpkin seed, toasted sourdough"],["Taste of the sea","Hot smoked salmon, smoked mackerel, prawns in Marie Rose sauce, lumpfish caviar, horseradish and artisan crackers"],["Chicken liver parfait","Caramelised onions, cranberry chutney, mixed leaf salad and toasted sourdough"],["Baked camembert","Filo pastry, hot truffle honey, candied cashews and toasted sourdough (+Ã‚Â£2.50 per portion)"],["Sweetcorn ribs","Cajun seasoning, chipotle mayo and lime"],["Pan-fried Argentinian shrimp","CafÃƒÂ© de Paris butter and grilled artisan flatbread"],["Chestnut & wild mushrooms","Garlic and herb butter on toasted sourdough"]];
- const mains=[["Braised beef short rib","Creamed mash, green beans in confit shallot and red wine jus"],["Turkey schnitzel","Honey-glazed pigs in blankets, cranberry, chips and gravy"],["Flat iron steak","Dauphinoise potato, green beans in confit shallots and peppercorn sauce"],["Pan-seared pork chop","Celeriac purÃƒÂ©e, braised red cabbage, tenderstem broccoli, cider and sage jus"],["Village Limits festive pie","Turkey, stuffing and cranberry pie, creamed mash and seasonal vegetables"],["Baked heritage carrots","Beetroot hummus, braised lentils, kale pesto and toasted seeds"],["Pan-roasted halibut","Samphire, shrimp, artichoke and lemon butter herb sauce"]];
- const desserts=[["Steamed Christmas sponge","Brandy cream"],["Winter berry pavlova","Candied pistachios, maple and crÃƒÂ¨me Chantilly"],["Orange, lemon & ginger posset","Strawberries and homemade shortbread"],["Triple chocolate brownie","Chocolate ice cream and chocolate sauce"],["Cheese board","Black Bomber cheddar, Shropshire Blue and Lincolnshire Poacher, figs, grapes and artisan crackers"],["Plum & cinnamon crÃƒÂ¨me brÃƒÂ»lÃƒÂ©e","Shortbread"],["Spiced apple & cranberry crumble","Custard"]];
+ const starters=[["Winter carrot & ginger soup","Pumpkin seed, toasted sourdough"],["Taste of the sea","Hot smoked salmon, smoked mackerel, prawns in Marie Rose sauce, lumpfish caviar, horseradish and artisan crackers"],["Chicken liver parfait","Caramelised onions, cranberry chutney, mixed leaf salad and toasted sourdough"],["Baked camembert","Filo pastry, hot truffle honey, candied cashews and toasted sourdough (+Ã‚&pound;2.50 per portion)"],["Sweetcorn ribs","Cajun seasoning, chipotle mayo and lime"],["Pan-fried Argentinian shrimp","CafÃƒ© de Paris butter and grilled artisan flatbread"],["Chestnut & wild mushrooms","Garlic and herb butter on toasted sourdough"]];
+ const mains=[["Braised beef short rib","Creamed mash, green beans in confit shallot and red wine jus"],["Turkey schnitzel","Honey-glazed pigs in blankets, cranberry, chips and gravy"],["Flat iron steak","Dauphinoise potato, green beans in confit shallots and peppercorn sauce"],["Pan-seared pork chop","Celeriac purÃƒ©e, braised red cabbage, tenderstem broccoli, cider and sage jus"],["Village Limits festive pie","Turkey, stuffing and cranberry pie, creamed mash and seasonal vegetables"],["Baked heritage carrots","Beetroot hummus, braised lentils, kale pesto and toasted seeds"],["Pan-roasted halibut","Samphire, shrimp, artichoke and lemon butter herb sauce"]];
+ const desserts=[["Steamed Christmas sponge","Brandy cream"],["Winter berry pavlova","Candied pistachios, maple and crÃƒ¨me Chantilly"],["Orange, lemon & ginger posset","Strawberries and homemade shortbread"],["Triple chocolate brownie","Chocolate ice cream and chocolate sauce"],["Cheese board","Black Bomber cheddar, Shropshire Blue and Lincolnshire Poacher, figs, grapes and artisan crackers"],["Plum & cinnamon crÃƒ¨me brÃƒ»lÃƒ©e","Shortbread"],["Spiced apple & cranberry crumble","Custard"]];
  const items=a=>a.map(([n,d])=>`<article class="christmas-dish"><h3>${esc(n)}</h3><p>${esc(d)}</p></article>`).join("");
  const note=sent?`<div class="enquiry-success"><h2>Thank you</h2><p>Your enquiry has been sent to our events team.</p></div>`:error?`<div class="enquiry-error">${esc(error)}</div>`:"";
  const seoSchema={
@@ -467,7 +467,7 @@ function christmasPage(sent=false,error=""){
    "telephone":"01526 353525",
    "email":"events@villagelimits.co.uk",
    "servesCuisine":["British","Modern British"],
-   "priceRange":"Ã‚Â£Ã‚Â£",
+   "priceRange":"Ã‚&pound;Ã‚&pound;",
    "address":{
      "@type":"PostalAddress",
      "streetAddress":"Village Limits",
@@ -483,7 +483,7 @@ function christmasPage(sent=false,error=""){
    "Christmas Parties Woodhall Spa | Christmas Party Menu | Village Limits",
    "Book your Christmas party in Woodhall Spa at Village Limits. Festive dining, Christmas party menu, group celebrations and enquiries for parties across Lincolnshire.",
    "/christmas",
-   `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1><p>Celebrate Christmas at Village Limits in Woodhall Spa, Lincolnshire Ã¢â‚¬â€ perfect for staff parties, family gatherings and festive get-togethers.</p><div class="christmas-price">Ã‚Â£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
+   `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1><p>Celebrate Christmas at Village Limits in Woodhall Spa, Lincolnshire Ã¢â‚¬&rdquo; perfect for staff parties, family gatherings and festive get-togethers.</p><div class="christmas-price">Ã‚&pound;35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
    <section class="section christmas-seo-intro"><div class="container narrow"><div class="eyebrow">Christmas at Village Limits</div><h2>Christmas parties and festive dining in Woodhall Spa</h2><p class="lead">Planning a Christmas meal, office Christmas party or festive celebration in Lincolnshire? Village Limits offers a relaxed Christmas party venue in Woodhall Spa with a three-course festive menu, warm hospitality and easy online enquiry.</p><p>Whether you are organising a work Christmas party, a family celebration or a festive meal with friends, our team can help you plan your preferred date and party size.</p></div></section>
    <section class="section christmas-menu-section"><div class="container"><div class="christmas-menu-grid"><section class="christmas-course"><h2>Starters</h2>${items(starters)}</section><section class="christmas-course"><h2>Mains</h2>${items(mains)}</section><section class="christmas-course christmas-desserts"><h2>Desserts</h2>${items(desserts)}</section></div></div></section>
    <section id="christmas-enquiry" class="section christmas-enquiry-section"><div class="container split"><div><div class="eyebrow">Plan your celebration</div><h2>Christmas party enquiry</h2><p class="lead">Tell us your preferred date and party size and our events team will contact you.</p><p>Christmas party enquiries are sent directly to <strong>events@villagelimits.co.uk</strong>.</p></div><div class="christmas-enquiry-card">${note}<form method="post" action="/christmas/enquire"><div class="honeypot"><input name="website" tabindex="-1" autocomplete="off"></div><label>Name<input name="name" required></label><label>Email<input name="email" type="email" required></label><label>Phone number<input name="phone" type="tel" required></label><div class="row-2"><label>Preferred date<input name="preferredDate" type="date" required></label><label>Number in party<input name="partySize" type="number" min="2" max="250" required></label></div><label>Additional information<textarea name="message" rows="4"></textarea></label><button class="btn large" type="submit">Send Christmas Enquiry</button></form></div></div></section>`,
