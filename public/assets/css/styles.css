@@ -178,6 +178,25 @@ body{overflow-x:hidden}
   .tea2-icons{grid-template-columns:1fr 1fr}
 }
 
+/* Version 2.3.3 contact and private event enquiries */
+.enquiry-form-card h2{font-size:clamp(2rem,4vw,3rem)}
+.enquiry-form-card form{margin-top:24px}
+.enquiry-form-card label{line-height:1.4}
+.enquiry-form-card input,.enquiry-form-card select,.enquiry-form-card textarea{min-height:50px;border-radius:0}
+.enquiry-form-card textarea{resize:vertical}
+.enquiry-form-card fieldset{border:0;padding:0;margin:0 0 18px}
+.enquiry-form-card legend{font-weight:700;margin-bottom:10px}
+.enquiry-radio-group{display:flex;gap:24px;flex-wrap:wrap}
+.enquiry-radio-group label{display:flex;align-items:center;gap:9px;margin:0;min-height:44px}
+.enquiry-radio-group input{width:22px!important;min-height:22px;margin:0!important}
+.enquiry-side-image{display:block;width:100%;height:auto;margin-top:30px}
+.enquiry-form-card .btn{min-height:52px}
+@media(max-width:900px){
+  .enquiry-form-card{padding:24px 18px}
+  .enquiry-form-card .row-2{grid-template-columns:1fr}
+  .enquiry-form-card .btn{width:100%;white-space:normal}
+}
+
 /* Version 2.3.2 Afternoon Tea redesign */
 .tea2-hero{display:grid;grid-template-columns:42% 58%;min-height:650px;background:#fff}
 .tea2-hero-copy{padding:70px 7vw;display:flex;flex-direction:column;justify-content:center}

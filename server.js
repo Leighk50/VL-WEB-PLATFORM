@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.2",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.3.3",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -82,6 +82,21 @@ async function sendAfternoonTeaEnquiry(q){
     console.error("Afternoon Tea email failed",r.status,details);
     throw new Error("We could not send your enquiry just now.");
   }
+}
+
+async function sendWebsiteEnquiry({subject,lines,email,name,logLabel}){
+  const token=await graphToken();
+  const payload={message:{subject,body:{contentType:"Text",content:lines.join("\n")},toRecipients:[{emailAddress:{address:EVENT_ENQUIRY_TO}}],replyTo:[{emailAddress:{address:email,name}}]},saveToSentItems:true};
+  const r=await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(EVENT_SENDER)}/sendMail`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  if(r.status!==202){const details=await r.text();console.error(`${logLabel} Microsoft Graph email failed`,r.status,details);throw new Error("We could not send your enquiry just now. Please try again or contact us by phone.");}
+}
+
+async function sendContactEnquiry(q){
+  await sendWebsiteEnquiry({subject:`Village Limits Website Enquiry - ${q.enquiryType} - ${q.name}`,lines:["New website enquiry from villagelimits.co.uk","",`Name: ${q.name}`,`Email: ${q.email}`,`Phone number: ${q.phone}`,`Enquiry type: ${q.enquiryType}`,`Preferred contact method: ${q.contactMethod}`,`Message: ${q.message}`],email:q.email,name:q.name,logLabel:"Contact enquiry"});
+}
+
+async function sendPrivateEventEnquiry(q){
+  await sendWebsiteEnquiry({subject:`Private Event Enquiry - ${q.eventType} - ${q.name} - ${q.preferredDate}`,lines:["New private event enquiry from villagelimits.co.uk","",`Name: ${q.name}`,`Email: ${q.email}`,`Phone number: ${q.phone}`,`Preferred date: ${q.preferredDate}`,`Event type: ${q.eventType}`,`Number of guests: ${q.guestCount}`,`Food requirements / catering notes: ${q.cateringNotes||"Not provided"}`,`Entertainment requirements: ${q.entertainmentRequirements||"Not provided"}`,`Dietary requirements / allergens: ${q.dietaryRequirements||"Not provided"}`,`Additional information: ${q.additionalInformation||"Not provided"}`],email:q.email,name:q.name,logLabel:"Private event enquiry"});
 }
 
 async function sendTestEmail(){
@@ -246,7 +261,20 @@ function eventDetail(id){
  "index,follow",e.image||"/assets/images/event.webp",sc||schema(c))
 }
 function book(){return shell("Book a Table | Village Limits Restaurant Woodhall Spa","Reserve a table at Village Limits restaurant in Woodhall Spa using our secure online table booking system.","/book-table",`${ph("Restaurant","Book a Table","Reserve your table using our secure booking system.")}<section class="section"><div class="container booking-box"><script src="https://touchreservation.net/customer/javascript/embed.js?coalias=villagelimits&site=1"></script></div></section>`)}
-function contact(){const c=read();return shell("Contact Village Limits | Woodhall Spa","Contact Village Limits in Woodhall Spa for restaurant reservations, accommodation, events and private functions.","/contact",`${ph("Contact","Get in touch","We look forward to welcoming you.")}<section class="section"><div class="container split"><div><h2>Village Limits</h2><p>${esc(c.settings.address)}</p><p><strong>Telephone:</strong> ${esc(c.settings.telephone)}<br><strong>Email:</strong> ${esc(c.settings.email)}</p></div><img src="/assets/images/exterior.webp" alt="Village Limits in Woodhall Spa"></div></section>`)}
+function contact(sent=false,error=""){
+  const c=read();
+  const note=sent?`<div class="enquiry-success" role="status"><h2>Thank you</h2><p>Your enquiry has been sent to our team. We will be in touch soon.</p></div>`:error?`<div class="enquiry-error" role="alert">${esc(error)}</div>`:"";
+  return shell("Contact Village Limits | Woodhall Spa","Contact Village Limits in Woodhall Spa for restaurant reservations, accommodation, events and private functions.","/contact",`${ph("Contact","Get in touch","We look forward to welcoming you.")}<section class="section"><div class="container split"><div><h2>Village Limits</h2><p>${esc(c.settings.address)}</p><p><strong>Telephone:</strong> ${esc(c.settings.telephone)}<br><strong>Email:</strong> ${esc(c.settings.email)}</p><img class="enquiry-side-image" src="/assets/images/exterior.webp" alt="Village Limits in Woodhall Spa"></div><div class="christmas-enquiry-card enquiry-form-card" id="contact-enquiry"><div class="eyebrow">How can we help?</div><h2>Send an enquiry</h2><p>Complete the form below and our team will respond using your preferred contact method. Fields marked <span aria-hidden="true">*</span> are required.</p>${note}<form method="post" action="/contact/enquire"><label>Name <span aria-hidden="true">*</span><input name="name" required autocomplete="name"></label><label>Email <span aria-hidden="true">*</span><input name="email" type="email" required autocomplete="email"></label><label>Phone number <span aria-hidden="true">*</span><input name="phone" type="tel" required autocomplete="tel"></label><label>Enquiry type <span aria-hidden="true">*</span><select name="enquiryType" required><option value="">Please select</option><option>General enquiry</option><option>Restaurant</option><option>Accommodation</option><option>Events / Entertainment</option><option>Afternoon Tea</option><option>Christmas</option><option>Private Event</option><option>Other</option></select></label><fieldset><legend>Preferred contact method <span aria-hidden="true">*</span></legend><div class="enquiry-radio-group"><label><input type="radio" name="contactMethod" value="Email" required checked> Email</label><label><input type="radio" name="contactMethod" value="Phone" required> Phone</label></div></fieldset><label>Message <span aria-hidden="true">*</span><textarea name="message" rows="6" required></textarea></label><button class="btn large" type="submit">Send Enquiry</button></form></div></div></section>`)}
+
+async function contactEnquiry(req){
+  const q=await formBody(req);
+  const name=String(q.name||"").trim(),email=String(q.email||"").trim(),phone=String(q.phone||"").trim();
+  const enquiryType=String(q.enquiryType||"").trim(),contactMethod=String(q.contactMethod||"").trim(),message=String(q.message||"").trim();
+  const enquiryTypes=["General enquiry","Restaurant","Accommodation","Events / Entertainment","Afternoon Tea","Christmas","Private Event","Other"];
+  if(!name||!email||!phone||!enquiryTypes.includes(enquiryType)||!["Email","Phone"].includes(contactMethod)||!message)throw new Error("Please complete all required fields.");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Please enter a valid email address.");
+  await sendContactEnquiry({name,email,phone,enquiryType,contactMethod,message});
+}
 
 function afternoonTeaPage(sent=false,error=""){
   const note=sent
@@ -497,7 +525,22 @@ async function christmasEnquiry(req){
 
   return {ok:true};
 }
-function privateEvents(){return shell("Private Events & Celebrations | Village Limits Woodhall Spa","Plan private dining, celebrations and special occasions at Village Limits in Woodhall Spa.","/private-events",`${ph("Celebrations","Private Events","Parties, celebrations and special occasions.")}<section class="section"><div class="container split"><div><h2>Create an occasion to remember</h2><p class="lead">Contact us to discuss private dining, celebrations and group events.</p><a class="btn" href="/contact">Contact Us</a></div><img src="/assets/images/courtyard.webp" alt="Private events at Village Limits"></div></section>`)}
+function privateEvents(sent=false,error=""){
+  const note=sent?`<div class="enquiry-success" role="status"><h2>Thank you</h2><p>Your private event enquiry has been sent to our events team. We will be in touch soon.</p></div>`:error?`<div class="enquiry-error" role="alert">${esc(error)}</div>`:"";
+  return shell("Private Events & Celebrations | Village Limits Woodhall Spa","Plan private dining, celebrations and special occasions at Village Limits in Woodhall Spa.","/private-events",`${ph("Celebrations","Private Events","Parties, celebrations and special occasions.")}<section class="section"><div class="container split"><div><h2>Create an occasion to remember</h2><p class="lead">From intimate private dining to milestone celebrations, tell us what you are planning and our events team will help bring it together.</p><img class="enquiry-side-image" src="/assets/images/courtyard.webp" alt="Private events at Village Limits"></div><div class="christmas-enquiry-card enquiry-form-card" id="private-events-enquiry"><div class="eyebrow">Plan your occasion</div><h2>Private event enquiry</h2><p>Share the details below and our events team will contact you to discuss availability and options. Fields marked <span aria-hidden="true">*</span> are required.</p>${note}<form method="post" action="/private-events/enquire"><label>Name <span aria-hidden="true">*</span><input name="name" required autocomplete="name"></label><label>Email <span aria-hidden="true">*</span><input name="email" type="email" required autocomplete="email"></label><label>Phone number <span aria-hidden="true">*</span><input name="phone" type="tel" required autocomplete="tel"></label><div class="row-2"><label>Preferred date <span aria-hidden="true">*</span><input name="preferredDate" type="date" required></label><label>Event type <span aria-hidden="true">*</span><select name="eventType" required><option value="">Please select</option><option>Birthday</option><option>Anniversary</option><option>Wedding / Reception</option><option>Celebration of Life</option><option>Corporate Event</option><option>Christmas Party</option><option>Private Dining</option><option>Other</option></select></label></div><label>Number of guests <span aria-hidden="true">*</span><input name="guestCount" type="number" min="1" max="500" required inputmode="numeric"></label><label>Food requirements / catering notes<textarea name="cateringNotes" rows="3"></textarea></label><label>Entertainment requirements<textarea name="entertainmentRequirements" rows="3"></textarea></label><label>Dietary requirements / allergens<textarea name="dietaryRequirements" rows="3"></textarea></label><label>Additional information<textarea name="additionalInformation" rows="5"></textarea></label><button class="btn large" type="submit">Send Private Event Enquiry</button></form></div></div></section>`)}
+
+async function privateEventEnquiry(req){
+  const q=await formBody(req);
+  const name=String(q.name||"").trim(),email=String(q.email||"").trim(),phone=String(q.phone||"").trim();
+  const preferredDate=String(q.preferredDate||"").trim(),eventType=String(q.eventType||"").trim(),guestCount=Number(q.guestCount);
+  const cateringNotes=String(q.cateringNotes||"").trim(),entertainmentRequirements=String(q.entertainmentRequirements||"").trim();
+  const dietaryRequirements=String(q.dietaryRequirements||"").trim(),additionalInformation=String(q.additionalInformation||"").trim();
+  const eventTypes=["Birthday","Anniversary","Wedding / Reception","Celebration of Life","Corporate Event","Christmas Party","Private Dining","Other"];
+  if(!name||!email||!phone||!preferredDate||!eventTypes.includes(eventType)||!Number.isInteger(guestCount)||guestCount<1||guestCount>500)throw new Error("Please complete all required fields.");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(preferredDate))throw new Error("Please enter a valid preferred date.");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Please enter a valid email address.");
+  await sendPrivateEventEnquiry({name,email,phone,preferredDate,eventType,guestCount,cateringNotes,entertainmentRequirements,dietaryRequirements,additionalInformation});
+}
 function robots(){return `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/admin/\nSitemap: ${SITE}/sitemap.xml\n`}
 function sitemap(){const c=read(),ps=["/","/eat","/stay","/whats-on","/christmas","/private-events","/contact","/book-table",...c.menus.filter(m=>m.visible).map(m=>`/menu/${encodeURIComponent(m.id)}`),...c.events.filter(e=>e.visible).map(e=>`/event/${encodeURIComponent(e.id)}`)];return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${ps.map(p=>`<url><loc>${SITE}${p}</loc></url>`).join("")}</urlset>`}
 function uploadFile(p,res){
@@ -538,7 +581,12 @@ if(p==="\/christmas\/enquire"&&req.method==="POST"){
     console.error("Christmas enquiry submission failed:",e);
     return html(res,christmasPage(false,e.message),400);
   }
-} if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
+}
+if(p==="/contact"&&req.method==="GET")return html(res,contact(u.searchParams.get("sent")==="1"));
+if(p==="/contact/enquire"&&req.method==="POST"){try{await contactEnquiry(req);res.writeHead(303,{"Location":"/contact?sent=1#contact-enquiry"});return res.end()}catch(e){console.error("Contact enquiry submission failed:",e);return html(res,contact(false,e.message),400)}}
+if(p==="/private-events"&&req.method==="GET")return html(res,privateEvents(u.searchParams.get("sent")==="1"));
+if(p==="/private-events/enquire"&&req.method==="POST"){try{await privateEventEnquiry(req);res.writeHead(303,{"Location":"/private-events?sent=1#private-events-enquiry"});return res.end()}catch(e){console.error("Private event enquiry submission failed:",e);return html(res,privateEvents(false,e.message),400)}}
+if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
 if(p==="/admin/login"&&req.method==="POST"){const b=await formBody(req);const suppliedUser=String(b.username??"").trim(),suppliedPass=String(b.password??"");if(suppliedUser!==USER||suppliedPass!==PASS){res.writeHead(303,{"Location":"/admin?error=1","Cache-Control":"no-store"});return res.end()}const t=make();res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end()}
 if(p==="/admin/logout"&&req.method==="POST"){res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":"vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});return res.end()}
 if(p==="/admin.html"){res.writeHead(302,{"Location":"/admin","Cache-Control":"no-store"});return res.end()} return staticFile(p,res)
