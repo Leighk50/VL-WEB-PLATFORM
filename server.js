@@ -4,7 +4,7 @@ const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
 const EVENT_SENDER=process.env.EVENT_SENDER||"events@villagelimits.co.uk",EVENT_ENQUIRY_TO=process.env.EVENT_ENQUIRY_TO||"events@villagelimits.co.uk";
-const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.5",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
+const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VERSION="2.2.6",SITE=(process.env.PUBLIC_SITE_URL||"https://www.villagelimits.co.uk").replace(/\/+$/,""),AV=encodeURIComponent(`${VERSION}-${BUILD}`);
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});if(!fs.existsSync(CONTENT))fs.copyFileSync(DEFAULT,CONTENT)}
@@ -202,9 +202,9 @@ function eventDetail(id){
 function book(){return shell("Book a Table | Village Limits Restaurant Woodhall Spa","Reserve a table at Village Limits restaurant in Woodhall Spa using our secure online table booking system.","/book-table",`${ph("Restaurant","Book a Table","Reserve your table using our secure booking system.")}<section class="section"><div class="container booking-box"><script src="https://touchreservation.net/customer/javascript/embed.js?coalias=villagelimits&site=1"></script></div></section>`)}
 function contact(){const c=read();return shell("Contact Village Limits | Woodhall Spa","Contact Village Limits in Woodhall Spa for restaurant reservations, accommodation, events and private functions.","/contact",`${ph("Contact","Get in touch","We look forward to welcoming you.")}<section class="section"><div class="container split"><div><h2>Village Limits</h2><p>${esc(c.settings.address)}</p><p><strong>Telephone:</strong> ${esc(c.settings.telephone)}<br><strong>Email:</strong> ${esc(c.settings.email)}</p></div><img src="/assets/images/exterior.webp" alt="Village Limits in Woodhall Spa"></div></section>`)}
 function christmasPage(sent=false,error=""){
- const starters=[["Winter carrot & ginger soup","Pumpkin seed, toasted sourdough"],["Taste of the sea","Hot smoked salmon, smoked mackerel, prawns in Marie Rose sauce, lumpfish caviar, horseradish and artisan crackers"],["Chicken liver parfait","Caramelised onions, cranberry chutney, mixed leaf salad and toasted sourdough"],["Baked camembert","Filo pastry, hot truffle honey, candied cashews and toasted sourdough (+£2.50 per portion)"],["Sweetcorn ribs","Cajun seasoning, chipotle mayo and lime"],["Pan-fried Argentinian shrimp","Café de Paris butter and grilled artisan flatbread"],["Chestnut & wild mushrooms","Garlic and herb butter on toasted sourdough"]];
- const mains=[["Braised beef short rib","Creamed mash, green beans in confit shallot and red wine jus"],["Turkey schnitzel","Honey-glazed pigs in blankets, cranberry, chips and gravy"],["Flat iron steak","Dauphinoise potato, green beans in confit shallots and peppercorn sauce"],["Pan-seared pork chop","Celeriac purée, braised red cabbage, tenderstem broccoli, cider and sage jus"],["Village Limits festive pie","Turkey, stuffing and cranberry pie, creamed mash and seasonal vegetables"],["Baked heritage carrots","Beetroot hummus, braised lentils, kale pesto and toasted seeds"],["Pan-roasted halibut","Samphire, shrimp, artichoke and lemon butter herb sauce"]];
- const desserts=[["Steamed Christmas sponge","Brandy cream"],["Winter berry pavlova","Candied pistachios, maple and crème Chantilly"],["Orange, lemon & ginger posset","Strawberries and homemade shortbread"],["Triple chocolate brownie","Chocolate ice cream and chocolate sauce"],["Cheese board","Black Bomber cheddar, Shropshire Blue and Lincolnshire Poacher, figs, grapes and artisan crackers"],["Plum & cinnamon crème brûlée","Shortbread"],["Spiced apple & cranberry crumble","Custard"]];
+ const starters=[["Winter carrot & ginger soup","Pumpkin seed, toasted sourdough"],["Taste of the sea","Hot smoked salmon, smoked mackerel, prawns in Marie Rose sauce, lumpfish caviar, horseradish and artisan crackers"],["Chicken liver parfait","Caramelised onions, cranberry chutney, mixed leaf salad and toasted sourdough"],["Baked camembert","Filo pastry, hot truffle honey, candied cashews and toasted sourdough (+Â£2.50 per portion)"],["Sweetcorn ribs","Cajun seasoning, chipotle mayo and lime"],["Pan-fried Argentinian shrimp","CafÃ© de Paris butter and grilled artisan flatbread"],["Chestnut & wild mushrooms","Garlic and herb butter on toasted sourdough"]];
+ const mains=[["Braised beef short rib","Creamed mash, green beans in confit shallot and red wine jus"],["Turkey schnitzel","Honey-glazed pigs in blankets, cranberry, chips and gravy"],["Flat iron steak","Dauphinoise potato, green beans in confit shallots and peppercorn sauce"],["Pan-seared pork chop","Celeriac purÃ©e, braised red cabbage, tenderstem broccoli, cider and sage jus"],["Village Limits festive pie","Turkey, stuffing and cranberry pie, creamed mash and seasonal vegetables"],["Baked heritage carrots","Beetroot hummus, braised lentils, kale pesto and toasted seeds"],["Pan-roasted halibut","Samphire, shrimp, artichoke and lemon butter herb sauce"]];
+ const desserts=[["Steamed Christmas sponge","Brandy cream"],["Winter berry pavlova","Candied pistachios, maple and crÃ¨me Chantilly"],["Orange, lemon & ginger posset","Strawberries and homemade shortbread"],["Triple chocolate brownie","Chocolate ice cream and chocolate sauce"],["Cheese board","Black Bomber cheddar, Shropshire Blue and Lincolnshire Poacher, figs, grapes and artisan crackers"],["Plum & cinnamon crÃ¨me brÃ»lÃ©e","Shortbread"],["Spiced apple & cranberry crumble","Custard"]];
  const items=a=>a.map(([n,d])=>`<article class="christmas-dish"><h3>${esc(n)}</h3><p>${esc(d)}</p></article>`).join("");
  const note=sent?`<div class="enquiry-success"><h2>Thank you</h2><p>Your enquiry has been sent to our events team.</p></div>`:error?`<div class="enquiry-error">${esc(error)}</div>`:"";
  const seoSchema={
@@ -216,7 +216,7 @@ function christmasPage(sent=false,error=""){
    "telephone":"01526 353525",
    "email":"events@villagelimits.co.uk",
    "servesCuisine":["British","Modern British"],
-   "priceRange":"££",
+   "priceRange":"Â£Â£",
    "address":{
      "@type":"PostalAddress",
      "streetAddress":"Village Limits",
@@ -232,7 +232,7 @@ function christmasPage(sent=false,error=""){
    "Christmas Parties Woodhall Spa | Christmas Party Menu | Village Limits",
    "Book your Christmas party in Woodhall Spa at Village Limits. Festive dining, Christmas party menu, group celebrations and enquiries for parties across Lincolnshire.",
    "/christmas",
-   `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1><p>Celebrate Christmas at Village Limits in Woodhall Spa, Lincolnshire — perfect for staff parties, family gatherings and festive get-togethers.</p><div class="christmas-price">£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
+   `<section class="christmas-hero"><div class="container christmas-hero-copy"><div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1><p>Celebrate Christmas at Village Limits in Woodhall Spa, Lincolnshire â€” perfect for staff parties, family gatherings and festive get-togethers.</p><div class="christmas-price">Â£35 per person</div><a class="btn large" href="#christmas-enquiry">Enquire now</a></div></section>
    <section class="section christmas-seo-intro"><div class="container narrow"><div class="eyebrow">Christmas at Village Limits</div><h2>Christmas parties and festive dining in Woodhall Spa</h2><p class="lead">Planning a Christmas meal, office Christmas party or festive celebration in Lincolnshire? Village Limits offers a relaxed Christmas party venue in Woodhall Spa with a three-course festive menu, warm hospitality and easy online enquiry.</p><p>Whether you are organising a work Christmas party, a family celebration or a festive meal with friends, our team can help you plan your preferred date and party size.</p></div></section>
    <section class="section christmas-menu-section"><div class="container"><div class="christmas-menu-grid"><section class="christmas-course"><h2>Starters</h2>${items(starters)}</section><section class="christmas-course"><h2>Mains</h2>${items(mains)}</section><section class="christmas-course christmas-desserts"><h2>Desserts</h2>${items(desserts)}</section></div></div></section>
    <section id="christmas-enquiry" class="section christmas-enquiry-section"><div class="container split"><div><div class="eyebrow">Plan your celebration</div><h2>Christmas party enquiry</h2><p class="lead">Tell us your preferred date and party size and our events team will contact you.</p><p>Christmas party enquiries are sent directly to <strong>events@villagelimits.co.uk</strong>.</p></div><div class="christmas-enquiry-card">${note}<form method="post" action="/christmas/enquire"><div class="honeypot"><input name="website" tabindex="-1" autocomplete="off"></div><label>Name<input name="name" required></label><label>Email<input name="email" type="email" required></label><label>Phone number<input name="phone" type="tel" required></label><div class="row-2"><label>Preferred date<input name="preferredDate" type="date" required></label><label>Number in party<input name="partySize" type="number" min="2" max="250" required></label></div><label>Additional information<textarea name="message" rows="4"></textarea></label><button class="btn large" type="submit">Send Christmas Enquiry</button></form></div></div></section>`,
@@ -242,11 +242,46 @@ function christmasPage(sent=false,error=""){
  )
 }
 async function christmasEnquiry(req){
- const q=await formBody(req); if(q.website)return;
- const name=String(q.name||"").trim(),email=String(q.email||"").trim(),phone=String(q.phone||"").trim(),preferredDate=String(q.preferredDate||"").trim(),partySize=Number(q.partySize),message=String(q.message||"").trim();
- if(!name||!email||!phone||!preferredDate||!Number.isInteger(partySize)||partySize<2)throw new Error("Please complete all required fields.");
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Please enter a valid email address.");
- await sendChristmasEnquiry({name,email,phone,preferredDate,partySize,message});
+  const raw=await new Promise((resolve,reject)=>{
+    let b="";
+    req.on("data",c=>{b+=c;if(b.length>250000){reject(new Error("Enquiry is too large."));req.destroy()}});
+    req.on("end",()=>resolve(b));
+    req.on("error",reject);
+  });
+
+  const ct=String(req.headers["content-type"]||"");
+  let q={};
+
+  if(ct.includes("application/x-www-form-urlencoded")){
+    q=Object.fromEntries(new URLSearchParams(raw));
+  }else if(ct.includes("application/json")){
+    try{q=raw?JSON.parse(raw):{}}catch{throw new Error("Invalid enquiry data.");}
+  }else{
+    q=Object.fromEntries(new URLSearchParams(raw));
+  }
+
+  if(q.website)return {ok:true};
+
+  const name=String(q.name||"").trim();
+  const email=String(q.email||"").trim();
+  const phone=String(q.phone||"").trim();
+  const preferredDate=String(q.preferredDate||"").trim();
+  const partySize=Number(q.partySize);
+  const message=String(q.message||"").trim();
+
+  if(!name||!email||!phone||!preferredDate||!Number.isInteger(partySize)||partySize<2||partySize>250){
+    throw new Error("Please complete all required fields.");
+  }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    throw new Error("Please enter a valid email address.");
+  }
+
+  await sendChristmasEnquiry({name,email,phone,preferredDate,partySize,message});
+  console.log("Christmas enquiry sent successfully",{
+    name,email,preferredDate,partySize,recipient:EVENT_ENQUIRY_TO
+  });
+
+  return {ok:true};
 }
 function privateEvents(){return shell("Private Events & Celebrations | Village Limits Woodhall Spa","Plan private dining, celebrations and special occasions at Village Limits in Woodhall Spa.","/private-events",`${ph("Celebrations","Private Events","Parties, celebrations and special occasions.")}<section class="section"><div class="container split"><div><h2>Create an occasion to remember</h2><p class="lead">Contact us to discuss private dining, celebrations and group events.</p><a class="btn" href="/contact">Contact Us</a></div><img src="/assets/images/courtyard.webp" alt="Private events at Village Limits"></div></section>`)}
 function robots(){return `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/admin/\nSitemap: ${SITE}/sitemap.xml\n`}
@@ -278,7 +313,16 @@ if(p==="/api/admin/test-email"&&req.method==="POST"){
   }
   if(p==="/api/admin/content"&&req.method==="PUT"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});write(await body(req));return json(res,200,{ok:true})}
 if(p==="/api/admin/upload-image"&&req.method==="POST"){if(!valid(req))return json(res,401,{error:"Your admin session has expired. Please sign in again."});const payload=await largeBody(req);const url=saveUploadedImage(payload);return json(res,200,{ok:true,url})}
-if(p.startsWith("/uploads/"))return uploadFile(p.slice(9),res); if(p==="/")return html(res,home()); if(p==="/eat")return html(res,eat()); if(p.startsWith("/menu/"))return html(res,menu(p.slice(6))); if(p==="/stay")return html(res,stay()); if(p==="/whats-on")return html(res,events());if(p==="/api/christmas-email-health"&&req.method==="GET")return json(res,200,{configured:Boolean(MS_TENANT_ID&&MS_CLIENT_ID&&MS_CLIENT_SECRET),sender:EVENT_SENDER,recipient:EVENT_ENQUIRY_TO,tenant:Boolean(MS_TENANT_ID),client:Boolean(MS_CLIENT_ID),secret:Boolean(MS_CLIENT_SECRET)});if(p==="/christmas"&&req.method==="GET")return html(res,christmasPage(new URL(req.url,"http://localhost").searchParams.get("sent")==="1"));if(p==="/christmas/enquire"&&req.method==="POST"){try{await christmasEnquiry(req);res.writeHead(303,{"Location":"/christmas?sent=1#christmas-enquiry"});return res.end()}catch(e){return html(res,christmasPage(false,e.message),400)}} if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
+if(p.startsWith("/uploads/"))return uploadFile(p.slice(9),res); if(p==="/")return html(res,home()); if(p==="/eat")return html(res,eat()); if(p.startsWith("/menu/"))return html(res,menu(p.slice(6))); if(p==="/stay")return html(res,stay()); if(p==="/whats-on")return html(res,events());if(p==="/api/christmas-email-health"&&req.method==="GET")return json(res,200,{configured:Boolean(MS_TENANT_ID&&MS_CLIENT_ID&&MS_CLIENT_SECRET),sender:EVENT_SENDER,recipient:EVENT_ENQUIRY_TO,tenant:Boolean(MS_TENANT_ID),client:Boolean(MS_CLIENT_ID),secret:Boolean(MS_CLIENT_SECRET)});if(p==="/christmas"&&req.method==="GET")return html(res,christmasPage(new URL(req.url,"http://localhost").searchParams.get("sent")==="1"));if(p==="/christmas/enquire"&&req.method==="POST"){
+  try{
+    await christmasEnquiry(req);
+    res.writeHead(303,{"Location":"/christmas?sent=1#christmas-enquiry"});
+    return res.end();
+  }catch(e){
+    console.error("Christmas enquiry submission failed:",e);
+    return html(res,christmasPage(false,e.message),400);
+  }
+} if(p.startsWith("/event/"))return html(res,eventDetail(p.slice(7))); if(p==="/book-table")return html(res,book()); if(p==="/contact")return html(res,contact()); if(p==="/private-events")return html(res,privateEvents()); if(p==="/admin"&&req.method==="GET"){if(valid(req))return staticFile("/admin.html",res);return html(res,loginPage(u.searchParams.get("error")==="1"))}
 if(p==="/admin/login"&&req.method==="POST"){const b=await formBody(req);const suppliedUser=String(b.username??"").trim(),suppliedPass=String(b.password??"");if(suppliedUser!==USER||suppliedPass!==PASS){res.writeHead(303,{"Location":"/admin?error=1","Cache-Control":"no-store"});return res.end()}const t=make();res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":`vl_admin=${encodeURIComponent(t)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`});return res.end()}
 if(p==="/admin/logout"&&req.method==="POST"){res.writeHead(303,{"Location":"/admin","Cache-Control":"no-store","Set-Cookie":"vl_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});return res.end()}
 if(p==="/admin.html"){res.writeHead(302,{"Location":"/admin","Cache-Control":"no-store"});return res.end()} return staticFile(p,res)
