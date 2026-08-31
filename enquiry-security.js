@@ -134,13 +134,23 @@ function validate(type,q){
 function log(form,outcome,category){console.log(JSON.stringify({event:"public_enquiry",form,timestamp:new Date().toISOString(),outcome,category}))}
 async function processEnquiry(req,type,secret,send){
   const ip=clientIp(req);rateLimit(ip);
-  const q=await readForm(req);
-  if(String(q.contact_reference||"").trim())throw new EnquiryError("We could not accept this enquiry. Please contact us by phone if you need assistance.","honeypot");
-  verifyTiming(q.form_token,secret);
-  const clean=validate(type,q);
-  await send(clean);
-  log(type,"graph_success","sent");
-  return clean;
+  let q;
+  try{
+    q=await readForm(req);
+    if(String(q.contact_reference||"").trim())throw new EnquiryError("We could not accept this enquiry. Please contact us by phone if you need assistance.","honeypot");
+    verifyTiming(q.form_token,secret);
+    const clean=validate(type,q);
+    await send(clean);
+    log(type,"graph_success","sent");
+    return clean;
+  }catch(error){
+    if(q&&error&&typeof error==="object"){
+      error.formValues=Object.fromEntries(Object.entries(q)
+        .filter(([key,value])=>!["form_token","contact_reference"].includes(key)&&typeof value==="string")
+        .map(([key,value])=>[key,value.slice(0,4000)]));
+    }
+    throw error;
+  }
 }
 
 module.exports={EnquiryError,clientIp,rateLimit,timingToken,verifyTiming,readForm,validate,spamCheck,processEnquiry,log,_limits:limits};

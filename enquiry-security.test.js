@@ -58,3 +58,17 @@ test("Graph send is awaited and a send failure cannot become success",async()=>{
   const request=Readable.from([body]);request.headers={"content-type":"application/x-www-form-urlencoded"};request.socket={remoteAddress:"127.0.0.2"};
   await assert.rejects(()=>processEnquiry(request,"contact",secret,async()=>{throw new Error("Graph rejected sendMail")}),/Graph rejected/);
 });
+
+test("validation failures retain safe form values but never security fields",async()=>{
+  _limits.clear();const secret="test-secret",token=timingToken(secret,Date.now()-3000);
+  const submitted={...common,email:"mistake@example",enquiryType:"Restaurant",contactMethod:"Phone",message:"A genuine detailed enquiry",form_token:token,contact_reference:""};
+  const request=Readable.from([new URLSearchParams(submitted).toString()]);request.headers={"content-type":"application/x-www-form-urlencoded"};request.socket={remoteAddress:"127.0.0.3"};
+  await assert.rejects(()=>processEnquiry(request,"contact",secret,async()=>{}),error=>{
+    assert.equal(error.formValues.name,submitted.name);
+    assert.equal(error.formValues.email,submitted.email);
+    assert.equal(error.formValues.message,submitted.message);
+    assert.equal(error.formValues.form_token,undefined);
+    assert.equal(error.formValues.contact_reference,undefined);
+    return true;
+  });
+});
