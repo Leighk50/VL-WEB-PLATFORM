@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $=(s,r=document)=>r.querySelector(s), esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  let rows=[];
+  let rows=[],reportInfo=null;
 
   async function api(url,options={}){
     const r=await fetch(url,{...options,credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})}});
@@ -24,10 +24,29 @@
   function storedCode(room){const n=roomNumber(room),el=n?$(`[data-keysafe-room="${n}"]`):null;return el?el.value.trim():""}
   function message(g,code){return `Village Limits Self Check-in\nDear ${g.first}\nYou are booked in to Room ${g.room} and the keys are in the key safe next to the room door and the code is ${code}. Breakfast is served from 8am to 10am in the breakfast room next to the accommodation. Should you have any problems checking in or during your stay please call 01526 353312 option 0.`}
 
+  function ymd(y,m,d){return `${String(y).padStart(4,"0")}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`}
+  function localYmd(date){return ymd(date.getFullYear(),date.getMonth()+1,date.getDate())}
+  function tomorrow(){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+1);return d}
+  function parseCheckinDate(value){
+    const v=String(value||"").trim();if(!v)return"";
+    let m=v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+    if(m)return ymd(Number(m[1]),Number(m[2]),Number(m[3]));
+    m=v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+    if(m)return ymd(Number(m[3]),Number(m[2]),Number(m[1]));
+    const d=new Date(v);
+    return Number.isNaN(d.getTime())?"":localYmd(d);
+  }
+  function tomorrowLabel(date){return new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(date)}
+
   function render(){
     const box=$("#smsGuests");if(!box)return;
     box.innerHTML=rows.map((g,i)=>{const code=storedCode(g.room);return `<div class="admin-card" style="margin-bottom:14px"><div class="item-actions"><h3>${esc(g.first||"Guest")} · ${esc(g.room||"Room not found")}</h3><label class="switchline"><input type="checkbox" data-send="${i}" checked> Send</label></div><div class="row-2"><label>Mobile<input data-phone="${i}" value="${esc(g.phone)}"></label><label>Key-safe code<input data-code="${i}" autocomplete="off" value="${esc(code)}" placeholder="${code?"":"No stored room code"}"></label></div><label>Message<textarea data-msg="${i}" rows="7">${esc(message(g,code||"[CODE]"))}</textarea></label><small>${esc(g.checkin?`Check-in: ${g.checkin}`:"")} ${esc(g.ref?` · Ref: ${g.ref}`:"")}</small></div>`}).join("");
-    $("#smsCount").textContent=`${rows.length} reservation${rows.length===1?"":"s"} loaded`;
+    if(reportInfo){
+      const ignored=reportInfo.total-rows.length;
+      $("#smsCount").textContent=rows.length
+        ? `${reportInfo.label}: ${rows.length} arrival${rows.length===1?"":"s"} ready. ${ignored} other reservation${ignored===1?"":"s"} ignored.`
+        : `No arrivals found for ${reportInfo.label}.${reportInfo.unreadable?` ${reportInfo.unreadable} reservation row${reportInfo.unreadable===1?" has":"s have"} a missing or unrecognised check-in date.`:""}`;
+    }else $("#smsCount").textContent=`${rows.length} reservation${rows.length===1?"":"s"} loaded`;
   }
 
   async function loadKeySafeCodes(){
@@ -76,7 +95,15 @@
   }
 
   const input=$("#hotelCsv");
-  if(input)input.onchange=async()=>{const f=input.files&&input.files[0];if(!f)return;rows=parseCsv(await f.text()).map(mapped).filter(g=>g.first||g.room||g.phone);render()};
+  if(input)input.onchange=async()=>{
+    const f=input.files&&input.files[0];if(!f)return;
+    const all=parseCsv(await f.text()).map(mapped).filter(g=>g.first||g.room||g.phone||g.checkin);
+    const target=tomorrow(),targetYmd=localYmd(target);
+    const unreadable=all.filter(g=>!parseCheckinDate(g.checkin)).length;
+    rows=all.filter(g=>parseCheckinDate(g.checkin)===targetYmd);
+    reportInfo={total:all.length,unreadable,label:tomorrowLabel(target)};
+    render();
+  };
   const sendBtn=$("#sendSmsBatch");if(sendBtn)sendBtn.onclick=send;
   const saveCodes=$("#saveKeySafeCodes");if(saveCodes)saveCodes.onclick=saveKeySafeCodes;
   const showCodes=$("#showKeySafeCodes");if(showCodes)showCodes.onclick=toggleKeySafeCodes;
