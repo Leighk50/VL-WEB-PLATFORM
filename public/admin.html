@@ -1,79 +1,29 @@
 <!doctype html>
 <html lang="en-GB">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Website Administration | Village Limits</title>
-  <meta name="robots" content="noindex,nofollow,noarchive">
-  <link rel="stylesheet" href="/assets/css/styles.css?v=2.1.7">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website Administration | Village Limits</title><meta name="robots" content="noindex,nofollow,noarchive"><link rel="stylesheet" href="/assets/css/styles.css?v=2.1.7"></head>
 <body class="admin-body">
-<header class="admin-top">
-  <div>
-    <strong>Village Limits</strong>
-    <span>Website administration &middot; Version 2.3.5</span>
+<header class="admin-top"><div><strong>Village Limits</strong><span>Website administration &middot; Version 2.3.5</span></div><div><a class="btn outline-light" href="/" target="_blank" rel="noopener">View website</a><form action="/admin/logout" method="post" style="display:inline"><button class="btn" type="submit">Sign out</button></form></div></header>
+<div class="admin-shell"><aside class="admin-nav"><button class="active" data-panel="dashboard">Dashboard</button><button data-panel="menus">Menus</button><button data-panel="events">What's On</button><button data-panel="sms">Guest SMS</button><button data-panel="settings">Website Details</button></aside>
+<main class="admin-main">
+<section id="panel-dashboard" class="admin-panel"><div class="admin-heading"><div><span class="eyebrow">Version 2.2.4</span><h1>Dashboard</h1></div><button id="testEmailBtn" class="btn dark" type="button">Send Test Email</button><span id="testEmailStatus" style="margin-left:12px"></span><button id="saveAll" class="btn">Save all changes</button></div><div class="stat-grid"><div class="admin-card"><strong id="menuCount">0</strong><p>Visible menus</p></div><div class="admin-card"><strong id="dishCount">0</strong><p>Dishes</p></div><div class="admin-card"><strong id="eventCount">0</strong><p>Events</p></div></div><p id="saveStatus" class="save-status"></p></section>
+<section id="panel-menus" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Restaurant</span><h1>Menus</h1></div><button id="addMenu" class="btn">Add Menu</button></div><div id="menusEditor"></div></section>
+<section id="panel-events" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Entertainment</span><h1>What's On</h1></div><div class="actions"><button id="saveEvents" class="btn dark">Save Changes</button><button id="addEvent" class="btn">Add Event</button></div></div><div id="eventsEditor" class="editor-grid"></div></section>
+<section id="panel-sms" class="admin-panel" hidden>
+  <div class="admin-heading"><div><span class="eyebrow">Accommodation</span><h1>Guest SMS</h1></div></div>
+  <div class="admin-card">
+    <div class="item-actions"><div><h3>Current Key Safe Codes</h3><p>Store the current code for each room. These codes are kept in the protected server data area and used automatically when preparing self check-in messages.</p></div></div>
+    <div class="row-2">
+      <label>Room 1<input data-keysafe-room="1" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+      <label>Room 2<input data-keysafe-room="2" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+      <label>Room 3<input data-keysafe-room="3" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+      <label>Room 4<input data-keysafe-room="4" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+      <label>Room 5<input data-keysafe-room="5" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+      <label>Room 6<input data-keysafe-room="6" type="password" inputmode="numeric" autocomplete="off" placeholder="Current code"></label>
+    </div>
+    <div class="actions"><button id="saveKeySafeCodes" class="btn dark" type="button">Save Key Safe Codes</button><button id="showKeySafeCodes" class="small-btn" type="button">Show codes</button></div>
+    <p id="keySafeStatus" class="save-status"></p>
   </div>
-  <div>
-    <a class="btn outline-light" href="/" target="_blank" rel="noopener">View website</a>
-    <form action="/admin/logout" method="post" style="display:inline">
-      <button class="btn" type="submit">Sign out</button>
-    </form>
-  </div>
-</header>
-
-<div class="admin-shell">
-  <aside class="admin-nav">
-    <button class="active" data-panel="dashboard">Dashboard</button>
-    <button data-panel="menus">Menus</button>
-    <button data-panel="events">What's On</button>
-    <button data-panel="settings">Website Details</button>
-  </aside>
-
-  <main class="admin-main">
-    <section id="panel-dashboard" class="admin-panel">
-      <div class="admin-heading">
-        <div>
-          <span class="eyebrow">Version 2.2.4</span>
-          <h1>Dashboard</h1>
-        </div>
-        <button id="testEmailBtn" class="btn dark" type="button">Send Test Email</button><span id="testEmailStatus" style="margin-left:12px"></span><button id="saveAll" class="btn">Save all changes</button>
-      </div>
-      <div class="stat-grid">
-        <div class="admin-card"><strong id="menuCount">0</strong><p>Visible menus</p></div>
-        <div class="admin-card"><strong id="dishCount">0</strong><p>Dishes</p></div>
-        <div class="admin-card"><strong id="eventCount">0</strong><p>Events</p></div>
-      </div>
-      <p id="saveStatus" class="save-status"></p>
-    </section>
-
-    <section id="panel-menus" class="admin-panel" hidden>
-      <div class="admin-heading">
-        <div><span class="eyebrow">Restaurant</span><h1>Menus</h1></div>
-        <button id="addMenu" class="btn">Add Menu</button>
-      </div>
-      <div id="menusEditor"></div>
-    </section>
-
-    <section id="panel-events" class="admin-panel" hidden>
-      <div class="admin-heading">
-        <div><span class="eyebrow">Entertainment</span><h1>What's On</h1></div>
-        <div class="actions"><button id="saveEvents" class="btn dark">Save Changes</button><button id="addEvent" class="btn">Add Event</button></div>
-      </div>
-      <div id="eventsEditor" class="editor-grid"></div>
-    </section>
-
-    <section id="panel-settings" class="admin-panel" hidden>
-      <div class="admin-heading"><div><span class="eyebrow">General</span><h1>Website Details</h1></div></div>
-      <div class="admin-card">
-        <label>Opening Hours<input data-setting="openingHours"></label>
-        <label>Telephone<input data-setting="telephone"></label>
-        <label>Email<input data-setting="email"></label>
-        <label>Address<textarea data-setting="address"></textarea></label>
-      </div>
-    </section>
-  </main>
-</div>
-
-<script src="/assets/js/admin-dashboard.js?v=2.2.4"></script>
-</body>
-</html>
+  <div class="admin-card" style="margin-top:18px"><h3>Little Hotelier reservation report</h3><p>Upload the latest CSV. Review every guest and key-safe code before sending.</p><label>Reservation CSV<input id="hotelCsv" type="file" accept=".csv,text/csv"></label><p id="smsCount" class="save-status">No report loaded.</p><div class="row-2"><label>Send from<select id="smsSender"><option value="447860008022">07860 008022 — guests can reply</option><option value="VLimits">VLimits — no replies</option></select></label></div></div><div id="smsGuests" style="margin-top:18px"></div><div class="admin-card" style="margin-top:18px"><button id="sendSmsBatch" class="btn dark" type="button">Approve &amp; Send Selected</button><p id="smsStatus" class="save-status"></p></div>
+</section>
+<section id="panel-settings" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">General</span><h1>Website Details</h1></div></div><div class="admin-card"><label>Opening Hours<input data-setting="openingHours"></label><label>Telephone<input data-setting="telephone"></label><label>Email<input data-setting="email"></label><label>Address<textarea data-setting="address"></textarea></label></div></section>
+</main></div><script src="/assets/js/admin-dashboard.js?v=2.2.4"></script><script src="/assets/js/guest-sms.js?v=1.2.0"></script></body></html>
