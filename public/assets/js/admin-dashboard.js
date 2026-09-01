@@ -51,7 +51,7 @@
     const status=$("[data-upload-status]",card),preview=$("[data-image-preview]",card),pathField=$('[data-event="image"]',card);
     if(!["image/jpeg","image/png","image/webp"].includes(file.type)){status.textContent="Please choose a JPG, PNG or WebP image.";return}
     if(file.size>6*1024*1024){status.textContent="Image must be 6 MB or smaller.";return}
-    status.textContent="Uploading imageâ€¦";
+    status.textContent="Uploading image…";
     const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||"").split(",")[1]||"");r.onerror=()=>reject(new Error("Could not read image."));r.readAsDataURL(file)});
     try{
       const result=await request("/api/admin/upload-image",{method:"POST",body:JSON.stringify({filename:file.name,mime:file.type,data})});
@@ -206,7 +206,7 @@
       </label>
 
       <label>Display Date
-        <input data-event="date" value="${esc(event.date||"")}" placeholder="Friday 4 September Â· 7:00pm">
+        <input data-event="date" value="${esc(event.date||"")}" placeholder="Friday 4 September · 7:00pm">
       </label>
 
       <div class="row-2">
@@ -219,7 +219,7 @@
       </div>
 
       <div class="row-2">
-        <label>Price per person (Â£)
+        <label>Price per person (£)
           <input type="number" min="0" step="0.01" data-event="price" value="${esc(event.price??"")}">
         </label>
         <label>Performer / Entertainer
@@ -309,7 +309,7 @@
 
   $("#saveAll").onclick = async () => {
     const status = $("#saveStatus");
-    status.textContent = "Savingâ€¦";
+    status.textContent = "Saving…";
     try {
       await request("/api/admin/content", {method:"PUT", body:JSON.stringify(content)});
       status.textContent = "Saved. Changes are live.";

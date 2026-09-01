@@ -1,11 +1,12 @@
 {
-    "version":  "1.1.1",
-    "buildLabel":  "Homepage Restored and Accommodation Featured",
+    "version":  "2.3.5",
+    "buildLabel":  "SEO Consolidation & Encoding Cleanup",
+    "encodingCleanupSeed":  "2.3.5",
     "settings":  {
                      "telephone":  "01526 353312",
                      "email":  "hello@villagelimits.co.uk",
                      "address":  "Village Limits, Woodhall Spa, Lincolnshire",
-                     "openingHours":  "Wednesdayâ€“Saturday from 6pm Â· Sunday 12pmâ€“4pm"
+                     "openingHours":  "Wednesday–Saturday from 6pm · Sunday 12pm–4pm"
                  },
     "menus":  [
                   {
@@ -21,37 +22,37 @@
                                                          {
                                                              "name":  "Homemade Soup of the Day",
                                                              "description":  "Served with toasted sourdough.",
-                                                             "price":  "Â£8",
+                                                             "price":  "£8",
                                                              "allergens":  "Gluten, celery"
                                                          },
                                                          {
                                                              "name":  "House Garlic \u0026 Rosemary Focaccia",
                                                              "description":  "Truffle and cauliflower hummus, roasted hazelnuts and crispy onions.",
-                                                             "price":  "Â£8.50",
+                                                             "price":  "£8.50",
                                                              "allergens":  "Nuts, gluten, sesame"
                                                          },
                                                          {
                                                              "name":  "Smoked Mackerel Fillet",
                                                              "description":  "Beetroot, horseradish and spring leaf salad.",
-                                                             "price":  "Â£8.50",
+                                                             "price":  "£8.50",
                                                              "allergens":  "Fish, sulphites, egg, mustard"
                                                          },
                                                          {
                                                              "name":  "Pan-Fried Chestnut Mushrooms",
                                                              "description":  "Garlic and herb vegan butter, toasted sourdough.",
-                                                             "price":  "Â£8.50",
+                                                             "price":  "£8.50",
                                                              "allergens":  "Gluten, soya"
                                                          },
                                                          {
                                                              "name":  "Crab, Prawn \u0026 Smoked Salmon",
                                                              "description":  "Marie Rose, brown bread and lemon aioli.",
-                                                             "price":  "Â£8.50",
+                                                             "price":  "£8.50",
                                                              "allergens":  "Crustaceans, gluten, mustard, egg, fish, sulphites"
                                                          },
                                                          {
                                                              "name":  "Pulled Beef Rib Bonbons",
                                                              "description":  "Burnt cider apple sauce and truffle aioli.",
-                                                             "price":  "Â£8.50",
+                                                             "price":  "£8.50",
                                                              "allergens":  "Gluten, egg, milk, celery, sulphites, mustard"
                                                          }
                                                      ]
@@ -91,19 +92,19 @@
                                                          {
                                                              "name":  "Skate Wing",
                                                              "description":  "Please ask the team for today\u0027s accompaniments.",
-                                                             "price":  "Â£22",
+                                                             "price":  "£22",
                                                              "allergens":  "Please ask a member of the team"
                                                          },
                                                          {
                                                              "name":  "Calves Liver",
                                                              "description":  "Smoked bacon, peas and seasonal accompaniments.",
-                                                             "price":  "Â£18",
+                                                             "price":  "£18",
                                                              "allergens":  "Please ask a member of the team"
                                                          },
                                                          {
                                                              "name":  "Cod Tail",
                                                              "description":  "Served with tartar sauce.",
-                                                             "price":  "Â£18",
+                                                             "price":  "£18",
                                                              "allergens":  "Fish, egg, mustard"
                                                          }
                                                      ]
@@ -127,7 +128,7 @@
                                                              "allergens":  "Egg, milk"
                                                          },
                                                          {
-                                                             "name":  "CrÃ¨me BrÃ»lÃ©e",
+                                                             "name":  "Crème Brûlée",
                                                              "description":  "",
                                                              "price":  "",
                                                              "allergens":  "Egg, milk"
@@ -178,8 +179,8 @@
                    },
                    {
                        "title":  "Psychic Evening",
-                       "date":  "Monday 30 November 2026 Â· 6:30pm",
-                       "description":  "Two-course meal, Â£30 per person.",
+                       "date":  "Monday 30 November 2026 · 6:30pm",
+                       "description":  "Two-course meal, £30 per person.",
                        "ticketUrl":  "https://villagelimits.touchtakeaway.net/menu"
                    }
                ]

@@ -1,6 +1,7 @@
 {
-  "version": "2.0.0",
-  "buildLabel": "Clean Version 2",
+  "version": "2.3.5",
+  "buildLabel": "SEO Consolidation & Encoding Cleanup",
+  "encodingCleanupSeed": "2.3.5",
   "settings": {
     "telephone": "01526 353312",
     "email": "hello@villagelimits.co.uk",
