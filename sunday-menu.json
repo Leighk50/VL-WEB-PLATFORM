@@ -1,0 +1,157 @@
+{
+  "id": "sunday",
+  "name": "Sunday Lunch",
+  "description": "All Sunday roasts are served with roast potatoes, root vegetable purée, Savoy cabbage, seasonal greens, Yorkshire pudding and rich gravy.",
+  "visible": true,
+  "status": "Approved menu",
+  "sections": [
+    {
+      "name": "Starters",
+      "items": [
+        {
+          "id": "sun-soup",
+          "name": "Homemade Soup of the Day",
+          "description": "Served with toasted sourdough.",
+          "price": "£8.00",
+          "allergens": "Gluten, Celery",
+          "visible": true
+        },
+        {
+          "id": "sun-focaccia",
+          "name": "House Garlic & Rosemary Focaccia",
+          "description": "Truffle and cauliflower hummus, roasted hazelnuts and crispy onions.",
+          "price": "£8.50",
+          "allergens": "Gluten, Sesame, Nuts",
+          "visible": true
+        },
+        {
+          "id": "sun-mackerel",
+          "name": "Smoked Mackerel Fillet",
+          "description": "Beetroot, horseradish and spring leaf salad.",
+          "price": "£8.50",
+          "allergens": "Fish, Egg, Mustard, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "sun-mushrooms",
+          "name": "Pan-Fried Chestnut Mushrooms",
+          "description": "Garlic and herb vegan butter, toasted sourdough.",
+          "price": "£8.50",
+          "allergens": "Gluten, Soya",
+          "visible": true
+        },
+        {
+          "id": "sun-seafood",
+          "name": "Crab, Prawn & Smoked Salmon",
+          "description": "Mary Rose sauce, brown bread and lemon aioli.",
+          "price": "£8.50",
+          "allergens": "Crustaceans, Fish, Gluten, Egg, Mustard, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "sun-beef-bonbons",
+          "name": "Pulled Beef Rib Bon Bons",
+          "description": "Burnt cider apple sauce and truffle aioli.",
+          "price": "£8.50",
+          "allergens": "Gluten, Egg, Milk, Celery, Mustard, Sulphites",
+          "visible": true
+        },
+        {
+          "id": "sun-camembert",
+          "name": "Whole Baked Camembert Wrapped in Filo Pastry",
+          "description": "Hot honey, candied cashews and toasted sourdough.",
+          "price": "£12.00",
+          "allergens": "Milk, Dairy, Gluten, Nuts",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "Sunday Roasts",
+      "items": [
+        {
+          "id": "sun-beef-roast",
+          "name": "28-Day Aged Lincoln Red Roast Beef",
+          "description": "Served with roast potatoes, root vegetable purée, Savoy cabbage, seasonal greens, Yorkshire pudding and rich gravy.",
+          "price": "£18.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        },
+        {
+          "id": "sun-pork-roast",
+          "name": "Slow-Roasted Pork with Crackling",
+          "description": "Served with roast potatoes, root vegetable purée, Savoy cabbage, seasonal greens, Yorkshire pudding and rich gravy.",
+          "price": "£17.00",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        },
+        {
+          "id": "sun-chicken-roast",
+          "name": "Pan-Fried Chicken Breast with Stuffing",
+          "description": "Served with roast potatoes, root vegetable purée, Savoy cabbage, seasonal greens, Yorkshire pudding and rich gravy.",
+          "price": "£17.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        },
+        {
+          "id": "sun-wellington",
+          "name": "Beetroot & Vegetable Wellington",
+          "description": "Served with roast potatoes, root vegetable purée, Savoy cabbage, seasonal greens, Yorkshire pudding and rich gravy.",
+          "price": "£16.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "Mains",
+      "items": [
+        {
+          "id": "sun-halloumi-orzo",
+          "name": "Pan-Fried Halloumi & Orzo Salad",
+          "description": "Courgette, aubergine, rocket, caramelised onion, pine nuts and sun-dried tomato dressing.",
+          "price": "£16.00",
+          "allergens": "Gluten, Milk, Soya, Nuts",
+          "visible": true
+        },
+        {
+          "id": "sun-salmon",
+          "name": "Pan-Roasted Salmon",
+          "description": "Crispy new potatoes, British asparagus and Hollandaise sauce.",
+          "price": "£20.00",
+          "allergens": "Fish, Egg, Milk",
+          "visible": true
+        },
+        {
+          "id": "sun-haddock",
+          "name": "Beer-Battered Haddock",
+          "description": "Chips, mushy peas, tartare sauce and lemon.",
+          "price": "£18.00",
+          "allergens": "Fish, Gluten, Egg, Mustard, Sulphites",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "Sides",
+      "items": [
+        {
+          "id": "sun-roast-potatoes",
+          "name": "Roast Potatoes",
+          "description": "",
+          "price": "£4.00",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        },
+        {
+          "id": "sun-stuffing",
+          "name": "Stuffing",
+          "description": "",
+          "price": "£4.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        }
+      ]
+    }
+  ]
+}
