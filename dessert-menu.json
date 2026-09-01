@@ -1,0 +1,61 @@
+{
+  "id": "desserts",
+  "name": "Desserts",
+  "description": "Desserts £8.50 each.",
+  "visible": true,
+  "sections": [
+    {
+      "name": "Desserts",
+      "items": [
+        {
+          "id": "des-bakewell",
+          "name": "Bakewell Tart",
+          "description": "With custard.",
+          "price": "£8.50",
+          "allergens": "Eggs, Dairy, Celery, Nuts",
+          "visible": true
+        },
+        {
+          "id": "des-cheesecake",
+          "name": "Cheesecake",
+          "description": "Ask for this week’s flavour. With coulis.",
+          "price": "£8.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        },
+        {
+          "id": "des-sticky-toffee",
+          "name": "Sticky Toffee Pudding",
+          "description": "With caramel sauce.",
+          "price": "£8.50",
+          "allergens": "Dairy, Eggs, Gluten, Soya",
+          "visible": true
+        },
+        {
+          "id": "des-brownie",
+          "name": "Chocolate, Raspberry & Peanut Butter Brownie",
+          "description": "With Kelly’s plant based ice cream.",
+          "price": "£8.50",
+          "allergens": "Nuts, Peanuts",
+          "visible": true
+        },
+        {
+          "id": "des-pavlova",
+          "name": "Summer Fruit Pavlova",
+          "description": "Chantilly cream.",
+          "price": "£8.50",
+          "allergens": "Dairy, Eggs",
+          "visible": true
+        },
+        {
+          "id": "des-brulee",
+          "name": "Crème Brûlée",
+          "description": "Ask for this week’s flavour.",
+          "price": "£8.50",
+          "allergens": "Please ask a member of the team",
+          "visible": true
+        }
+      ]
+    }
+  ]
+}
