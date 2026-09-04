@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node seed-sunday-menu.js && node seed-dessert-menu.js && node sms-admin-entry.js",
+    "start": "node seed-sunday-menu.js && node seed-dessert-menu.js && node seo-entry.js",
     "test": "node --test enquiry-security.test.js"
   }
 }
