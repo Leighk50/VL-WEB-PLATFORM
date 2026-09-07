@@ -1,8 +1,15 @@
 "use strict";
 
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 
 const SITE = (process.env.PUBLIC_SITE_URL || "https://www.villagelimits.co.uk").replace(/\/+$/, "");
+const INDEXNOW_KEY = "d53a7b019a5e4c1d8e62bf94c3a710ee";
+const INDEXNOW_KEY_PATH = `/${INDEXNOW_KEY}.txt`;
+const INDEXNOW_ENDPOINT = "https://api.indexnow.org/IndexNow";
+const DATA_DIR = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, "site", "data") : path.join(__dirname, "data"));
+const CONTENT_FILE = path.join(DATA_DIR, "content.json");
 const originalCreateServer = http.createServer;
 
 const SEO_REDIRECTS = new Map([
@@ -21,9 +28,86 @@ const HTML_PATHS = new Set([
   "/menu/main"
 ]);
 
+const CORE_INDEX_URLS = [
+  "/",
+  "/eat",
+  "/stay",
+  "/whats-on",
+  "/afternoon-tea",
+  "/christmas",
+  "/private-events",
+  "/contact",
+  "/menu/main",
+  "/menu/sunday"
+];
+
 function normalisePath(pathname) {
   if (pathname === "/") return pathname;
   return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
+function xmlEscape(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&apos;"}[ch]));
+}
+
+function contentLastModified() {
+  try {
+    return fs.statSync(CONTENT_FILE).mtime.toISOString();
+  } catch {
+    try {
+      return fs.statSync(path.join(__dirname, "server.js")).mtime.toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
+  }
+}
+
+function enrichSitemap(xml) {
+  const lastmod = contentLastModified();
+  return String(xml).replace(/<url><loc>(.*?)<\/loc>(?:<lastmod>.*?<\/lastmod>)?<\/url>/g, (_m, loc) =>
+    `<url><loc>${loc}</loc><lastmod>${xmlEscape(lastmod)}</lastmod></url>`
+  );
+}
+
+function currentIndexUrls() {
+  const urls = new Set(CORE_INDEX_URLS.map(p => `${SITE}${p}`));
+  try {
+    const content = JSON.parse(fs.readFileSync(CONTENT_FILE, "utf8").replace(/^\uFEFF/, ""));
+    for (const menu of content.menus || []) {
+      if (menu && menu.visible && menu.id) urls.add(`${SITE}/menu/${encodeURIComponent(menu.id)}`);
+    }
+    for (const event of content.events || []) {
+      if (event && event.visible && event.id) urls.add(`${SITE}/event/${encodeURIComponent(event.id)}`);
+    }
+  } catch {}
+  return [...urls];
+}
+
+async function submitIndexNow(urls, reason = "update") {
+  const host = new URL(SITE).host;
+  const list = [...new Set((urls || []).filter(Boolean))].filter(url => {
+    try { return new URL(url).host === host; } catch { return false; }
+  });
+  if (!list.length) return;
+  try {
+    const response = await fetch(INDEXNOW_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type":"application/json; charset=utf-8"},
+      body: JSON.stringify({
+        host,
+        key: INDEXNOW_KEY,
+        keyLocation: `${SITE}${INDEXNOW_KEY_PATH}`,
+        urlList: list
+      })
+    });
+    if (!response.ok && response.status !== 202) {
+      console.warn("IndexNow submission failed", reason, response.status, (await response.text()).slice(0, 500));
+    } else {
+      console.log("IndexNow submission accepted", reason, response.status, list.length);
+    }
+  } catch (err) {
+    console.warn("IndexNow submission error", reason, err.message);
+  }
 }
 
 function transformHtml(pathname, html) {
@@ -99,6 +183,15 @@ http.createServer = function seoCreateServer(options, requestListener) {
     const redirectKey = rawPath.endsWith("/") ? rawPath : `${rawPath}/`;
     const redirectTarget = SEO_REDIRECTS.get(redirectKey);
 
+    if (rawPath === INDEXNOW_KEY_PATH && req.method === "GET") {
+      res.writeHead(200, {
+        "Content-Type":"text/plain; charset=utf-8",
+        "Cache-Control":"public, max-age=86400"
+      });
+      res.end(`${INDEXNOW_KEY}\n`);
+      return;
+    }
+
     if (redirectTarget) {
       res.writeHead(301, {
         Location: `${SITE}${redirectTarget}`,
@@ -109,16 +202,28 @@ http.createServer = function seoCreateServer(options, requestListener) {
     }
 
     const pathname = normalisePath(rawPath);
-    if (!HTML_PATHS.has(pathname) || req.method !== "GET") return listener(req, res);
+    const isHtml = HTML_PATHS.has(pathname) && req.method === "GET";
+    const isSitemap = rawPath === "/sitemap.xml" && req.method === "GET";
+    const isAdminContentUpdate = rawPath === "/api/admin/content" && req.method === "PUT";
+
+    if (!isHtml && !isSitemap && !isAdminContentUpdate) return listener(req, res);
 
     const originalEnd = res.end;
     res.end = function patchedEnd(chunk, encoding, callback) {
       const contentType = String(res.getHeader("Content-Type") || "");
-      if (chunk != null && contentType.includes("text/html")) {
+      if (chunk != null && isHtml && contentType.includes("text/html")) {
         const source = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
         chunk = transformHtml(pathname, source);
+      } else if (chunk != null && isSitemap && (contentType.includes("xml") || contentType.includes("text"))) {
+        const source = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        chunk = enrichSitemap(source);
       }
-      return originalEnd.call(this, chunk, encoding, callback);
+
+      const result = originalEnd.call(this, chunk, encoding, callback);
+      if (isAdminContentUpdate && res.statusCode >= 200 && res.statusCode < 300) {
+        setTimeout(() => submitIndexNow(currentIndexUrls(), "admin-content-update"), 0);
+      }
+      return result;
     };
 
     return listener(req, res);
@@ -130,3 +235,5 @@ http.createServer = function seoCreateServer(options, requestListener) {
 };
 
 require("./sms-admin-entry");
+
+setTimeout(() => submitIndexNow(currentIndexUrls(), "deployment-startup"), 5000);
