@@ -186,4 +186,4 @@ http.createServer = function enquiryCreateServer(options, requestListener) {
     : originalCreateServer.call(http, serverOptions, wrapped);
 };
 
-require("./event-image-protection-entry");
+require("./seo-entry");
