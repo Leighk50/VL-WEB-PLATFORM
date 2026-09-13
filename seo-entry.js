@@ -25,7 +25,8 @@ const HTML_PATHS = new Set([
   "/christmas",
   "/private-events",
   "/contact",
-  "/menu/main"
+  "/menu/main",
+  "/menu/sunday"
 ]);
 
 const CORE_INDEX_URLS = [
@@ -146,11 +147,27 @@ function transformHtml(pathname, html) {
       )
       .replace(
         /<meta name="description" content="View the Main Menu at Village Limits restaurant in Woodhall Spa\. ([^"]*)">/,
-        '<meta name="description" content="View the current restaurant menu at Village Limits in Woodhall Spa, including freshly prepared starters, mains and dishes for relaxed dining in Lincolnshire.">'
+        '<meta name="description" content="View the current restaurant menu at Village Limits in Woodhall Spa, including freshly prepared starters, mains, steaks and dishes for relaxed dining in Lincolnshire.">'
       )
       .replace(
         '<section class="section"><div class="container narrow">',
-        '<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant menu Woodhall Spa</div><h2>Our current restaurant menu</h2><p class="lead">Explore the current food menu at Village Limits in Woodhall Spa. Our restaurant serves freshly prepared dishes for relaxed meals, evenings out and special occasions.</p></div></section><section class="section"><div class="container narrow">'
+        '<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant menu Woodhall Spa</div><h2>Our current restaurant menu</h2><p class="lead">Explore the current food menu at Village Limits in Woodhall Spa, including freshly prepared starters, mains and steaks. Our restaurant is ideal for relaxed meals, evenings out and special occasions.</p></div></section><section class="section"><div class="container narrow">'
+      );
+  }
+
+  if (pathname === "/menu/sunday") {
+    body = body
+      .replace(
+        "Sunday Lunch | Village Limits Woodhall Spa",
+        "Sunday Lunch Woodhall Spa | Village Limits"
+      )
+      .replace(
+        /<meta name="description" content="[^"]*Sunday Lunch[^"]*">/,
+        '<meta name="description" content="Enjoy Sunday lunch in Woodhall Spa at Village Limits, with traditional Sunday roasts, Lincoln Red beef, slow-roasted pork and seasonal alternatives.">'
+      )
+      .replace(
+        '<section class="section"><div class="container narrow">',
+        '<section class="section"><div class="container narrow"><div class="eyebrow">Sunday lunch Woodhall Spa</div><h2>Sunday lunch at Village Limits</h2><p class="lead">Enjoy Sunday lunch in Woodhall Spa at Village Limits, with traditional Sunday roasts including 28-day aged Lincoln Red beef, slow-roasted pork and seasonal alternatives.</p></div></section><section class="section"><div class="container narrow">'
       );
   }
 
