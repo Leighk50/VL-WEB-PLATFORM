@@ -37,9 +37,10 @@
       render();setStatus('');
     }catch(e){setStatus(e.message,true)}
   }
-  async function save(){try{draft.sections=collect();const data=await api('/api/admin/specials-sms/draft',{method:'PUT',body:JSON.stringify({sections:draft.sections})});draft=data.draft;render();setStatus('Draft saved.')}catch(e){setStatus(e.message,true)}}
+  async function save(){try{draft.sections=collect();const data=await api('/api/admin/specials-sms/draft',{method:'PUT',body:JSON.stringify({sections:draft.sections})});draft=data.draft;render();setStatus('Draft saved.');return true}catch(e){setStatus(e.message,true);return false}}
   async function publish(){try{await save();if(!confirm('Publish these specials to the live website?'))return;const data=await api('/api/admin/specials-sms/publish',{method:'POST',body:'{}'});setStatus(`Published ${data.menu?.sections?.reduce((n,s)=>n+(s.items?.length||0),0)||0} specials to the website.`);await refresh()}catch(e){setStatus(e.message,true)}}
   async function parseManual(){try{const text=raw.value.trim();if(!text)throw new Error('Paste or type a specials message first.');setStatus('Parsing specials…');const data=await api('/api/admin/specials-sms/parse',{method:'POST',body:JSON.stringify({text})});draft=data.draft;render();setStatus(`Parsed using ${draft.parser}. Review before publishing.`)}catch(e){setStatus(e.message,true)}}
+  async function printDraft(){const ok=await save();if(!ok)return;window.open('/admin/specials/print','_blank','noopener')}
   editor.addEventListener('click',e=>{
     const confirmBtn=e.target.closest('[data-confirm-warnings]');if(confirmBtn){const itemEl=confirmBtn.closest('[data-special-item]');const [si,ii]=itemEl.dataset.specialItem.split(':').map(Number);if(draft?.sections?.[si]?.items?.[ii])draft.sections[si].items[ii].warnings=[];itemEl.querySelector('[data-warning-box]')?.remove();setStatus('Warning marked as reviewed. Save before publishing.');return}
     const add=e.target.closest('[data-add-item]');if(add){const si=Number(add.dataset.addItem);draft.sections[si].items.push({id:`manual-${Date.now()}`,name:'',description:'',price:'',allergens:'',visible:true,warnings:[]});render()}
@@ -48,6 +49,7 @@
   document.getElementById('parseSpecialsSms')?.addEventListener('click',parseManual);
   document.getElementById('saveSpecialsDraft')?.addEventListener('click',save);
   document.getElementById('publishSpecialsDraft')?.addEventListener('click',publish);
-  document.getElementById('printSpecialsDraft')?.addEventListener('click',()=>window.open('/admin/specials/print','_blank','noopener'));
+  document.getElementById('printSpecialsDraft')?.addEventListener('click',printDraft);
+  document.getElementById('printSpecialsDraftBottom')?.addEventListener('click',printDraft);
   document.querySelector('[data-panel="specials-sms"]')?.addEventListener('click',()=>setTimeout(refresh,0));
 })();
