@@ -11,6 +11,7 @@ const WEBHOOK_SECRET = process.env.CHEF_SMS_WEBHOOK_SECRET || "";
 const AI_KEY = process.env.OPENAI_API_KEY || "";
 const AI_MODEL = process.env.SPECIALS_AI_MODEL || "";
 const AI_URL = process.env.SPECIALS_AI_API_URL || "https://api.openai.com/v1/chat/completions";
+const WEBHOOK_PATH = "/api/webhooks/webex/inbound-sms";
 
 function normalizePhone(value) {
   let phone = String(value || "").trim().replace(/[\s()-]/g, "");
@@ -132,7 +133,21 @@ http.createServer = function webexAdapterCreateServer(options, requestListener) 
   const serverOptions = typeof options === "function" ? undefined : options;
   const wrapped = async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-    if (decodeURIComponent(url.pathname) === "/api/webhooks/webex/inbound-sms" && req.method === "POST") {
+    const pathname = decodeURIComponent(url.pathname);
+
+    // Webex verifies a webhook endpoint before it allows the project to be created.
+    // Verification requests must be side-effect free, so simply return HTTP 200.
+    if (pathname === WEBHOOK_PATH && (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS")) {
+      res.writeHead(200, {
+        "Content-Type":"text/plain; charset=utf-8",
+        "Cache-Control":"no-store",
+        "Allow":"GET, HEAD, OPTIONS, POST"
+      });
+      res.end(req.method === "HEAD" ? undefined : "OK");
+      return;
+    }
+
+    if (pathname === WEBHOOK_PATH && req.method === "POST") {
       try {
         if (!webhookAllowed(req)) { json(res, 403, {error:"Invalid webhook secret"}); return; }
         const payload = JSON.parse(await readRaw(req) || "{}");
