@@ -182,4 +182,4 @@ http.createServer = function enhancedSeoCreateServer(options, requestListener) {
     : originalCreateServer.call(http, serverOptions, wrapped);
 };
 
-require("./seo-entry");
+require("./enquiry-admin-entry");
