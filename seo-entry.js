@@ -151,7 +151,7 @@ function transformHtml(pathname, html) {
       )
       .replace(
         '<section class="section"><div class="container narrow">',
-        '<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant menu Woodhall Spa</div><h2>Our current restaurant menu</h2><p class="lead">Explore the current food menu at Village Limits in Woodhall Spa, including freshly prepared starters, mains and steaks. Our restaurant is ideal for relaxed meals, evenings out and special occasions.</p></div></section><section class="section"><div class="container narrow">'
+        '<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant menu Woodhall Spa</div><h2>Our current restaurant menu</h2><p class="lead">Explore the current food menu at Village Limits in Woodhall Spa, including freshly prepared starters, mains and steaks. Our restaurant is ideal for relaxed meals, evenings out and special occasions.</p><div class="actions"><a class="btn" href="/menu/sunday">View Sunday Lunch Menu</a></div></div></section><section class="section"><div class="container narrow">'
       );
   }
 
@@ -167,7 +167,7 @@ function transformHtml(pathname, html) {
       )
       .replace(
         '<section class="section"><div class="container narrow">',
-        '<section class="section"><div class="container narrow"><div class="eyebrow">Sunday lunch Woodhall Spa</div><h2>Sunday lunch at Village Limits</h2><p class="lead">Enjoy Sunday lunch in Woodhall Spa at Village Limits, with traditional Sunday roasts including 28-day aged Lincoln Red beef, slow-roasted pork and seasonal alternatives.</p></div></section><section class="section"><div class="container narrow">'
+        '<section class="section"><div class="container narrow"><div class="eyebrow">Sunday lunch Woodhall Spa</div><h2>Sunday lunch at Village Limits</h2><p class="lead">Enjoy Sunday lunch in Woodhall Spa at Village Limits, with traditional Sunday roasts including 28-day aged Lincoln Red beef, slow-roasted pork and seasonal alternatives.</p><div class="actions"><a class="btn" href="/menu/main">View Main Restaurant Menu</a></div></div></section><section class="section"><div class="container narrow">'
       );
   }
 
