@@ -1,0 +1,1 @@
+Webex Interact inbound SMS events send the chef number and message under `data.phone_number` and `data.message`. `webex-inbound-adapter.js` handles that payload before the Chef Specials admin/publish modules. The adapter is only active when package.json starts through it.
