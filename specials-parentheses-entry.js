@@ -73,16 +73,16 @@ function normalizeAllergenToken(value) {
     dairy:"milk", milk:"milk",
     egg:"eggs", eggs:"eggs",
     gluten:"cereals containing gluten", "cereal containing gluten":"cereals containing gluten", "cereals containing gluten":"cereals containing gluten",
-    crustacean:"crustaceans", crustaceans:"crustaceans",
+    crustacean:"crustaceans", crustaceans:"crustaceans", crustation:"crustaceans", crustations:"crustaceans",
     fish:"fish", lupin:"lupin",
-    mollusc:"molluscs", molluscs:"molluscs",
+    mollusc:"molluscs", molluscs:"molluscs", mollusk:"molluscs", mollusks:"molluscs",
     mustard:"mustard",
     nut:"nuts", nuts:"nuts", almond:"nuts", almonds:"nuts", cashew:"nuts", cashews:"nuts", hazelnut:"nuts", hazelnuts:"nuts", walnut:"nuts", walnuts:"nuts",
     peanut:"peanuts", peanuts:"peanuts",
     sesame:"sesame",
     soy:"soya", soya:"soya",
     celery:"celery",
-    sulphite:"sulphites", sulphites:"sulphites", sulfite:"sulphites", sulfites:"sulphites",
+    sulphite:"sulphites", sulphites:"sulphites", sulfite:"sulphites", sulfites:"sulphites"
   };
   return aliases[key] || "";
 }
@@ -98,7 +98,9 @@ function extractBracketAllergens(line) {
   if (!groups.length) return {line:source, allergens:""};
   const candidate = groups[groups.length - 1];
   const tokens = candidate[1].split(/[,;/]+/).map(x => x.trim()).filter(Boolean);
-  if (!tokens.length || !tokens.every(token => Boolean(normalizeAllergenToken(token)))) return {line:source, allergens:""};
+  if (!tokens.length) return {line:source, allergens:""};
+  const recognisedCount = tokens.map(normalizeAllergenToken).filter(Boolean).length;
+  if (recognisedCount < Math.max(1, Math.ceil(tokens.length * 0.6))) return {line:source, allergens:""};
   source = `${source.slice(0, candidate.index)}${source.slice(candidate.index + candidate[0].length)}`.replace(/\s{2,}/g, " ").trim();
   return {line:source, allergens:formatAllergens(tokens)};
 }
@@ -107,6 +109,7 @@ function cleanText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").replace(/\s+,/g, ",").replace(/,\s*/g, ", ")
     .replace(/\bcafe de paris\b/gi, "Café de Paris")
     .replace(/\bmoules frit(?:s|es)?\b/gi, "Moules frites")
+    .replace(/\bGraint\s+Argentina(n)?\s+(prawn|shrimp)s?\b/gi, m => /shrimp/i.test(m) ? "Giant Argentinian shrimp" : "Giant Argentinian prawns")
     .replace(/\bArgentina(n)?\s+(prawn|shrimp)s?\b/gi, m => /shrimp/i.test(m) ? "Argentinian shrimp" : "Argentinian prawns");
 }
 
@@ -121,6 +124,7 @@ function warningList(item) {
   check("bread", "gluten"); check("flatbread", "gluten"); check("sourdough", "gluten");
   check("almond", "nuts"); check("cashew", "nuts"); check("white wine", "sulphites");
   if (!item.allergens) warnings.push("Allergens are required before publishing.");
+  if (!/^£\d+(?:\.\d{1,2})?$/.test(String(item.price || "").trim())) warnings.push("Price needs review before publishing.");
   return [...new Set(warnings)];
 }
 
@@ -131,8 +135,8 @@ function rulesParse(text) {
   for (const raw of lines) {
     let line = raw.replace(/^[-*•]+\s*/, "");
     if (/^specials?$/i.test(line)) continue;
-    if (/^(starters?|mains?|main courses?|desserts?|dessert|to share|sides?)\s*:?$/i.test(line)) {
-      const label = line.replace(/:$/, "").replace(/^main courses?$/i, "Mains").replace(/^dessert$/i, "Desserts");
+    if (/^(starters?|mains?|main courses?|desserts?|dessert|to share|sides?)\s*:?\s*$/i.test(line)) {
+      const label = line.replace(/:$/, "").trim().replace(/^main courses?$/i, "Mains").replace(/^dessert$/i, "Desserts");
       current = {name:label, items:[]}; sections.push(current); lastItem = null; continue;
     }
     if (/^allergens?\s*:/i.test(line)) {
@@ -141,20 +145,33 @@ function rulesParse(text) {
     }
     const bracket = extractBracketAllergens(line);
     line = bracket.line;
-    const price = line.match(/(?:£|GBP\s*)(\d+(?:\.\d{1,2})?)/i);
-    if (price) {
+    const numericPrice = line.match(/(?:£|GBP\s*)(\d+(?:\.\d{1,2})?)/i);
+    const nonNumericPrice = !numericPrice && /£\s*\D/.test(line) ? line.match(/£\s*([^()]+)$/i) : null;
+    const looksLikeDish = Boolean(numericPrice || nonNumericPrice || bracket.allergens);
+    if (looksLikeDish) {
       if (!current) { current = {name:"Today’s Specials", items:[]}; sections.push(current); }
-      const body = line.replace(price[0], "").trim().replace(/[\s,;:\-–—]+$/g, "");
+      let body = line;
+      let price = "";
+      let priceNote = "";
+      if (numericPrice) {
+        body = line.replace(numericPrice[0], "").trim();
+        price = `£${Number(numericPrice[1]).toFixed(Number(numericPrice[1]) % 1 ? 2 : 0)}`;
+      } else if (nonNumericPrice) {
+        priceNote = nonNumericPrice[1].trim();
+        body = line.replace(nonNumericPrice[0], "").trim();
+      }
+      body = body.trim().replace(/[\s,;:\-–—]+$/g, "");
       const parts = body.split(/,\s*/);
       const item = {
         id:`sp-${crypto.randomBytes(5).toString("hex")}`,
         name:cleanText(parts.shift() || body),
         description:cleanText(parts.join(", ")),
-        price:`£${Number(price[1]).toFixed(Number(price[1]) % 1 ? 2 : 0)}`,
+        price,
         allergens:bracket.allergens,
         visible:true,
         warnings:[]
       };
+      if (priceNote) item.description = cleanText([item.description, `Chef price note: ${priceNote}`].filter(Boolean).join(", "));
       current.items.push(item); lastItem = item; continue;
     }
     if (lastItem) lastItem.description = cleanText([lastItem.description, line].filter(Boolean).join(", "));
@@ -165,7 +182,7 @@ function rulesParse(text) {
 
 async function aiParse(text) {
   if (!AI_KEY || !AI_MODEL) return null;
-  const prompt = `Parse this UK restaurant specials text into JSON. The chef normally puts the allergen declaration in parentheses at the end of each dish, for example: Pan-fried prawns, Café de Paris butter, lemon, flatbread £12 (milk, gluten, crustaceans). Treat a parenthetical group made up of recognised UK allergens as the allergens field and do not leave that group in the dish description. Also support a separate 'Allergens:' line. Correct only obvious spelling, punctuation and culinary terminology. Standardise supplied allergen wording. Never invent allergens. Put uncertain allergen issues in warnings. Preserve supplied prices. Return only JSON: {"sections":[{"name":"Starters","items":[{"name":"...","description":"...","price":"£12","allergens":"Milk, Crustaceans","warnings":[]}]}]}. Input:\n${text}`;
+  const prompt = `Parse this UK restaurant specials text into JSON. The chef normally puts the allergen declaration in parentheses at the end of each dish, for example: Pan-fried prawns, Café de Paris butter, lemon, flatbread £12 (milk, gluten, crustaceans). Treat a parenthetical group that is mostly recognised UK allergens as the allergens field, tolerate obvious allergen typos such as crustation -> crustaceans, and do not leave that group in the dish description. Also support a separate 'Allergens:' line. Correct obvious spelling, punctuation and culinary terminology, including Graint Argentina shrimp -> Giant Argentinian shrimp where context clearly indicates that correction. If a price is missing or written as text such as '£free samples price up to you', still return the dish with an empty price and retain the original price note for admin review. Never invent allergens or a numeric price. Return only JSON: {"sections":[{"name":"Starters","items":[{"name":"...","description":"...","price":"£12","allergens":"Milk, Crustaceans","warnings":[]}]}]}. Input:\n${text}`;
   const response = await fetch(AI_URL, {method:"POST", headers:{Authorization:`Bearer ${AI_KEY}`, "Content-Type":"application/json"}, body:JSON.stringify({model:AI_MODEL, messages:[{role:"system", content:"Return valid JSON only."},{role:"user", content:prompt}], temperature:0})});
   if (!response.ok) throw new Error(`AI parser returned ${response.status}`);
   const data = await response.json();
