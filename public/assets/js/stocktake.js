@@ -6,6 +6,8 @@
   const rows=document.getElementById('stockRows');
   const status=document.getElementById('stockStatus');
   const meta=document.getElementById('stockMeta');
+  const masterRows=document.getElementById('masterStockRows');
+  const masterStatus=document.getElementById('masterStockStatus');
   let data={items:[],types:[],locations:[]};
   let activeId=null;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,9 +31,22 @@
   async function addItem(e){e.preventDefault();if(activeId){status.textContent='Existing product selected. Enter its counts in the table below.';return;}const body={type:form.type.value,description:form.description.value.trim(),size:form.size.value.trim()};try{status.textContent='Checking master list…';const result=await api('/api/admin/stocktake/items',{method:'POST',body:JSON.stringify(body)});status.textContent=`Added ${result.item.description} to the master list.`;search.value='';suggestions.innerHTML='';form.reset();activeId=null;await load();}catch(err){if(err.data?.suggestions?.length){renderSuggestions(err.data.suggestions);status.textContent='Similar products already exist. Choose one above, or click “Add as new anyway” if this is definitely a different product.';const btn=document.getElementById('stockForceAdd');btn.hidden=false;btn.onclick=async()=>{try{const result=await api('/api/admin/stocktake/items',{method:'POST',body:JSON.stringify({...body,confirmNew:true})});status.textContent=`Added ${result.item.description}.`;btn.hidden=true;search.value='';form.reset();await load();}catch(e2){status.textContent=e2.message;}};}else status.textContent=err.message;}}
   form?.addEventListener('submit',addItem);
   document.getElementById('saveStocktake')?.addEventListener('click',async()=>{try{const entries=data.items.map(i=>({id:i.id,bar:i.counts?.bar||0,cellar:i.counts?.cellar||0,walk_in_fridge:i.counts?.walk_in_fridge||0}));status.textContent='Saving stock take…';const r=await api('/api/admin/stocktake/counts',{method:'PUT',body:JSON.stringify({entries})});status.textContent='Stock take saved.';data.updatedAt=r.updatedAt;meta.textContent=`${data.items.length} master products · Last saved ${new Date(r.updatedAt).toLocaleString()}`;}catch(e){status.textContent=e.message;}});
+
+  function masterTypeOptions(types,current){return types.map(t=>`<option value="${esc(t)}" ${t===current?'selected':''}>${esc(t)}</option>`).join('');}
+  function renderMaster(master){
+    if(!masterRows)return;
+    if(!master.items?.length){masterRows.innerHTML='<p>No master stock items have been created yet.</p>';return;}
+    const items=[...master.items].sort((a,b)=>a.type.localeCompare(b.type)||a.description.localeCompare(b.description));
+    masterRows.innerHTML=`<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;min-width:850px"><thead><tr><th style="text-align:left">Type</th><th style="text-align:left">Description</th><th style="text-align:left">Size</th><th style="text-align:left">Cost price</th><th></th></tr></thead><tbody>${items.map(i=>`<tr data-master-id="${esc(i.id)}" style="border-top:1px solid #ddd"><td><select data-master="type">${masterTypeOptions(master.types||[],i.type)}</select></td><td><input data-master="description" value="${esc(i.description)}" style="min-width:220px"></td><td><input data-master="size" value="${esc(i.size)}" style="width:120px"></td><td><div style="display:flex;align-items:center;gap:4px"><span>£</span><input data-master="costPrice" type="number" min="0" step="0.01" value="${i.costPrice==null?'':esc(Number(i.costPrice).toFixed(2))}" placeholder="0.00" style="width:100px"></div></td><td><button type="button" class="small-btn" data-save-master>Save</button><span data-master-status style="margin-left:8px"></span></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  async function loadMaster(){if(!masterRows)return;try{masterStatus.textContent='Loading master stock…';const master=await api('/api/admin/stocktake/master');renderMaster(master);masterStatus.textContent='';}catch(e){masterStatus.textContent=e.message;}}
+  masterRows?.addEventListener('click',async e=>{const btn=e.target.closest('[data-save-master]');if(!btn)return;const row=btn.closest('[data-master-id]');const rowStatus=row.querySelector('[data-master-status]');const get=k=>row.querySelector(`[data-master="${k}"]`).value.trim();try{rowStatus.textContent='Saving…';await api('/api/admin/stocktake/items/'+encodeURIComponent(row.dataset.masterId),{method:'PUT',body:JSON.stringify({type:get('type'),description:get('description'),size:get('size'),costPrice:get('costPrice')})});rowStatus.textContent='Saved';await load();}catch(err){rowStatus.textContent=err.message;}});
+
   async function loadAccess(){const box=document.getElementById('stockAccessUsers'),s=document.getElementById('stockAccessStatus');if(!box)return;try{const r=await api('/api/admin/stocktake/access');box.innerHTML=(r.users||[]).length?(r.users||[]).map(u=>`<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" data-stock-access="${esc(u.username)}" ${u.allowed?'checked':''}> <strong>${esc(u.displayName)}</strong> <span style="color:#777">(${esc(u.username)})</span></label>`).join(''):'<p>No additional admin users exist yet.</p>';s.textContent='';}catch(e){s.textContent=e.message;}}
   document.getElementById('saveStockAccess')?.addEventListener('click',async()=>{const s=document.getElementById('stockAccessStatus');try{const users=[...document.querySelectorAll('[data-stock-access]:checked')].map(x=>x.dataset.stockAccess);await api('/api/admin/stocktake/access',{method:'PUT',body:JSON.stringify({users})});s.textContent='Stock Take access saved.';}catch(e){s.textContent=e.message;}});
   document.getElementById('refreshStocktake')?.addEventListener('click',load);
+  document.getElementById('refreshMasterStock')?.addEventListener('click',loadMaster);
   document.querySelector('[data-panel="stocktake"]')?.addEventListener('click',()=>setTimeout(load,0));
+  document.querySelector('[data-panel="master-stock"]')?.addEventListener('click',()=>setTimeout(loadMaster,0));
   document.querySelector('[data-panel="stock-access"]')?.addEventListener('click',()=>setTimeout(loadAccess,0));
 })();
