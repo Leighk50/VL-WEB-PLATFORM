@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node seed-sunday-menu.js && node seed-dessert-menu.js && node stocktake-entry.js",
-    "test": "node --check stocktake-entry.js && node --check public/assets/js/stocktake.js && node --check admin-rbac-entry.js && node --check public/assets/js/admin-rbac.js && node --check specials-parentheses-entry.js && node --check webex-inbound-adapter.js && node --check specials-sms-safe.js && node --check specials-print-entry.js && node --test enquiry-security.test.js enquiry-admin.test.js"
+    "start": "node seed-sunday-menu.js && node seed-dessert-menu.js && node stocktake-import-2026-09-15.js && node stocktake-entry.js",
+    "test": "node --check stocktake-import-2026-09-15.js && node --check stocktake-entry.js && node --check public/assets/js/stocktake.js && node --check admin-rbac-entry.js && node --check public/assets/js/admin-rbac.js && node --check specials-parentheses-entry.js && node --check webex-inbound-adapter.js && node --check specials-sms-safe.js && node --check specials-print-entry.js && node --test enquiry-security.test.js enquiry-admin.test.js"
   }
 }
