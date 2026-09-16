@@ -22,33 +22,82 @@ function decodeToken(req){const token=tokenFromReq(req);if(!token.includes("."))
 function readUsers(){try{const data=JSON.parse(fs.readFileSync(USERS_FILE,"utf8"));return Array.isArray(data.users)?data.users:[];}catch{return[];}}
 function ensureDir(){fs.mkdirSync(DATA_DIR,{recursive:true});}
 function emptyStock(){return {version:1,updatedAt:null,items:[],counts:{},accessUsers:[]};}
-function readStock(){ensureDir();try{const data=JSON.parse(fs.readFileSync(STOCK_FILE,"utf8"));return {version:1,updatedAt:data.updatedAt||null,items:Array.isArray(data.items)?data.items:[],counts:data.counts&&typeof data.counts==="object"?data.counts:{},accessUsers:Array.isArray(data.accessUsers)?data.accessUsers.map(String):[]};}catch{return emptyStock();}}
 function writeStock(data){ensureDir();const temp=STOCK_FILE+".tmp";fs.writeFileSync(temp,JSON.stringify(data,null,2),{encoding:"utf8",mode:0o600});fs.renameSync(temp,STOCK_FILE);try{fs.chmodSync(STOCK_FILE,0o600);}catch{}}
+function cleanText(v){return String(v||"").trim().replace(/\s+/g," ");}
+function norm(v){return cleanText(v).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();}
+function canonicalSizeKey(v){
+  const raw=cleanText(v).toLowerCase().replace(/\s+/g,"");
+  const match=raw.match(/^(\d+(?:\.\d+)?)(ml|cl|l)$/i);
+  if(!match)return norm(v);
+  const amount=Number(match[1]);
+  if(!Number.isFinite(amount))return norm(v);
+  const unit=match[2].toLowerCase();
+  const ml=unit==="l"?amount*1000:unit==="cl"?amount*10:amount;
+  return `${Math.round(ml*1000)/1000}ml`;
+}
+function itemKey(description,size){return `${norm(description)}|${canonicalSizeKey(size)}`;}
+function consolidateEquivalentItems(data){
+  const byKey=new Map();
+  const kept=[];
+  let changed=false;
+  for(const item of data.items||[]){
+    const key=itemKey(item.description,item.size);
+    const existing=byKey.get(key);
+    if(!existing){byKey.set(key,item);kept.push(item);continue;}
+    changed=true;
+    const targetCounts=data.counts[existing.id]||(data.counts[existing.id]={bar:0,cellar:0,walk_in_fridge:0});
+    const sourceCounts=data.counts[item.id]||{};
+    for(const loc of LOCATIONS)targetCounts[loc.id]=(Number(targetCounts[loc.id])||0)+(Number(sourceCounts[loc.id])||0);
+    if((existing.costPrice===null||existing.costPrice===undefined||existing.costPrice==="")&&item.costPrice!==null&&item.costPrice!==undefined&&item.costPrice!=="")existing.costPrice=item.costPrice;
+    delete data.counts[item.id];
+  }
+  if(changed){data.items=kept;data.updatedAt=new Date().toISOString();}
+  return changed;
+}
+function readStock(){
+  ensureDir();
+  try{
+    const raw=JSON.parse(fs.readFileSync(STOCK_FILE,"utf8"));
+    const data={version:1,updatedAt:raw.updatedAt||null,items:Array.isArray(raw.items)?raw.items:[],counts:raw.counts&&typeof raw.counts==="object"?raw.counts:{},accessUsers:Array.isArray(raw.accessUsers)?raw.accessUsers.map(String):[]};
+    if(consolidateEquivalentItems(data))writeStock(data);
+    return data;
+  }catch{return emptyStock();}
+}
 function canStocktake(req){const username=decodeToken(req);if(!username)return false;if(username===OWNER)return true;const user=readUsers().find(u=>String(u.username).toLowerCase()===String(username).toLowerCase());if(!user||user.enabled===false)return false;return readStock().accessUsers.some(u=>u.toLowerCase()===String(username).toLowerCase());}
 function isOwner(req){return decodeToken(req)===OWNER;}
 function sameOrigin(req){const origin=req.headers.origin;if(!origin)return true;try{return new URL(origin).host===req.headers.host;}catch{return false;}}
 function readRaw(req,max=1000000){return new Promise((resolve,reject)=>{let raw="";req.on("data",c=>{raw+=c;if(raw.length>max)reject(new Error("Request too large"));});req.on("end",()=>resolve(raw));req.on("error",reject);});}
 function payload(raw){try{return raw?JSON.parse(raw):{};}catch{return{};}}
-function cleanText(v){return String(v||"").trim().replace(/\s+/g," ");}
-function norm(v){return cleanText(v).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();}
-function itemKey(description,size){return `${norm(description)}|${norm(size)}`;}
 function scoreItem(item,q){const n=norm(q);if(!n)return 0;const hay=norm(`${item.description} ${item.size} ${item.type}`);if(hay===n)return 100;if(hay.startsWith(n))return 80;if(hay.includes(n))return 60;const words=n.split(" ").filter(Boolean);return words.reduce((s,w)=>s+(hay.includes(w)?10:0),0);}
 function publicItem(i){return {id:i.id,type:i.type,description:i.description,size:i.size,createdAt:i.createdAt,updatedAt:i.updatedAt};}
-function publicData(data){return {types:TYPES,locations:LOCATIONS,updatedAt:data.updatedAt,items:data.items.map(i=>({...publicItem(i),total:Object.values(data.counts[i.id]||{}).reduce((a,b)=>a+(Number(b)||0),0),counts:{bar:Number(data.counts[i.id]?.bar)||0,cellar:Number(data.counts[i.id]?.cellar)||0,walk_in_fridge:Number(data.counts[i.id]?.walk_in_fridge)||0}}))};}
+function itemTotal(data,item){return LOCATIONS.reduce((sum,loc)=>sum+(Number(data.counts[item.id]?.[loc.id])||0),0);}
+function publicData(data){return {types:TYPES,locations:LOCATIONS,updatedAt:data.updatedAt,items:data.items.map(i=>({...publicItem(i),total:itemTotal(data,i),counts:{bar:Number(data.counts[i.id]?.bar)||0,cellar:Number(data.counts[i.id]?.cellar)||0,walk_in_fridge:Number(data.counts[i.id]?.walk_in_fridge)||0}}))};}
+function reportData(data){return {updatedAt:data.updatedAt,items:data.items.map(i=>({...publicItem(i),total:itemTotal(data,i)})).sort((a,b)=>a.type.localeCompare(b.type)||a.description.localeCompare(b.description)||a.size.localeCompare(b.size))};}
 function masterData(data){return {types:TYPES,items:data.items.map(i=>({...publicItem(i),costPrice:Number.isFinite(Number(i.costPrice))?Number(i.costPrice):null}))};}
-function stockPanelHtml(owner){return `<button data-panel="stocktake">Bar Stock Take</button>${owner?'<button data-panel="master-stock">Master Stock List</button><button data-panel="stock-access">Stock Access</button>':''}`;}
-function stockSectionsHtml(owner){return `<section id="panel-stocktake" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Bar</span><h1>Stock Take</h1></div><div class="actions"><button id="refreshStocktake" class="btn dark" type="button">Refresh</button><button id="saveStocktake" class="btn" type="button">Save Stock Take</button></div></div><p id="stockMeta" class="save-status"></p><div class="admin-card"><h3>Find or add a product</h3><p>Start typing a product name. Existing master items are suggested first to prevent duplicates.</p><label>Search master stock<input id="stockSearch" autocomplete="off" placeholder="e.g. Peroni 330ml"></label><div id="stockSuggestions"></div><form id="stockNewItem" style="margin-top:14px"><div class="row-2"><label>Item type<select name="type" required><option value="">Choose type</option></select></label><label>Size<input name="size" required placeholder="330ml, 70cl, 50L keg"></label></div><label>Description<input name="description" required placeholder="Brand / product name"></label><div class="actions"><button id="stockAddBtn" class="btn dark" type="submit">Add New Master Item</button><button id="stockForceAdd" class="btn secondary" type="button" hidden>Add as new anyway</button></div></form></div><div id="stockRows" style="margin-top:18px"></div><p id="stockStatus" class="save-status"></p></section>${owner?'<section id="panel-master-stock" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Bar</span><h1>Master Stock List</h1></div><button id="refreshMasterStock" class="btn dark" type="button">Refresh</button></div><div class="admin-card"><p>Maintain the master product details and cost prices here. Cost prices are deliberately hidden from the Stock Take screen.</p><div id="masterStockRows"></div><p id="masterStockStatus" class="save-status"></p></div></section><section id="panel-stock-access" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Security</span><h1>Stock Take Access</h1></div></div><div class="admin-card"><p>Choose which additional admin users can access the Bar Stock Take area. The Owner always has access.</p><div id="stockAccessUsers"></div><button id="saveStockAccess" class="btn dark" type="button">Save Access</button><p id="stockAccessStatus" class="save-status"></p></div></section>':''}`;}
-function injectAdmin(req){if(!canStocktake(req))return null;let html=fs.readFileSync(ADMIN_HTML,"utf8");const owner=isOwner(req);html=html.replace('</aside>',`${stockPanelHtml(owner)}</aside>`).replace('</main>',`${stockSectionsHtml(owner)}</main>`).replace('</body>','<script src="/assets/js/stocktake.js?v=1.1.0"></script></body>');return html;}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function reportPage(data){
+  const report=reportData(data);
+  const rows=report.items.map(i=>`<tr><td>${esc(i.type)}</td><td><strong>${esc(i.description)}</strong></td><td>${esc(i.size)}</td><td class="num">${esc(i.total)}</td></tr>`).join("");
+  return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Total Bar Stock Report | Village Limits</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#222;margin:0;background:#f4f1eb}.toolbar{padding:14px;text-align:center}.toolbar button{padding:10px 18px;border:0;border-radius:20px;background:#222;color:#fff;font-weight:700}.sheet{max-width:900px;margin:auto;background:#fff;padding:28px 34px;box-shadow:0 4px 18px #0002}.head{text-align:center;border-bottom:2px solid #b69452;padding-bottom:16px;margin-bottom:18px}.head img{max-width:260px;max-height:100px}.head h1{font-family:Georgia,serif;letter-spacing:2px;margin:12px 0 4px}.meta{color:#666;font-size:12px}table{width:100%;border-collapse:collapse}th{text-align:left;border-bottom:2px solid #333;padding:8px 6px}td{padding:7px 6px;border-bottom:1px solid #ddd}.num{text-align:right;font-weight:700}th.num{text-align:right}@media print{body{background:#fff}.toolbar{display:none}.sheet{box-shadow:none;max-width:none;padding:0}}</style></head><body><div class="toolbar"><button onclick="window.print()">Print Total Stock Report</button></div><main class="sheet"><div class="head"><img src="/assets/images/logo-gold.png" alt="Village Limits"><h1>TOTAL STOCK REPORT</h1><div class="meta">Combined Bar + Cellar + Walk-in Fridge${report.updatedAt?` · Last saved ${esc(new Date(report.updatedAt).toLocaleString("en-GB"))}`:""}</div></div><table><thead><tr><th>Type</th><th>Description</th><th>Size</th><th class="num">Total Qty</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No stock items found.</td></tr>'}</tbody></table></main></body></html>`;
+}
+function stockPanelHtml(owner){return `<button data-panel="stocktake">Bar Stock Take</button><button data-panel="stock-report">Total Stock Report</button>${owner?'<button data-panel="master-stock">Master Stock List</button><button data-panel="stock-access">Stock Access</button>':''}`;}
+function stockSectionsHtml(owner){return `<section id="panel-stocktake" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Bar</span><h1>Stock Take</h1></div><div class="actions"><button id="refreshStocktake" class="btn dark" type="button">Refresh</button><button id="saveStocktake" class="btn" type="button">Save Stock Take</button></div></div><p id="stockMeta" class="save-status"></p><div class="admin-card"><h3>Find or add a product</h3><p>Start typing a product name. Existing master items are suggested first to prevent duplicates. Equivalent sizes such as 70cl and 700ml are treated as the same size.</p><label>Search master stock<input id="stockSearch" autocomplete="off" placeholder="e.g. Peroni 330ml"></label><div id="stockSuggestions"></div><form id="stockNewItem" style="margin-top:14px"><div class="row-2"><label>Item type<select name="type" required><option value="">Choose type</option></select></label><label>Size<input name="size" required placeholder="330ml, 70cl, 50L keg"></label></div><label>Description<input name="description" required placeholder="Brand / product name"></label><div class="actions"><button id="stockAddBtn" class="btn dark" type="submit">Add New Master Item</button><button id="stockForceAdd" class="btn secondary" type="button" hidden>Add as new anyway</button></div></form></div><div id="stockRows" style="margin-top:18px"></div><p id="stockStatus" class="save-status"></p></section><section id="panel-stock-report" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Bar</span><h1>Total Stock Report</h1></div><div class="actions"><button id="refreshStockReport" class="btn dark" type="button">Refresh</button><button id="printStockReport" class="btn" type="button">Print Report</button></div></div><p id="stockReportMeta" class="save-status"></p><div id="stockReportRows"></div></section>${owner?'<section id="panel-master-stock" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Bar</span><h1>Master Stock List</h1></div><button id="refreshMasterStock" class="btn dark" type="button">Refresh</button></div><div class="admin-card"><p>Maintain the master product details and cost prices here. Cost prices are deliberately hidden from the Stock Take screen.</p><div id="masterStockRows"></div><p id="masterStockStatus" class="save-status"></p></div></section><section id="panel-stock-access" class="admin-panel" hidden><div class="admin-heading"><div><span class="eyebrow">Security</span><h1>Stock Take Access</h1></div></div><div class="admin-card"><p>Choose which additional admin users can access the Bar Stock Take area. The Owner always has access.</p><div id="stockAccessUsers"></div><button id="saveStockAccess" class="btn dark" type="button">Save Access</button><p id="stockAccessStatus" class="save-status"></p></div></section>':''}`;}
+function injectAdmin(req){if(!canStocktake(req))return null;let html=fs.readFileSync(ADMIN_HTML,"utf8");const owner=isOwner(req);html=html.replace('</aside>',`${stockPanelHtml(owner)}</aside>`).replace('</main>',`${stockSectionsHtml(owner)}</main>`).replace('</body>','<script src="/assets/js/stocktake.js?v=1.2.0"></script></body>');return html;}
 
 async function handle(req,res,pathname,url){
   if((pathname==="/admin"||pathname==="/admin/")&&req.method==="GET"){
     const html=injectAdmin(req);if(html){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store"});res.end(html);return true;}return false;
+  }
+  if(pathname==="/admin/stocktake/report"&&req.method==="GET"){
+    if(!canStocktake(req)){res.writeHead(302,{Location:"/admin"});res.end();return true;}
+    res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store"});res.end(reportPage(readStock()));return true;
   }
   if(!pathname.startsWith("/api/admin/stocktake"))return false;
   if(!canStocktake(req)){json(res,decodeToken(req)?403:401,{error:"Your account does not have access to Bar Stock Take."});return true;}
   if(["POST","PUT","DELETE"].includes(req.method)&&!sameOrigin(req)){json(res,403,{error:"Invalid request origin."});return true;}
   const data=readStock();
   if(pathname==="/api/admin/stocktake"&&req.method==="GET"){json(res,200,publicData(data));return true;}
+  if(pathname==="/api/admin/stocktake/report"&&req.method==="GET"){json(res,200,reportData(data));return true;}
   if(pathname==="/api/admin/stocktake/search"&&req.method==="GET"){const q=String(url.searchParams.get("q")||"");const results=data.items.map(item=>({item,score:scoreItem(item,q)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,8).map(x=>publicItem(x.item));json(res,200,{results});return true;}
   if(pathname==="/api/admin/stocktake/master"&&req.method==="GET"){
     if(!isOwner(req)){json(res,403,{error:"Only the owner can view stock cost prices."});return true;}
@@ -62,13 +111,13 @@ async function handle(req,res,pathname,url){
   if(pathname==="/api/admin/stocktake/items"&&req.method==="POST"){
     const body=payload(await readRaw(req));const type=cleanText(body.type),description=cleanText(body.description),size=cleanText(body.size);
     if(!TYPES.includes(type)){json(res,400,{error:"Please choose a valid item type."});return true;}if(description.length<2){json(res,400,{error:"Please enter the product description."});return true;}if(!size){json(res,400,{error:"Please enter the bottle, can, keg or pack size."});return true;}
-    const key=itemKey(description,size);const duplicate=data.items.find(i=>itemKey(i.description,i.size)===key);if(duplicate){json(res,409,{error:"That product is already in the master list.",existing:publicItem(duplicate)});return true;}
+    const key=itemKey(description,size);const duplicate=data.items.find(i=>itemKey(i.description,i.size)===key);if(duplicate){json(res,409,{error:"That product is already in the master list (equivalent liquid sizes are consolidated).",existing:publicItem(duplicate)});return true;}
     const suggestions=data.items.map(item=>({item,score:scoreItem(item,`${description} ${size}`)})).filter(x=>x.score>=40).sort((a,b)=>b.score-a.score).slice(0,5).map(x=>publicItem(x.item));if(suggestions.length&&!body.confirmNew){json(res,409,{error:"Similar products already exist. Select one of them, or confirm this is genuinely a new product.",suggestions});return true;}
     const now=new Date().toISOString();const item={id:crypto.randomUUID(),type,description,size,costPrice:null,createdAt:now,updatedAt:now};data.items.push(item);data.counts[item.id]={bar:0,cellar:0,walk_in_fridge:0};data.updatedAt=now;writeStock(data);json(res,201,{ok:true,item:publicItem(item)});return true;
   }
   if(pathname.startsWith("/api/admin/stocktake/items/")&&req.method==="PUT"){
     if(!isOwner(req)){json(res,403,{error:"Only the owner can edit master stock details and cost prices."});return true;}
-    const id=decodeURIComponent(pathname.slice("/api/admin/stocktake/items/".length));const item=data.items.find(i=>i.id===id);if(!item){json(res,404,{error:"Stock item not found."});return true;}const body=payload(await readRaw(req));const type=cleanText(body.type),description=cleanText(body.description),size=cleanText(body.size);if(!TYPES.includes(type)||!description||!size){json(res,400,{error:"Type, description and size are required."});return true;}const key=itemKey(description,size);if(data.items.some(i=>i.id!==id&&itemKey(i.description,i.size)===key)){json(res,409,{error:"Another master item already uses that description and size."});return true;}let costPrice=null;if(body.costPrice!==null&&body.costPrice!==undefined&&String(body.costPrice).trim()!==""){const n=Number(body.costPrice);if(!Number.isFinite(n)||n<0){json(res,400,{error:"Cost price must be zero or a positive number."});return true;}costPrice=Math.round(n*100)/100;}Object.assign(item,{type,description,size,costPrice,updatedAt:new Date().toISOString()});data.updatedAt=item.updatedAt;writeStock(data);json(res,200,{ok:true,item:{...publicItem(item),costPrice:item.costPrice}});return true;
+    const id=decodeURIComponent(pathname.slice("/api/admin/stocktake/items/".length));const item=data.items.find(i=>i.id===id);if(!item){json(res,404,{error:"Stock item not found."});return true;}const body=payload(await readRaw(req));const type=cleanText(body.type),description=cleanText(body.description),size=cleanText(body.size);if(!TYPES.includes(type)||!description||!size){json(res,400,{error:"Type, description and size are required."});return true;}const key=itemKey(description,size);if(data.items.some(i=>i.id!==id&&itemKey(i.description,i.size)===key)){json(res,409,{error:"Another master item already uses that description and equivalent size."});return true;}let costPrice=null;if(body.costPrice!==null&&body.costPrice!==undefined&&String(body.costPrice).trim()!==""){const n=Number(body.costPrice);if(!Number.isFinite(n)||n<0){json(res,400,{error:"Cost price must be zero or a positive number."});return true;}costPrice=Math.round(n*100)/100;}Object.assign(item,{type,description,size,costPrice,updatedAt:new Date().toISOString()});data.updatedAt=item.updatedAt;writeStock(data);json(res,200,{ok:true,item:{...publicItem(item),costPrice:item.costPrice}});return true;
   }
   if(pathname==="/api/admin/stocktake/counts"&&req.method==="PUT"){
     const body=payload(await readRaw(req));const entries=Array.isArray(body.entries)?body.entries:[];for(const entry of entries){const id=String(entry.id||"");if(!data.items.some(i=>i.id===id))continue;const next={};for(const loc of LOCATIONS){const value=Number(entry[loc.id]);next[loc.id]=Number.isFinite(value)&&value>=0?value:0;}data.counts[id]=next;}data.updatedAt=new Date().toISOString();writeStock(data);json(res,200,{ok:true,updatedAt:data.updatedAt});return true;
