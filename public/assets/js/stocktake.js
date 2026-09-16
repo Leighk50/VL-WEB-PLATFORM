@@ -6,6 +6,8 @@
   const rows=document.getElementById('stockRows');
   const status=document.getElementById('stockStatus');
   const meta=document.getElementById('stockMeta');
+  const reportRows=document.getElementById('stockReportRows');
+  const reportMeta=document.getElementById('stockReportMeta');
   const masterRows=document.getElementById('masterStockRows');
   const masterStatus=document.getElementById('masterStockStatus');
   let data={items:[],types:[],locations:[]};
@@ -32,6 +34,15 @@
   form?.addEventListener('submit',addItem);
   document.getElementById('saveStocktake')?.addEventListener('click',async()=>{try{const entries=data.items.map(i=>({id:i.id,bar:i.counts?.bar||0,cellar:i.counts?.cellar||0,walk_in_fridge:i.counts?.walk_in_fridge||0}));status.textContent='Saving stock take…';const r=await api('/api/admin/stocktake/counts',{method:'PUT',body:JSON.stringify({entries})});status.textContent='Stock take saved.';data.updatedAt=r.updatedAt;meta.textContent=`${data.items.length} master products · Last saved ${new Date(r.updatedAt).toLocaleString()}`;}catch(e){status.textContent=e.message;}});
 
+  function renderReport(report){
+    if(!reportRows)return;
+    const items=report.items||[];
+    if(!items.length){reportRows.innerHTML='<div class="admin-card"><p>No stock items found.</p></div>';return;}
+    let currentType='';
+    reportRows.innerHTML=`<div class="admin-card" style="overflow:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr><th style="text-align:left">Type</th><th style="text-align:left">Description</th><th style="text-align:left">Size</th><th style="text-align:right">Total Qty</th></tr></thead><tbody>${items.map(i=>{const showType=i.type!==currentType;currentType=i.type;return `<tr style="border-top:1px solid #ddd"><td>${showType?`<strong>${esc(i.type)}</strong>`:''}</td><td>${esc(i.description)}</td><td>${esc(i.size)}</td><td style="text-align:right;font-weight:700">${esc(i.total)}</td></tr>`;}).join('')}</tbody></table></div>`;
+  }
+  async function loadReport(){if(!reportRows)return;try{reportMeta.textContent='Loading total stock…';const report=await api('/api/admin/stocktake/report');renderReport(report);reportMeta.textContent=`${report.items?.length||0} products${report.updatedAt?' · Last saved '+new Date(report.updatedAt).toLocaleString():''}`;}catch(e){reportMeta.textContent=e.message;}}
+
   function masterTypeOptions(types,current){return types.map(t=>`<option value="${esc(t)}" ${t===current?'selected':''}>${esc(t)}</option>`).join('');}
   function renderMaster(master){
     if(!masterRows)return;
@@ -45,8 +56,11 @@
   async function loadAccess(){const box=document.getElementById('stockAccessUsers'),s=document.getElementById('stockAccessStatus');if(!box)return;try{const r=await api('/api/admin/stocktake/access');box.innerHTML=(r.users||[]).length?(r.users||[]).map(u=>`<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" data-stock-access="${esc(u.username)}" ${u.allowed?'checked':''}> <strong>${esc(u.displayName)}</strong> <span style="color:#777">(${esc(u.username)})</span></label>`).join(''):'<p>No additional admin users exist yet.</p>';s.textContent='';}catch(e){s.textContent=e.message;}}
   document.getElementById('saveStockAccess')?.addEventListener('click',async()=>{const s=document.getElementById('stockAccessStatus');try{const users=[...document.querySelectorAll('[data-stock-access]:checked')].map(x=>x.dataset.stockAccess);await api('/api/admin/stocktake/access',{method:'PUT',body:JSON.stringify({users})});s.textContent='Stock Take access saved.';}catch(e){s.textContent=e.message;}});
   document.getElementById('refreshStocktake')?.addEventListener('click',load);
+  document.getElementById('refreshStockReport')?.addEventListener('click',loadReport);
+  document.getElementById('printStockReport')?.addEventListener('click',()=>window.open('/admin/stocktake/report','_blank','noopener'));
   document.getElementById('refreshMasterStock')?.addEventListener('click',loadMaster);
   document.querySelector('[data-panel="stocktake"]')?.addEventListener('click',()=>setTimeout(load,0));
+  document.querySelector('[data-panel="stock-report"]')?.addEventListener('click',()=>setTimeout(loadReport,0));
   document.querySelector('[data-panel="master-stock"]')?.addEventListener('click',()=>setTimeout(loadMaster,0));
   document.querySelector('[data-panel="stock-access"]')?.addEventListener('click',()=>setTimeout(loadAccess,0));
 })();
