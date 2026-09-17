@@ -5,6 +5,9 @@ const OWNER=process.env.ADMIN_USERNAME||"admin";
 const SECRET=process.env.SESSION_SECRET||"replace-this-secret";
 const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,"site","data"):path.join(__dirname,"data"));
 const FILE=path.join(DATA_DIR,"keep-in-touch.json");
+const WEBEX_TOKEN=process.env.WEBEX_INTERACT_TOKEN||process.env.WEBEX_API_TOKEN||process.env.WEBEX_TOKEN||process.env["Webex API"]||"";
+const MS_TENANT_ID=process.env.MS_TENANT_ID||"",MS_CLIENT_ID=process.env.MS_CLIENT_ID||"",MS_CLIENT_SECRET=process.env.MS_CLIENT_SECRET||"";
+const MARKETING_SENDER=process.env.MARKETING_SENDER||process.env.EVENT_SENDER||"events@villagelimits.co.uk";
 const ALLOWED_INTERESTS=new Set(["restaurant","entertainment","accommodation"]);
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});}
 function read(){ensure();try{const d=JSON.parse(fs.readFileSync(FILE,"utf8"));return {version:3,entries:Array.isArray(d.entries)?d.entries:[],campaigns:Array.isArray(d.campaigns)?d.campaigns:[]};}catch{return {version:3,entries:[],campaigns:[]};}}
@@ -34,7 +37,7 @@ async function handle(req,res,pathname){
     if(found)Object.assign(found,fields);else data.entries.push({id:crypto.randomUUID(),...fields,createdAt:now});write(data);json(res,200,{ok:true});return true;
   }
   if(pathname==="/api/admin/keep-in-touch"&&req.method==="GET"){
-    if(!isOwner(req))return false;const data=read();const entries=[...data.entries].sort((a,b)=>String(b.consentAt).localeCompare(String(a.consentAt)));json(res,200,{count:entries.length,activeCount:entries.filter(e=>e.consent===true&&!e.unsubscribedAt).length,entries,campaigns:data.campaigns.slice(-10).reverse(),preferenceFields:true});return true;
+    if(!isOwner(req))return false;const data=read();const entries=[...data.entries].sort((a,b)=>String(b.consentAt).localeCompare(String(a.consentAt)));json(res,200,{count:entries.length,activeCount:entries.filter(e=>e.consent===true&&!e.unsubscribedAt).length,entries,campaigns:data.campaigns.slice(-10).reverse(),preferenceFields:true,smsConfigured:Boolean(WEBEX_TOKEN),emailConfigured:Boolean(MS_TENANT_ID&&MS_CLIENT_ID&&MS_CLIENT_SECRET&&MARKETING_SENDER),marketingSender:MARKETING_SENDER});return true;
   }
   if(pathname==="/api/admin/keep-in-touch/export"&&req.method==="GET"){
     if(!isOwner(req))return false;res.writeHead(200,{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":"attachment; filename=Village-Limits-Keep-In-Touch.csv","Cache-Control":"no-store"});res.end(csv(read()));return true;
