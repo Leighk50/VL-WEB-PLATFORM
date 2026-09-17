@@ -7,7 +7,7 @@
   <meta name="description" content="Join the Village Limits mailing list for offers, discounts, events and what's happening in Woodhall Spa.">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <style>
-    .kit-hero{background:linear-gradient(135deg,#151515,#2d2924);color:#fff;padding:72px 0 56px}.kit-wrap{max-width:760px}.kit-card{max-width:760px;margin:-32px auto 60px;background:#fff;border-radius:18px;box-shadow:0 12px 38px #0002;padding:34px}.kit-card label{display:block;margin:16px 0 7px;font-weight:700}.kit-card input[type=text],.kit-card input[type=email],.kit-card input[type=tel]{width:100%;box-sizing:border-box;padding:14px;border:1px solid #ccc;border-radius:10px;font:inherit}.kit-consent{display:flex!important;gap:10px;align-items:flex-start;font-weight:400!important;line-height:1.45}.kit-consent input{margin-top:4px}.kit-note{font-size:.92rem;color:#666;line-height:1.5}.kit-success{padding:18px;border-radius:12px;background:#edf7ec;margin-top:18px}.kit-error{padding:12px;border-radius:10px;background:#fff0f0;color:#8b1111;margin-top:14px}.kit-hp{position:absolute;left:-9999px}
+    .kit-hero{background:linear-gradient(135deg,#151515,#2d2924);color:#fff;padding:72px 0 56px}.kit-wrap{max-width:760px}.kit-card{max-width:760px;margin:-32px auto 60px;background:#fff;border-radius:18px;box-shadow:0 12px 38px #0002;padding:34px}.kit-card label{display:block;margin:16px 0 7px;font-weight:700}.kit-card input[type=text],.kit-card input[type=email],.kit-card input[type=tel]{width:100%;box-sizing:border-box;padding:14px;border:1px solid #ccc;border-radius:10px;font:inherit}.kit-consent{display:flex!important;gap:10px;align-items:flex-start;font-weight:400!important;line-height:1.45}.kit-consent input{margin-top:4px}.kit-note{font-size:.92rem;color:#666;line-height:1.5}.kit-success{padding:18px;border-radius:12px;background:#edf7ec;margin-top:18px}.kit-error{padding:12px;border-radius:10px;background:#fff0f0;color:#8b1111;margin-top:14px}.kit-hp{position:absolute;left:-9999px}.kit-interests{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}.kit-interest{display:flex!important;gap:8px;align-items:center;border:1px solid #ddd;border-radius:10px;padding:12px;margin:0!important;font-weight:600!important;background:#fafafa}.kit-interest input{margin:0}@media(max-width:640px){.kit-interests{grid-template-columns:1fr}.kit-card{padding:24px}}
   </style>
 </head>
 <body>
@@ -16,11 +16,19 @@
   <main class="container">
     <section class="kit-card">
       <h2>Join the Village Limits list</h2>
-      <p>Leave your details below and we'll keep you updated with offers, events and occasional Village Limits news.</p>
+      <p>Leave your details below and we'll keep you updated with offers, events and occasional Village Limits news. Your postcode and interests help us make those updates more relevant to you.</p>
       <form id="keepInTouchForm" novalidate>
         <label for="kitName">Name</label><input id="kitName" name="name" type="text" autocomplete="name" required>
         <label for="kitEmail">Email</label><input id="kitEmail" name="email" type="email" autocomplete="email" required>
         <label for="kitMobile">Mobile number</label><input id="kitMobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" placeholder="07..." required>
+        <label for="kitPostcode">Postcode</label><input id="kitPostcode" name="postcode" type="text" autocomplete="postal-code" placeholder="e.g. LN10 6UJ" required>
+        <label>What are you interested in?</label>
+        <div class="kit-interests" aria-label="Interests">
+          <label class="kit-interest"><input type="checkbox" name="interests" value="restaurant"> Restaurant</label>
+          <label class="kit-interest"><input type="checkbox" name="interests" value="entertainment"> Entertainment</label>
+          <label class="kit-interest"><input type="checkbox" name="interests" value="accommodation"> Accommodation</label>
+        </div>
+        <p class="kit-note">Choose as many as you like. We use your postcode to help distinguish nearby guests from visitors so we can make offers more relevant.</p>
         <label class="kit-hp">Website<input name="website" tabindex="-1" autocomplete="off"></label>
         <label class="kit-consent"><input id="kitConsent" name="marketingConsent" type="checkbox" required><span>I agree that The Village Limits may contact me by email and SMS with offers, discounts, events, promotions and other Village Limits news.</span></label>
         <p class="kit-note">You can withdraw your consent at any time by contacting us at <strong>hello@villagelimits.co.uk</strong> or 01526 353312. We will use your details only for Village Limits marketing and will not sell them to third parties.</p>
@@ -31,6 +39,6 @@
   </main>
   <div data-footer></div>
   <script src="/assets/js/site.js"></script>
-  <script src="/assets/js/keep-in-touch.js"></script>
+  <script src="/assets/js/keep-in-touch.js?v=1.1.0"></script>
 </body>
 </html>
