@@ -84,13 +84,13 @@ function transform(pathname, html) {
   let body = html;
 
   if (pathname === "/") {
-    const block = `<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant in Woodhall Spa</div><h2>Restaurant, rooms and entertainment in Woodhall Spa</h2><p class="lead">Discover Village Limits for relaxed dining, Sunday lunch, changing specials, afternoon tea, comfortable rooms and memorable entertainment in Woodhall Spa, Lincolnshire.</p><div class="actions"><a class="btn" href="/menu/main">View Main Menu</a><a class="btn secondary" href="/menu/sunday">Sunday Lunch Menu</a><a class="btn secondary" href="/menu/specials">Today’s Specials</a><a class="btn secondary" href="/afternoon-tea">Afternoon Tea</a></div></div></section>`;
+    const block = `<section class="section"><div class="container narrow"><div class="eyebrow">Restaurant in Woodhall Spa</div><h2>Restaurant, rooms and entertainment in Woodhall Spa</h2><p class="lead">Discover Village Limits for relaxed dining, Sunday lunch, changing specials, afternoon tea, comfortable rooms and memorable entertainment in Woodhall Spa, Lincolnshire.</p><div class="actions"><a class="btn" href="/menu/main">View Main Menu</a><a class="btn secondary" href="/menu/sunday">Sunday Lunch Menu</a><a class="btn secondary" href="/menu/specials">Today’s Specials</a><a class="btn secondary" href="/afternoon-tea">Afternoon Tea</a><a class="btn secondary" href="/christmas">Christmas Parties in Woodhall Spa</a></div></div></section>`;
     body = injectBeforeFooter(body, block);
     body = injectJsonLd(body, restaurantSchema());
   }
 
   if (pathname === "/eat") {
-    const block = `<section class="section alt"><div class="container narrow"><div class="eyebrow">Explore our menus</div><h2>Menus at Village Limits</h2><p class="lead">See our current restaurant menu, Sunday lunch, changing specials and afternoon tea.</p><div class="actions"><a class="btn" href="/menu/main">Main Restaurant Menu</a><a class="btn secondary" href="/menu/sunday">Sunday Lunch</a><a class="btn secondary" href="/menu/specials">Specials</a><a class="btn secondary" href="/afternoon-tea">Afternoon Tea</a></div></div></section>`;
+    const block = `<section class="section alt"><div class="container narrow"><div class="eyebrow">Explore our menus</div><h2>Menus at Village Limits</h2><p class="lead">See our current restaurant menu, Sunday lunch, changing specials and afternoon tea.</p><div class="actions"><a class="btn" href="/menu/main">Main Restaurant Menu</a><a class="btn secondary" href="/menu/sunday">Sunday Lunch</a><a class="btn secondary" href="/menu/specials">Specials</a><a class="btn secondary" href="/afternoon-tea">Afternoon Tea</a><a class="btn secondary" href="/christmas">Christmas Parties in Woodhall Spa</a></div></div></section>`;
     body = injectBeforeFooter(body, block);
     body = injectJsonLd(body, restaurantSchema());
   }
@@ -130,10 +130,20 @@ function transform(pathname, html) {
   }
 
   if (pathname === "/christmas") {
+    body = body
+      .replace("Christmas Parties Woodhall Spa | Christmas Party Menu | Village Limits", "Christmas Parties & Christmas Dinner Woodhall Spa | Village Limits")
+      .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="Christmas parties and Christmas dinner in Woodhall Spa for 2026 at Village Limits. Festive dining, a three-course Christmas party menu and group celebrations in Lincolnshire.">')
+      .replace('<div class="eyebrow">Christmas Parties in Woodhall Spa</div><h1>Christmas Party Menu</h1>', '<div class="eyebrow">Christmas 2026 in Woodhall Spa</div><h1>Christmas Parties &amp; Festive Dining in Woodhall Spa</h1>')
+      .replace("Planning a Christmas meal, office Christmas party or festive celebration in Lincolnshire?", "Planning Christmas dinner in Woodhall Spa, an office Christmas party or a festive celebration in Lincolnshire?")
+      .replace("Whether you are organising a work Christmas party, a family celebration or a festive meal with friends,", "For Christmas 2026, whether you are organising a work Christmas party, a family celebration or Christmas dinner with friends,");
+
     const faq = faqBlock([
-      {q:"Where are Christmas parties held?",a:"Christmas parties are held at Village Limits in Woodhall Spa, Lincolnshire."},
-      {q:"How can I enquire about a Christmas party?",a:"Use the Christmas enquiry form on this page or contact Village Limits directly to discuss your preferred date and party size."},
-      {q:"Can dietary requirements be discussed?",a:"Yes. Include dietary requirements in your enquiry so the team can discuss the current Christmas menu and suitable options with you."}
+      {q:"Where can I book a Christmas party in Woodhall Spa?",a:"Village Limits hosts Christmas parties and festive dining on Stixwould Road in Woodhall Spa, Lincolnshire."},
+      {q:"Can I book Christmas dinner in Woodhall Spa?",a:"Yes. The Village Limits Christmas 2026 menu is designed for festive meals, work parties, family celebrations and groups of friends."},
+      {q:"How much is the Christmas party menu?",a:"The Christmas party menu is £35 per person. The current dishes and any supplements are shown on this page."},
+      {q:"Is Village Limits suitable for work Christmas parties?",a:"Yes. The Christmas offering is suitable for office and staff parties as well as family and social celebrations. Send your preferred date and party size through the enquiry form so the team can discuss availability."},
+      {q:"Can dietary requirements be discussed?",a:"Yes. Include dietary requirements in your enquiry so the team can discuss the current Christmas menu and suitable options with you."},
+      {q:"Can guests stay overnight after a Christmas party?",a:"Village Limits also offers guest accommodation. Room availability is separate from Christmas party availability, so ask the team about rooms when you make your enquiry."}
     ]);
     body = injectBeforeFooter(body, faq.visible);
     body = injectJsonLd(body, faq.schema);
@@ -152,6 +162,8 @@ function transform(pathname, html) {
   if (["/menu/main","/menu/sunday","/menu/specials","/afternoon-tea"].includes(pathname)) {
     body = injectJsonLd(body, restaurantSchema());
   }
+
+  body = body.replace('<a href="/christmas">Christmas dining</a>', '<a href="/christmas">Christmas parties in Woodhall Spa</a>');
 
   return body;
 }
