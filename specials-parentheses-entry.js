@@ -143,6 +143,18 @@ function rulesParse(text) {
       if (lastItem) lastItem.allergens = formatAllergens(line.replace(/^allergens?\s*:/i, "").split(/[,;/]+/));
       continue;
     }
+    // Chefs often put allergens on the line immediately after the dish:
+    //   Fish special £18
+    //   (fish, dairy, egg, sulphites)
+    // Treat a bracket-only recognised allergen line as belonging to the
+    // previous dish instead of accidentally creating a new blank dish.
+    if (/^\([^()]+\)$/.test(line) && lastItem) {
+      const standalone = extractBracketAllergens(line);
+      if (standalone.allergens) {
+        lastItem.allergens = standalone.allergens;
+        continue;
+      }
+    }
     const bracket = extractBracketAllergens(line);
     line = bracket.line;
     const numericPrice = line.match(/(?:£|GBP\s*)(\d+(?:\.\d{1,2})?)/i);
