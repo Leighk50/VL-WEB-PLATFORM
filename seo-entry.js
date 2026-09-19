@@ -14,7 +14,12 @@ const originalCreateServer = http.createServer;
 
 const SEO_REDIRECTS = new Map([
   ["/live-entertainment-psychic-evenings-woodhall-spa/", "/whats-on"],
-  ["/live-entertainment-woodhall-spa/", "/whats-on"]
+  ["/live-entertainment-woodhall-spa/", "/whats-on"],
+  ["/accommodation/", "/stay"],
+  ["/bed-and-breakfast-hotel-woodhall-spa/", "/stay"],
+  ["/restaurant-woodhall-spa/", "/eat"],
+  ["/pub-food-woodhall-spa/", "/eat"],
+  ["/woodhall-spa-pubs/", "/eat"]
 ]);
 
 const HTML_PATHS = new Set([
