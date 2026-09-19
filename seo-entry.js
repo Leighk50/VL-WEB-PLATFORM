@@ -14,7 +14,12 @@ const originalCreateServer = http.createServer;
 
 const SEO_REDIRECTS = new Map([
   ["/live-entertainment-psychic-evenings-woodhall-spa/", "/whats-on"],
-  ["/live-entertainment-woodhall-spa/", "/whats-on"]
+  ["/live-entertainment-woodhall-spa/", "/whats-on"],
+  ["/accommodation/", "/stay"],
+  ["/bed-and-breakfast-hotel-woodhall-spa/", "/stay"],
+  ["/restaurant-woodhall-spa/", "/eat"],
+  ["/pub-food-woodhall-spa/", "/eat"],
+  ["/woodhall-spa-pubs/", "/eat"]
 ]);
 
 const HTML_PATHS = new Set([
@@ -63,10 +68,22 @@ function contentLastModified() {
   }
 }
 
+function knownExpiredEventUrls() {
+  try {
+    const content = JSON.parse(fs.readFileSync(CONTENT_FILE, "utf8").replace(/^\uFEFF/, ""));
+    return new Set((content.events || [])
+      .filter(event => event && event.id && /sarah-jane jazz/i.test(String(event.title || "")))
+      .map(event => `${SITE}/event/${encodeURIComponent(event.id)}`));
+  } catch {
+    return new Set();
+  }
+}
+
 function enrichSitemap(xml) {
   const lastmod = contentLastModified();
+  const expired = knownExpiredEventUrls();
   return String(xml).replace(/<url><loc>(.*?)<\/loc>(?:<lastmod>.*?<\/lastmod>)?<\/url>/g, (_m, loc) =>
-    `<url><loc>${loc}</loc><lastmod>${xmlEscape(lastmod)}</lastmod></url>`
+    expired.has(loc) ? "" : `<url><loc>${loc}</loc><lastmod>${xmlEscape(lastmod)}</lastmod></url>`
   );
 }
 
@@ -78,7 +95,9 @@ function currentIndexUrls() {
       if (menu && menu.visible && menu.id) urls.add(`${SITE}/menu/${encodeURIComponent(menu.id)}`);
     }
     for (const event of content.events || []) {
-      if (event && event.visible && event.id) urls.add(`${SITE}/event/${encodeURIComponent(event.id)}`);
+      if (event && event.visible && event.id && !/sarah-jane jazz/i.test(String(event.title || ""))) {
+        urls.add(`${SITE}/event/${encodeURIComponent(event.id)}`);
+      }
     }
   } catch {}
   return [...urls];
@@ -135,7 +154,7 @@ function transformHtml(pathname, html) {
       )
       .replace(
         "<p>Breakfast is available, and our <a href=\"/eat\">restaurant is on site</a>. Guests can also enjoy <a href=\"/whats-on\">entertainment on site Wednesday to Sunday</a>, making Village Limits a convenient alternative to hotels or bed and breakfast accommodation in Woodhall Spa.</p>",
-        "<p>Looking for hotel rooms, a bed and breakfast or comfortable accommodation in Woodhall Spa? Breakfast is available, our <a href=\"/eat\">restaurant is on site</a>, and guests can also enjoy <a href=\"/whats-on\">entertainment on site Wednesday to Sunday</a>. Village Limits is an independent place to stay close to Woodhall Spa village centre and local attractions.</p>"
+        "<p>Looking for hotel rooms, a bed and breakfast or comfortable accommodation in Woodhall Spa? Breakfast is available, our <a href=\"/eat\">restaurant is on site</a>, and guests can also enjoy <a href=\"/whats-on\">entertainment on site Wednesday to Sunday</a>. Village Limits is an independent place to stay close to Woodhall Spa village centre and local attractions.</p><h3>Why stay at Village Limits?</h3><p>Our six air-conditioned guest rooms give visitors a convenient base for Woodhall Spa, whether you are staying for a short break, a restaurant visit, an event or time with family and friends. Guests have free on-site parking and Wi-Fi, with breakfast available and direct online booking.</p><ul class=\"feature-list\"><li>Six air-conditioned guest rooms</li><li>Breakfast available</li><li>Free parking and Wi-Fi</li><li>Restaurant dining on site</li><li>Regular entertainment and special events</li><li>Convenient for Woodhall Spa village and local attractions</li></ul><h3>Accommodation FAQs</h3><p><strong>Do you have free parking?</strong><br>Yes, free on-site parking is available for guests.</p><p><strong>Are all rooms air-conditioned?</strong><br>Yes, all six guest rooms are air-conditioned.</p><p><strong>Is breakfast available?</strong><br>Yes, breakfast is available for staying guests.</p>"
       );
   }
 
@@ -183,8 +202,12 @@ function transformHtml(pathname, html) {
       )
       .replace(
         "<p class=\"lead\">From intimate private dining to milestone celebrations, tell us what you are planning and our events team will help bring it together.</p>",
-        "<p class=\"lead\">From intimate private dining to milestone celebrations, tell us what you are planning and our events team will help bring it together.</p><p>Village Limits is available for birthdays, anniversaries, private dining, wedding receptions, celebrations of life, corporate occasions and other private events in Woodhall Spa. We can help with food, drinks, entertainment requirements and the details that make the occasion feel personal.</p>"
+        "<p class=\"lead\">From intimate private dining to milestone celebrations, tell us what you are planning and our events team will help bring it together.</p><p>Village Limits is available for birthdays, anniversaries, private dining, wedding receptions, celebrations of life, corporate occasions and other private events in Woodhall Spa. We can help with food, drinks, entertainment requirements and the details that make the occasion feel personal.</p><h3>Private parties and functions in Woodhall Spa</h3><p>Plan a relaxed meal, drinks reception, family celebration or business gathering with food and hospitality from the Village Limits team. Free on-site parking and our <a href=\"/stay\">six guest rooms</a> are useful for guests travelling from outside Woodhall Spa.</p><h3>Events we can help with</h3><ul class=\"feature-list\"><li>Birthdays and anniversaries</li><li>Private dining and family celebrations</li><li>Wedding receptions and post-wedding gatherings</li><li>Celebrations of life and wakes</li><li>Corporate meals and small business events</li><li>Christmas parties and seasonal celebrations</li></ul><p>Tell us your preferred date, approximate guest numbers, food requirements and entertainment ideas using the enquiry form and our team will discuss availability and options with you.</p>"
       );
+  }
+
+  if (pathname === "/" || pathname === "/whats-on") {
+    body = body.replace(/<article class="event-card">(?:(?!<\/article>)[\s\S])*?<h[23]>Sarah-Jane Jazz<\/h[23]>(?:(?!<\/article>)[\s\S])*?<\/article>/gi, "");
   }
 
   return body;
