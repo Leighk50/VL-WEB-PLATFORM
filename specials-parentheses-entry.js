@@ -135,6 +135,7 @@ function extractBracketAllergens(line) {
 
 function cleanText(value) {
   const cleaned = String(value || "").trim().replace(/\s+/g, " ").replace(/\s+,/g, ",").replace(/,\s*/g, ", ")
+    .replace(/\bc[oô]te\s+de\s+b(?:ou?f|oeuf|œuf)\b/gi, "Côte de bœuf")
     .replace(/\bcafe de paris\b/gi, "Café de Paris")
     .replace(/\bmoules frit(?:s|es)?\b/gi, "Moules frites")
     .replace(/\bGraint\s+Argentina(n)?\s+(prawn|shrimp)s?\b/gi, m => /shrimp/i.test(m) ? "Giant Argentinian shrimp" : "Giant Argentinian prawns")
