@@ -98,6 +98,7 @@ function cleanText(value) {
     .replace(/\s+/g, " ")
     .replace(/\s+,/g, ",")
     .replace(/,\s*/g, ", ")
+    .replace(/\bc[oô]te\s+de\s+b(?:ou?f|oeuf|œuf)\b/gi, "Côte de bœuf")
     .replace(/\bcafe de paris\b/gi, "Café de Paris")
     .replace(/\bmoules frit(?:s|es)?\b/gi, "Moules frites")
     .replace(/\bArgentina(n)?\s+(prawn|shrimp)s?\b/gi, m => /shrimp/i.test(m) ? "Argentinian shrimp" : "Argentinian prawns");
