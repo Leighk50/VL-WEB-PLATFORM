@@ -92,7 +92,7 @@ function parseBody(raw, contentType) {
 }
 
 function cleanText(value) {
-  return String(value || "")
+  const cleaned = String(value || "")
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\s+,/g, ",")
@@ -100,10 +100,16 @@ function cleanText(value) {
     .replace(/\bcafe de paris\b/gi, "Café de Paris")
     .replace(/\bmoules frit(?:s|es)?\b/gi, "Moules frites")
     .replace(/\bArgentina(n)?\s+(prawn|shrimp)s?\b/gi, m => /shrimp/i.test(m) ? "Argentinian shrimp" : "Argentinian prawns");
+  return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "";
+}
+
+function cleanSentence(value) {
+  const cleaned = cleanText(value);
+  return cleaned && !/[.!?]$/.test(cleaned) ? `${cleaned}.` : cleaned;
 }
 
 function normalizeAllergens(value) {
-  const map = {dairy:"milk", egg:"eggs", gluten:"cereals containing gluten", crustacean:"crustaceans", soy:"soya", sulphite:"sulphites", sulfite:"sulphites", sulfites:"sulphites", nut:"nuts", mollusc:"molluscs"};
+  const map = {milk:"dairy", dairy:"dairy", egg:"eggs", eggs:"eggs", eg:"eggs", egs:"eggs", gluten:"gluten", "cereal containing gluten":"gluten", "cereals containing gluten":"gluten", wheat:"gluten", crustacean:"crustaceans", crustation:"crustaceans", crustations:"crustaceans", soy:"soya", sulphite:"sulphites", sulfite:"sulphites", sulfites:"sulphites", nut:"nuts", mollusc:"molluscs", mollusk:"molluscs"};
   const seen = new Set();
   for (const raw of String(value || "").split(/[,;/]+/)) {
     const key = raw.trim().toLowerCase();
@@ -120,7 +126,7 @@ function warningsFor(item) {
   const check = (ingredient, allergen) => {
     if (text.includes(ingredient) && !allergens.includes(allergen)) warnings.push(`Possible ${allergen} allergen because the dish mentions ${ingredient}. Confirm before publishing.`);
   };
-  check("cream", "milk"); check("butter", "milk"); check("cheese", "milk");
+  check("cream", "dairy"); check("butter", "dairy"); check("cheese", "dairy");
   check("prawn", "crustaceans"); check("shrimp", "crustaceans"); check("mussel", "molluscs");
   check("salmon", "fish"); check("mackerel", "fish"); check("cod", "fish");
   check("bread", "gluten"); check("flatbread", "gluten"); check("sourdough", "gluten");
@@ -183,7 +189,7 @@ async function aiParse(text) {
     for (const item of section.items) {
       item.id = `sp-${crypto.randomBytes(5).toString("hex")}`;
       item.name = cleanText(item.name);
-      item.description = cleanText(item.description);
+      item.description = cleanSentence(item.description);
       item.price = String(item.price || "").trim();
       item.allergens = normalizeAllergens(item.allergens);
       item.visible = true;
@@ -217,7 +223,7 @@ function validateForPublish(sections) {
 function publish(sections) {
   validateForPublish(sections);
   const content = readContent();
-  const menu = {id:"specials", name:"Specials", description:"Current limited-availability dishes.", visible:true, status:"Published from chef SMS", updatedAt:new Date().toISOString(), sections:sections.map(s => ({name:cleanText(s.name), items:s.items.map(i => ({id:i.id || crypto.randomUUID(), name:cleanText(i.name), description:cleanText(i.description), price:String(i.price), allergens:normalizeAllergens(i.allergens), visible:i.visible !== false}))}))};
+  const menu = {id:"specials", name:"Specials", description:"Current limited-availability dishes.", visible:true, status:"Published from chef SMS", updatedAt:new Date().toISOString(), sections:sections.map(s => ({name:cleanText(s.name), items:s.items.map(i => ({id:i.id || crypto.randomUUID(), name:cleanText(i.name), description:cleanSentence(i.description), price:String(i.price), allergens:normalizeAllergens(i.allergens), visible:i.visible !== false}))}))};
   const index = (content.menus || []).findIndex(m => m.id === "specials");
   if (index >= 0) content.menus[index] = menu; else (content.menus || (content.menus = [])).push(menu);
   writeContent(content);
