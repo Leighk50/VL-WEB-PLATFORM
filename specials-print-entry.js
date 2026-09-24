@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const formatSpecialsTitle = require("./specials-title");
 
 const USER = process.env.ADMIN_USERNAME || "admin";
 const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
@@ -28,7 +29,7 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function readDraft(){try{return JSON.parse(fs.readFileSync(DRAFT_FILE,"utf8"))}catch{return null}}
 
 function printPage(draft){
-  const sections=(draft?.sections||[]).map(s=>`<section class="menu-section"><div class="section-title"><span></span><h2>${esc(s.name)}</h2><span></span></div>${(s.items||[]).map(i=>`<article class="menu-item"><div class="dish-row"><h3>${esc(i.name)}</h3><div class="dots"></div><strong>${esc(i.price)}</strong></div>${i.description?`<p class="description">${esc(i.description)}</p>`:""}${i.allergens?`<p class="allergens"><span>Allergens</span> ${esc(i.allergens)}</p>`:""}</article>`).join("")}</section>`).join("");
+  const sections=(draft?.sections||[]).map(s=>`<section class="menu-section"><div class="section-title"><span></span><h2>${esc(s.name)}</h2><span></span></div>${(s.items||[]).map(i=>`<article class="menu-item"><div class="dish-row"><h3>${esc(formatSpecialsTitle(i.name))}</h3><div class="dots"></div><strong>${esc(i.price)}</strong></div>${i.description?`<p class="description">${esc(i.description)}</p>`:""}${i.allergens?`<p class="allergens"><span>Allergens</span> ${esc(i.allergens)}</p>`:""}</article>`).join("")}</section>`).join("");
 
   return `<!doctype html>
 <html lang="en-GB">

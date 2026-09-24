@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const formatSpecialsTitle = require("./specials-title");
 
 const USER = process.env.ADMIN_USERNAME || "admin";
 const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
@@ -217,7 +218,7 @@ function rulesParse(text) {
       const parts = body.split(/,\s*/);
       const item = {
         id:`sp-${crypto.randomBytes(5).toString("hex")}`,
-        name:cleanText(parts.shift() || body),
+        name:formatSpecialsTitle(cleanText(parts.shift() || body)),
         description:cleanSentence(parts.join(", ")),
         price,
         allergens:bracket.allergens,
@@ -243,7 +244,7 @@ function rulesParse(text) {
 
 async function aiParse(text) {
   if (!AI_KEY || !AI_MODEL) return null;
-  const prompt = `Parse this UK restaurant specials text into JSON. Proofread ALL visible text: correct spelling, grammar, punctuation, capitalisation and obvious culinary terminology while preserving the intended meaning. Every heading and sentence must start with a capital letter. The first priced line is a dish heading. If two or more priced heading lines appear consecutively before one description, create a separate item for every heading, retain each heading's own price, and copy the shared description and allergens to every item. Inspect every word inside parentheses as a possible allergen, correct misspellings, and standardise to only these display names: Celery, Gluten, Crustaceans, Eggs, Fish, Lupin, Dairy, Molluscs, Mustard, Nuts, Peanuts, Sesame, Soya, Sulphites. Always convert Milk to Dairy. Do not leave an allergen parenthesis in the description. Also support a separate Allergens: line. Infer an allergen only when the supplied word is clearly that allergen despite a spelling error; otherwise add a warning rather than guessing. Correct examples such as crustation -> Crustaceans and Graint Argentina shrimp -> Giant Argentinian shrimp. If a price is missing or written as text such as '£free samples price up to you', return an empty price and retain the note for admin review. Never invent a numeric price. Return only JSON: {"sections":[{"name":"Starters","items":[{"name":"...","description":"...","price":"£12","allergens":"Dairy, Crustaceans","warnings":[]}]}]}. Input:\n${text}`;
+  const prompt = `Parse this UK restaurant specials text into JSON. Proofread ALL visible text: correct spelling, grammar, punctuation, capitalisation and obvious culinary terminology while preserving the intended meaning. Use title case for dish headings, leaving short joining words such as and, of, with and de in lower case. Every sentence must start with a capital letter. The first priced line is a dish heading. If two or more priced heading lines appear consecutively before one description, create a separate item for every heading, retain each heading's own price, and copy the shared description and allergens to every item. Inspect every word inside parentheses as a possible allergen, correct misspellings, and standardise to only these display names: Celery, Gluten, Crustaceans, Eggs, Fish, Lupin, Dairy, Molluscs, Mustard, Nuts, Peanuts, Sesame, Soya, Sulphites. Always convert Milk to Dairy. Do not leave an allergen parenthesis in the description. Also support a separate Allergens: line. Infer an allergen only when the supplied word is clearly that allergen despite a spelling error; otherwise add a warning rather than guessing. Correct examples such as crustation -> Crustaceans and Graint Argentina shrimp -> Giant Argentinian shrimp. If a price is missing or written as text such as '£free samples price up to you', return an empty price and retain the note for admin review. Never invent a numeric price. Return only JSON: {"sections":[{"name":"Starters","items":[{"name":"...","description":"...","price":"£12","allergens":"Dairy, Crustaceans","warnings":[]}]}]}. Input:\n${text}`;
   const response = await fetch(AI_URL, {method:"POST", headers:{Authorization:`Bearer ${AI_KEY}`, "Content-Type":"application/json"}, body:JSON.stringify({model:AI_MODEL, messages:[{role:"system", content:"Return valid JSON only."},{role:"user", content:prompt}], temperature:0})});
   if (!response.ok) throw new Error(`AI parser returned ${response.status}`);
   const data = await response.json();
@@ -256,7 +257,7 @@ async function aiParse(text) {
     section.items = Array.isArray(section.items) ? section.items : [];
     for (const item of section.items) {
       item.id = `sp-${crypto.randomBytes(5).toString("hex")}`;
-      item.name = cleanText(item.name);
+      item.name = formatSpecialsTitle(cleanText(item.name));
       item.description = cleanSentence(item.description);
       item.price = String(item.price || "").trim();
       item.allergens = formatAllergens(String(item.allergens || "").split(/[,;/]+/));

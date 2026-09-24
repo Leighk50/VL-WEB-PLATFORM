@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const formatSpecialsTitle = require("./specials-title");
 
 const USER = process.env.ADMIN_USERNAME || "admin";
 const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
@@ -223,7 +224,7 @@ function validateForPublish(sections) {
 function publish(sections) {
   validateForPublish(sections);
   const content = readContent();
-  const menu = {id:"specials", name:"Specials", description:"Current limited-availability dishes.", visible:true, status:"Published from chef SMS", updatedAt:new Date().toISOString(), sections:sections.map(s => ({name:cleanText(s.name), items:s.items.map(i => ({id:i.id || crypto.randomUUID(), name:cleanText(i.name), description:cleanSentence(i.description), price:String(i.price), allergens:normalizeAllergens(i.allergens), visible:i.visible !== false}))}))};
+  const menu = {id:"specials", name:"Specials", description:"Current limited-availability dishes.", visible:true, status:"Published from chef SMS", updatedAt:new Date().toISOString(), sections:sections.map(s => ({name:cleanText(s.name), items:s.items.map(i => ({id:i.id || crypto.randomUUID(), name:formatSpecialsTitle(cleanText(i.name)), description:cleanSentence(i.description), price:String(i.price), allergens:normalizeAllergens(i.allergens), visible:i.visible !== false}))}))};
   const index = (content.menus || []).findIndex(m => m.id === "specials");
   if (index >= 0) content.menus[index] = menu; else (content.menus || (content.menus = [])).push(menu);
   writeContent(content);
