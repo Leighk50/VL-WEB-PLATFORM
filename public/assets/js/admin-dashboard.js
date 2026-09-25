@@ -167,8 +167,12 @@
 
       box.appendChild(el);
 
-      $("[data-print-menu]", el).onclick = () => {
-        window.open(`/admin/menus/print/${encodeURIComponent(menu.id)}`, "_blank", "noopener");
+      $("[data-print-menu]", el).onclick = async () => {
+        const preview = window.open("", "_blank");
+        if (!preview) { $("#menuSaveStatus").textContent = "Please allow pop-ups to print this menu."; return; }
+        preview.document.write("<p>Saving menu and preparing print view…</p>");
+        if (await saveContent()) preview.location.href = `/admin/menus/print/${encodeURIComponent(menu.id)}`;
+        else preview.close();
       };
 
       $$("[data-menu]", el).forEach(input => {
@@ -312,16 +316,21 @@
     renderStats();
   };
 
-  $("#saveAll").onclick = async () => {
-    const status = $("#saveStatus");
-    status.textContent = "Saving…";
+  async function saveContent() {
+    const statuses = [$("#saveStatus"), $("#menuSaveStatus")].filter(Boolean);
+    statuses.forEach(status => { status.textContent = "Saving…"; });
     try {
       await request("/api/admin/content", {method:"PUT", body:JSON.stringify(content)});
-      status.textContent = "Saved. Changes are live.";
+      statuses.forEach(status => { status.textContent = "Saved. Changes are live."; });
+      return true;
     } catch (err) {
-      status.textContent = err.message;
+      statuses.forEach(status => { status.textContent = `Could not save: ${err.message}`; });
+      return false;
     }
-  };
+  }
+
+  $("#saveAll").onclick = saveContent;
+  $("#saveMenus").onclick = saveContent;
 
   const testEmailBtn=$("#testEmailBtn"); if(testEmailBtn)testEmailBtn.onclick=testWebsiteEmail;
   const saveEvents = $("#saveEvents");
