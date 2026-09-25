@@ -154,7 +154,8 @@
       el.className = "menu-editor";
       el.innerHTML = `<div class="menu-head">
           <h2>${esc(menu.name)}</h2>
-          <div><button type="button" data-add-section class="small-btn">Add Section</button>
+          <div><button type="button" data-print-menu class="small-btn">Print Menu</button>
+          <button type="button" data-add-section class="small-btn">Add Section</button>
           <button type="button" data-delete-menu class="danger-btn">Delete Menu</button></div>
         </div>
         <div class="row-2">
@@ -165,6 +166,10 @@
         <div>${(menu.sections || []).map(sectionHtml).join("")}</div>`;
 
       box.appendChild(el);
+
+      $("[data-print-menu]", el).onclick = () => {
+        window.open(`/admin/menus/print/${encodeURIComponent(menu.id)}`, "_blank", "noopener");
+      };
 
       $$("[data-menu]", el).forEach(input => {
         input.oninput = () => {
