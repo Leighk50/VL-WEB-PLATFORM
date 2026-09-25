@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const {printMenuPage} = require("./menu-print-page");
 
 const OWNER = process.env.ADMIN_USERNAME || "admin";
 const OWNER_PASSWORD = process.env.ADMIN_PASSWORD || "ChangeMe-Immediately";
@@ -116,6 +117,7 @@ function writeContent(content) {
   fs.renameSync(temp, CONTENT_FILE);
 }
 function requiredPermission(pathname) {
+  if (pathname.startsWith("/admin/menus/print/")) return "menus";
   if (pathname === "/api/admin/test-email") return "dashboard";
   if (pathname === "/api/admin/upload-image") return "events";
   if (pathname === "/admin/specials/print" || pathname.startsWith("/api/admin/specials-sms")) return "specials";
@@ -125,6 +127,17 @@ function requiredPermission(pathname) {
 }
 
 async function handle(req, res, pathname) {
+  if (pathname.startsWith("/admin/menus/print/")) {
+    const identity = currentIdentity(req);
+    if (!identity) { redirect(res, "/admin"); return true; }
+    if (!has(identity, "menus")) { res.writeHead(403); res.end("Access denied"); return true; }
+    if (req.method !== "GET") { res.writeHead(405); res.end("Method not allowed"); return true; }
+    const id = pathname.slice("/admin/menus/print/".length);
+    const menu = readContent().menus.find(item => item.id === id);
+    if (!menu) { res.writeHead(404); res.end("Menu not found"); return true; }
+    res.writeHead(200, {"Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"});
+    res.end(printMenuPage(menu)); return true;
+  }
   if ((pathname === "/admin/login" || pathname === "/api/admin/login") && req.method === "POST") {
     const payload = parsePayload(await parseRaw(req), req.headers["content-type"]);
     const username = String(payload.username || "").trim();
