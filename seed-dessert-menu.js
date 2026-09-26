@@ -18,9 +18,11 @@ function seedDessertMenu() {
   const desserts = JSON.parse(fs.readFileSync(MENU, "utf8").replace(/^\uFEFF/, ""));
   content.menus = Array.isArray(content.menus) ? content.menus : [];
   const index = content.menus.findIndex(menu => menu.id === "desserts");
-  // Never replace a live menu merely because its seed marker disappeared.
+  const defaultDesserts = JSON.parse(fs.readFileSync(DEFAULT, "utf8").replace(/^\uFEFF/, ""))
+    .menus.find(menu => menu.id === "desserts");
+  // Fill only a fresh or untouched placeholder menu.
   if (index >= 0) {
-    if (freshContent) content.menus[index] = desserts;
+    if (freshContent || JSON.stringify(content.menus[index]) === JSON.stringify(defaultDesserts)) content.menus[index] = desserts;
   }
   else content.menus.push(desserts);
 
