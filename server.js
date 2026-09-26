@@ -157,8 +157,10 @@ function seedMainMenu(){
   if(!fs.existsSync(menuPath)) return;
   const main=JSON.parse(fs.readFileSync(menuPath,"utf8").replace(/^\uFEFF/,""));
   const i=c.menus.findIndex(m=>m.id==="main");
-  // Existing back-office edits always take precedence over bundled seed data.
-  if(i>=0){if(freshContent)c.menus[i]=main;} else c.menus.unshift(main);
+  const defaultMain=JSON.parse(fs.readFileSync(DEFAULT,"utf8").replace(/^\uFEFF/,""))
+    .menus.find(m=>m.id==="main");
+  // Fill a bundled placeholder on first setup; preserve any edited menu.
+  if(i>=0){if(freshContent||JSON.stringify(c.menus[i])===JSON.stringify(defaultMain))c.menus[i]=main;} else c.menus.unshift(main);
   c.mainMenuSeed="2026-08-main-menu";
   write(c);
 }
