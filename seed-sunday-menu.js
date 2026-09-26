@@ -18,9 +18,11 @@ function seedSundayMenu() {
   const sunday = JSON.parse(fs.readFileSync(MENU, "utf8").replace(/^\uFEFF/, ""));
   content.menus = Array.isArray(content.menus) ? content.menus : [];
   const index = content.menus.findIndex(menu => menu.id === "sunday");
-  // A missing seed marker must never overwrite a menu edited in the back office.
+  const defaultSunday = JSON.parse(fs.readFileSync(DEFAULT, "utf8").replace(/^\uFEFF/, ""))
+    .menus.find(menu => menu.id === "sunday");
+  // Seed a fresh or untouched placeholder menu, but preserve back-office edits.
   if (index >= 0) {
-    if (freshContent) content.menus[index] = sunday;
+    if (freshContent || JSON.stringify(content.menus[index]) === JSON.stringify(defaultSunday)) content.menus[index] = sunday;
   } else content.menus.push(sunday);
 
   content.sundayMenuSeed = SEED;
