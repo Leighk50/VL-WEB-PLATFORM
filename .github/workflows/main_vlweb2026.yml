@@ -65,7 +65,7 @@ jobs:
       - name: Keep a pre-deployment content backup
         uses: actions/upload-artifact@v4
         with:
-          name: live-content-before-deploy
+          name: live-content-before-deploy-${{ github.run_attempt }}
           path: ${{ runner.temp }}/live-content.json
           retention-days: 90
 
