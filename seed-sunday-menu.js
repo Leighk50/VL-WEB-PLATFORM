@@ -9,7 +9,8 @@ const MENU = path.join(__dirname, "sunday-menu.json");
 
 function seedSundayMenu() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(CONTENT)) fs.copyFileSync(DEFAULT, CONTENT);
+  const freshContent = !fs.existsSync(CONTENT);
+  if (freshContent) fs.copyFileSync(DEFAULT, CONTENT);
 
   const content = JSON.parse(fs.readFileSync(CONTENT, "utf8").replace(/^\uFEFF/, ""));
   if (content.sundayMenuSeed === SEED) return false;
@@ -17,8 +18,10 @@ function seedSundayMenu() {
   const sunday = JSON.parse(fs.readFileSync(MENU, "utf8").replace(/^\uFEFF/, ""));
   content.menus = Array.isArray(content.menus) ? content.menus : [];
   const index = content.menus.findIndex(menu => menu.id === "sunday");
-  if (index >= 0) content.menus[index] = sunday;
-  else content.menus.push(sunday);
+  // A missing seed marker must never overwrite a menu edited in the back office.
+  if (index >= 0) {
+    if (freshContent) content.menus[index] = sunday;
+  } else content.menus.push(sunday);
 
   content.sundayMenuSeed = SEED;
   const temp = CONTENT + ".tmp";
