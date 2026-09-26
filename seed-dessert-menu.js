@@ -9,7 +9,8 @@ const MENU = path.join(__dirname, "dessert-menu.json");
 
 function seedDessertMenu() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(CONTENT)) fs.copyFileSync(DEFAULT, CONTENT);
+  const freshContent = !fs.existsSync(CONTENT);
+  if (freshContent) fs.copyFileSync(DEFAULT, CONTENT);
 
   const content = JSON.parse(fs.readFileSync(CONTENT, "utf8").replace(/^\uFEFF/, ""));
   if (content.dessertMenuSeed === SEED) return;
@@ -17,7 +18,12 @@ function seedDessertMenu() {
   const desserts = JSON.parse(fs.readFileSync(MENU, "utf8").replace(/^\uFEFF/, ""));
   content.menus = Array.isArray(content.menus) ? content.menus : [];
   const index = content.menus.findIndex(menu => menu.id === "desserts");
-  if (index >= 0) content.menus[index] = desserts;
+  const defaultDesserts = JSON.parse(fs.readFileSync(DEFAULT, "utf8").replace(/^\uFEFF/, ""))
+    .menus.find(menu => menu.id === "desserts");
+  // Fill only a fresh or untouched placeholder menu.
+  if (index >= 0) {
+    if (freshContent || JSON.stringify(content.menus[index]) === JSON.stringify(defaultDesserts)) content.menus[index] = desserts;
+  }
   else content.menus.push(desserts);
 
   content.dessertMenuSeed = SEED;

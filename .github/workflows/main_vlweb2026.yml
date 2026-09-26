@@ -48,6 +48,27 @@ jobs:
         with:
           name: node-app
 
+      - name: Preserve current website content
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --max-time 30 \
+            https://villagelimits.co.uk/api/content \
+            --output "$RUNNER_TEMP/live-content.json"
+          node - "$RUNNER_TEMP/live-content.json" <<'NODE'
+          const fs = require('fs');
+          const content = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (!Array.isArray(content.menus) || !content.menus.some(menu => menu.id === 'main') || !Array.isArray(content.events)) {
+            throw new Error('Live content is incomplete; stopping deployment to protect menu edits.');
+          }
+          fs.copyFileSync(process.argv[2], 'data/content.json');
+          NODE
+
+      - name: Keep a pre-deployment content backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-content-before-deploy-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/live-content.json
+          retention-days: 90
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
