@@ -34,3 +34,24 @@ test("startup preserves edited menus when seed markers are missing", () => {
     fs.rmSync(dir, {recursive:true, force:true});
   }
 });
+
+test("first startup replaces only bundled placeholder menus", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vl-menu-fresh-"));
+  try {
+    const env = {...process.env, CONTENT_DATA_DIR: dir, PORT: "0"};
+    for (const script of ["seed-sunday-menu.js", "seed-dessert-menu.js"]) {
+      const result = spawnSync(process.execPath, [script], {cwd:__dirname, env, encoding:"utf8"});
+      assert.equal(result.status, 0, result.stderr);
+    }
+    const started = spawnSync(process.execPath, ["-e", "require('./server');setTimeout(()=>process.exit(0),350)"],
+      {cwd:__dirname, env, encoding:"utf8", timeout:5000});
+    assert.equal(started.status, 0, started.stderr);
+    const after = JSON.parse(fs.readFileSync(path.join(dir, "content.json"), "utf8"));
+    for (const [id, file] of [["main", "main-menu.json"], ["sunday", "sunday-menu.json"], ["desserts", "dessert-menu.json"]]) {
+      const expected = JSON.parse(fs.readFileSync(path.join(__dirname, file), "utf8"));
+      assert.deepEqual(after.menus.find(menu => menu.id === id), expected);
+    }
+  } finally {
+    fs.rmSync(dir, {recursive:true, force:true});
+  }
+});
