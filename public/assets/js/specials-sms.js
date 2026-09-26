@@ -39,7 +39,7 @@
     }catch(e){setStatus(e.message,true)}
   }
   async function save(){try{draft.sections=collect();const data=await api('/api/admin/specials-sms/draft',{method:'PUT',body:JSON.stringify({sections:draft.sections})});draft=data.draft;render();setStatus('Draft saved.');return true}catch(e){setStatus(e.message,true);return false}}
-  async function publish(){try{await save();if(!confirm('Publish these specials to the live website?'))return;const data=await api('/api/admin/specials-sms/publish',{method:'POST',body:'{}'});setStatus(`Published ${data.menu?.sections?.reduce((n,s)=>n+(s.items?.length||0),0)||0} specials to the website.`);await refresh()}catch(e){setStatus(e.message,true)}}
+  async function publish(){try{await save();if(!confirm('Publish these specials to the live website?'))return;const data=await api('/api/admin/specials-sms/publish',{method:'POST',body:'{}'});window.dispatchEvent(new CustomEvent('vl:specials-published',{detail:{menu:data.menu}}));await refresh();setStatus(`Published ${data.menu?.sections?.reduce((n,s)=>n+(s.items?.length||0),0)||0} specials to the website and Menus section.`)}catch(e){setStatus(e.message,true)}}
   async function parseManual(){try{const text=raw.value.trim();if(!text)throw new Error('Paste or type a specials message first.');setStatus('Parsing specials…');const data=await api('/api/admin/specials-sms/parse',{method:'POST',body:JSON.stringify({text})});draft=data.draft;render();setStatus(`Parsed using ${parserLabel(draft.parser)}. Review before publishing.`)}catch(e){setStatus(e.message,true)}}
   async function printDraft(){const ok=await save();if(!ok)return;window.open('/admin/specials/print','_blank','noopener')}
   editor.addEventListener('click',e=>{
