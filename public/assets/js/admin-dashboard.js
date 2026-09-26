@@ -332,6 +332,15 @@
   $("#saveAll").onclick = saveContent;
   $("#saveMenus").onclick = saveContent;
 
+  window.addEventListener("vl:specials-published", event => {
+    if (!content || !event.detail?.menu) return;
+    const index = content.menus.findIndex(menu => menu.id === "specials");
+    if (index >= 0) content.menus[index] = event.detail.menu;
+    else content.menus.push(event.detail.menu);
+    renderMenus();
+    renderStats();
+  });
+
   const testEmailBtn=$("#testEmailBtn"); if(testEmailBtn)testEmailBtn.onclick=testWebsiteEmail;
   const saveEvents = $("#saveEvents");
   if (saveEvents) saveEvents.onclick = () => $("#saveAll").click();
