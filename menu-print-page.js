@@ -38,6 +38,8 @@ h2{margin:0;font-family:Arial,sans-serif;font-size:13px;letter-spacing:3.2px;tex
 .description{margin:3px 0 0;font-size:13.2px;line-height:1.35;color:#4f4841;font-style:italic}.allergens{margin:4px 0 0;font-family:Arial,sans-serif;font-size:9.5px;line-height:1.35;color:#766d64;text-transform:none}.allergens span{font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5d544b;margin-right:4px}
 footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-top:1px solid rgba(182,148,82,.4);text-align:center;font-family:Arial,sans-serif;color:#6f655c;font-size:9.5px;line-height:1.45;letter-spacing:.15px}
 .footer-brand{display:block;margin-top:5px;text-transform:uppercase;letter-spacing:2px;color:var(--gold-dark);font-size:9px}
+.footer-social{display:block;margin-top:7px;color:var(--muted);font-size:9px;letter-spacing:.25px}
+.footer-social strong{font-weight:600;color:var(--gold-dark)}
 .two-column .menu-sheet{padding:22px 38px 25px}
 .two-column header{padding:0 16px 8px}
 .two-column header img{width:180px;max-height:125px;margin-bottom:3px}
@@ -53,12 +55,13 @@ footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-to
 .two-column .description{font-size:10.3px;line-height:1.23;margin-top:2px}
 .two-column .allergens{font-size:8px;line-height:1.18;margin-top:2px}
 .two-column footer{margin:10px 15px 0;padding-top:5px;font-size:8px}
+.two-column .footer-social{margin-top:4px;font-size:7.5px}
 @media print{html,body{background:#fff}.screen{display:none}.menu-sheet{box-shadow:none;margin:0;min-height:auto;max-width:none;width:100%;padding:24px 40px 28px}.menu-sheet:before{inset:5px}.menu-sheet:after{inset:11px}.corner.tl{top:9px;left:9px}.corner.tr{top:9px;right:9px}.corner.bl{bottom:9px;left:9px}.corner.br{bottom:9px;right:9px}header{padding-left:0;padding-right:0}header img{width:600px;max-width:100%;max-height:245px}}
 </style></head><body class="${compact ? "two-column" : ""}">
 <div class="screen"><button type="button" onclick="window.print()">Print ${esc(menu.name)}</button></div>
 <main class="menu-sheet"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
 <header><img src="/assets/images/logo-gold.png" alt="Village Limits"><p class="location">Woodhall Spa</p><h1>${esc(menu.name)}</h1>${menu.description ? `<p class="subtitle">${esc(menu.description)}</p>` : ""}<div class="gold-rule"><span></span><b>◆</b><span></span></div></header>
 ${sections || '<p style="text-align:center">No dishes have been added yet.</p>'}
-<footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span></footer></main></body></html>`;
+<footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span><span class="footer-social">Keep in touch · Follow <strong>The Village Limits</strong> on Facebook &amp; Instagram for news and upcoming events.</span></footer></main></body></html>`;
 }
 module.exports = {printMenuPage};
