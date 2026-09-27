@@ -70,8 +70,12 @@ function readJsonBody(req, max = 50000) {
 function readEnquiries() {
   try {
     const value = JSON.parse(fs.readFileSync(ENQUIRIES_FILE, "utf8"));
-    return Array.isArray(value) ? value : [];
-  } catch { return []; }
+    if (!Array.isArray(value)) throw new Error("Enquiry records have an invalid format.");
+    return value;
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 function writeEnquiries(items) {
@@ -106,11 +110,19 @@ function createEnquiry(type, body) {
   };
 }
 
-function saveSubmittedEnquiry(type, rawBody) {
-  if (!rawBody) return;
+function saveSubmittedEnquiry(type, body) {
   const items = readEnquiries();
-  items.unshift(createEnquiry(type, rawBody));
+  const record = createEnquiry(type, body);
+  record.deliveryStatus = "pending";
+  items.unshift(record);
   writeEnquiries(items.slice(0, 2000));
+  return async status => {
+    const current = readEnquiries();
+    const item = current.find(entry => entry.id === record.id);
+    if (!item) throw new Error("Enquiry record is missing.");
+    item.deliveryStatus = status;
+    writeEnquiries(current);
+  };
 }
 
 async function handleAdminApi(req, res, pathname) {
@@ -121,8 +133,13 @@ async function handleAdminApi(req, res, pathname) {
   }
 
   if (pathname === "/api/admin/enquiries" && req.method === "GET") {
-    const enquiries = readEnquiries().sort((a,b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
-    sendJson(res, 200, {enquiries});
+    try {
+      const enquiries = readEnquiries().filter(item => item.deliveryStatus !== "failed").sort((a,b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
+      sendJson(res, 200, {enquiries});
+    } catch (error) {
+      console.error("Could not read enquiry records", error);
+      sendJson(res, 500, {error:"Enquiry records could not be read. Please contact the website administrator."});
+    }
     return true;
   }
 
@@ -161,23 +178,7 @@ http.createServer = function enquiryCreateServer(options, requestListener) {
     const type = req.method === "POST" ? FORM_ROUTES.get(pathname) : null;
     if (!type) return listener(req, res);
 
-    let rawBody = "";
-    req.on("data", chunk => {
-      if (rawBody.length < 120000) rawBody += chunk;
-    });
-
-    const originalEnd = res.end;
-    let recorded = false;
-    res.end = function patchedEnd(chunk, encoding, callback) {
-      const result = originalEnd.call(this, chunk, encoding, callback);
-      if (!recorded && res.statusCode >= 200 && res.statusCode < 400) {
-        recorded = true;
-        try { saveSubmittedEnquiry(type, rawBody); }
-        catch (err) { console.error("Could not save enquiry admin record", err.message); }
-      }
-      return result;
-    };
-
+    req.createEnquiryRecord = (_formType, body) => saveSubmittedEnquiry(type, body);
     return listener(req, res);
   };
 

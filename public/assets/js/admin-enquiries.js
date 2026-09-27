@@ -58,6 +58,7 @@
           </label>
         </div>
         <div style="margin-top:18px;line-height:1.65">${detailRows(item)}</div>
+        ${item.deliveryStatus === "pending" ? '<p style="margin:12px 0;color:#8a5700"><strong>Email delivery unconfirmed. Check the inbox before replying.</strong></p>' : ""}
         ${item.dealtWithAt ? `<p style="margin:16px 0 0;font-size:.85rem"><strong>Completed:</strong> ${esc(formatDate(item.dealtWithAt))}</p>` : ""}
       </article>`).join("");
 
