@@ -10,7 +10,7 @@ const MENU = path.join(__dirname, "sunday-menu.json");
 function seedSundayMenu() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const freshContent = !fs.existsSync(CONTENT);
-  if (freshContent) fs.copyFileSync(DEFAULT, CONTENT);
+  if (freshContent) fs.copyFileSync(fs.existsSync(path.join(__dirname, "data", "live-content-backup.json")) ? path.join(__dirname, "data", "live-content-backup.json") : DEFAULT, CONTENT);
 
   const content = JSON.parse(fs.readFileSync(CONTENT, "utf8").replace(/^\uFEFF/, ""));
   if (content.sundayMenuSeed === SEED) return false;

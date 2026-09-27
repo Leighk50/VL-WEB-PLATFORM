@@ -2,6 +2,7 @@
   "use strict";
 
   let content = null;
+  let contentRevision = null;
   const $ = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -15,7 +16,7 @@
     const response = await fetch(url, {
       ...options,
       credentials: "same-origin",
-      headers: {"Content-Type":"application/json", ...(options.headers || {})}
+      headers: {"Content-Type":"application/json", ...(url === "/api/admin/content" && options.method === "PUT" ? {"If-Match":contentRevision || ""} : {}), ...(options.headers || {})}
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
@@ -23,6 +24,7 @@
       throw new Error("Your session has expired.");
     }
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    if (url === "/api/admin/content") contentRevision = response.headers.get("ETag") || contentRevision;
     return data;
   }
 
@@ -147,9 +149,16 @@
 
   function renderMenus() {
     const box = $("#menusEditor");
+    const printButtons = $("#menuPrintButtons");
     box.innerHTML = "";
+    printButtons.innerHTML = "";
 
     content.menus.forEach((menu, menuIndex) => {
+      const shortcut = document.createElement("button");
+      shortcut.type = "button";
+      shortcut.className = "small-btn";
+      shortcut.textContent = `Print ${menu.name}`;
+      printButtons.appendChild(shortcut);
       const el = document.createElement("div");
       el.className = "menu-editor";
       el.innerHTML = `<div class="menu-head">
@@ -167,17 +176,20 @@
 
       box.appendChild(el);
 
-      $("[data-print-menu]", el).onclick = async () => {
+      const printMenu = async () => {
         const preview = window.open("", "_blank");
         if (!preview) { $("#menuSaveStatus").textContent = "Please allow pop-ups to print this menu."; return; }
         preview.document.write("<p>Saving menu and preparing print view…</p>");
         if (await saveContent()) preview.location.href = `/admin/menus/print/${encodeURIComponent(menu.id)}`;
         else preview.close();
       };
+      $("[data-print-menu]", el).onclick = printMenu;
+      shortcut.onclick = printMenu;
 
       $$("[data-menu]", el).forEach(input => {
         input.oninput = () => {
           menu[input.dataset.menu] = input.type === "checkbox" ? input.checked : input.value;
+          if (input.dataset.menu === "name") shortcut.textContent = `Print ${menu.name}`;
         };
       });
 

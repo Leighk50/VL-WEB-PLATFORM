@@ -234,3 +234,5 @@ body{overflow-x:hidden}
   .tea2-package-grid img{height:auto}
   .tea2-icons{grid-template-columns:1fr 1fr}
 }
+
+.menu-print-title{font-size:1.5rem;margin:0 0 14px}.menu-print-buttons{display:flex;flex-wrap:wrap;gap:10px}.menu-print-buttons .small-btn{font-size:.9rem;cursor:pointer}
