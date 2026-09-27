@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
 const {printMenuPage} = require("./menu-print-page");
+const contentRevision = require("./content-revision");
 
 const OWNER = process.env.ADMIN_USERNAME || "admin";
 const OWNER_PASSWORD = process.env.ADMIN_PASSWORD || "ChangeMe-Immediately";
@@ -224,12 +225,13 @@ async function handle(req, res, pathname) {
       if (!sameOrigin(req)) { json(res, 403, {error:"Invalid request origin."}); return true; }
       const submitted = parsePayload(await parseRaw(req, 2000000), req.headers["content-type"]);
       const current = readContent();
+      if (req.headers["if-match"] !== contentRevision(current)) { json(res, 409, {error:"The menus or events changed since you opened this page. Reload to see the latest version before saving."}); return true; }
       let changed = false;
       if (has(identity,"menus") && Array.isArray(submitted.menus)) { current.menus = submitted.menus; changed = true; }
       if (has(identity,"events") && Array.isArray(submitted.events)) { current.events = submitted.events; changed = true; }
       if (has(identity,"settings") && submitted.settings && typeof submitted.settings === "object") { current.settings = submitted.settings; changed = true; }
       if (!changed) { json(res, 403, {error:"Your account does not have permission to change website content."}); return true; }
-      writeContent(current); json(res, 200, {ok:true}); return true;
+      writeContent(current); res.setHeader("ETag", contentRevision(current)); json(res, 200, {ok:true}); return true;
     }
   }
 
