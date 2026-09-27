@@ -134,16 +134,19 @@ function validate(type,q){
 function log(form,outcome,category){console.log(JSON.stringify({event:"public_enquiry",form,timestamp:new Date().toISOString(),outcome,category}))}
 async function processEnquiry(req,type,secret,send){
   const ip=clientIp(req);rateLimit(ip);
-  let q;
+  let q, updateRecord;
   try{
     q=await readForm(req);
     if(String(q.contact_reference||"").trim())throw new EnquiryError("We could not accept this enquiry. Please contact us by phone if you need assistance.","honeypot");
     verifyTiming(q.form_token,secret);
     const clean=validate(type,q);
+    if(req.createEnquiryRecord)updateRecord=await req.createEnquiryRecord(type,q);
     await send(clean);
+    if(updateRecord)try{await updateRecord("sent")}catch(error){console.error("Could not confirm delivered enquiry record",error)}
     log(type,"graph_success","sent");
     return clean;
   }catch(error){
+    if(updateRecord)try{await updateRecord("failed")}catch(recordError){console.error("Could not mark failed enquiry record",recordError)}
     if(q&&error&&typeof error==="object"){
       error.formValues=Object.fromEntries(Object.entries(q)
         .filter(([key,value])=>!["form_token","contact_reference"].includes(key)&&typeof value==="string")
