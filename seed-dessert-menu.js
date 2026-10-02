@@ -22,7 +22,7 @@ function seedDessertMenu() {
     .menus.find(menu => menu.id === "desserts");
   // Fill only a fresh or untouched placeholder menu.
   if (index >= 0) {
-    if (freshContent || JSON.stringify(content.menus[index]) === JSON.stringify(defaultDesserts)) content.menus[index] = desserts;
+    if (JSON.stringify(content.menus[index]) === JSON.stringify(defaultDesserts)) content.menus[index] = desserts;
   }
   else content.menus.push(desserts);
 
