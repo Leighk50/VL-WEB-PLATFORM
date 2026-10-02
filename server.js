@@ -296,10 +296,25 @@ function events(){
 function eventDetail(id){
  const c=read(),e=c.events.find(x=>x.id===id&&x.visible);
  if(!e)return shell("Event unavailable | Village Limits","This event is currently unavailable.",`/event/${encodeURIComponent(id)}`,ph("What's On","Event unavailable","This event is no longer available."),"noindex,follow");
+ const isButcherBlock=/butcher(?:'s)?\s+block/i.test(String(e.title||""));
  const sc=eventSchema(c,e);
+ if(isButcherBlock&&sc){
+   sc.name="Butcher Block Night at Village Limits, Woodhall Spa";
+   sc.description=`Butcher Block Night at Village Limits in Woodhall Spa on ${e.date}. ${e.description||"A special three-course dining event."}`;
+ }
  const price=e.price!==""?`<p><strong>Price:</strong> &pound;${esc(e.price)} per person</p>`:"";
- return shell(`${e.title} | Village Limits Woodhall Spa`,`${e.description} Book ${e.title} at Village Limits in Woodhall Spa.`,`/event/${encodeURIComponent(e.id)}`,
- `${ph("What's On",e.title,e.date)}<section class="section event-detail"><div class="container narrow"><img class="event-detail-image" src="${esc(e.image||"/assets/images/event.webp")}" alt="${esc(e.title)} at Village Limits"><h2>${esc(e.title)}</h2><p class="lead">${esc(e.description)}</p><p><strong>Date:</strong> ${esc(e.date)}</p>${price}${e.ticketUrl?`<p><a class="btn large" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Book / Buy Tickets</a></p>`:""}<p><a href="/whats-on">&larr; Back to What's On</a></p></div></section>`,
+ const title=isButcherBlock
+   ?"Butcher Block Night Woodhall Spa | 27 November 2026 | Village Limits"
+   :`${e.title} | Village Limits Woodhall Spa`;
+ const description=isButcherBlock
+   ?"Butcher Block Night at Village Limits, Woodhall Spa on Friday 27 November 2026. Enjoy a special three-course dining event and book your tickets online."
+   :`${e.description} Book ${e.title} at Village Limits in Woodhall Spa.`;
+ const heroTitle=isButcherBlock?"Butcher Block Night in Woodhall Spa":e.title;
+ const seoIntro=isButcherBlock
+   ?`<section class="section alt"><div class="container narrow"><div class="eyebrow">Friday 27 November 2026</div><h2>Butcher Block Night at Village Limits</h2><p class="lead">Join us in Woodhall Spa for Butcher Block Night, a special three-course dining event at Village Limits.</p><p>Our Butcher Block evening features a meat-led menu centred around prime rib / C&ocirc;te de Boeuf, with starter and dessert courses completing the evening. Check the event details below and book early for your preferred places.</p><p><a href="/whats-on">See all upcoming events at Village Limits</a></p></div></section>`
+   :"";
+ return shell(title,description,`/event/${encodeURIComponent(e.id)}`,
+ `${ph("What's On",heroTitle,e.date)}${seoIntro}<section class="section event-detail"><div class="container narrow"><img class="event-detail-image" src="${esc(e.image||"/assets/images/event.webp")}" alt="${esc(heroTitle)} at Village Limits in Woodhall Spa"><h2>${esc(e.title)}</h2><p class="lead">${esc(e.description)}</p><p><strong>Date:</strong> ${esc(e.date)}</p>${price}${e.ticketUrl?`<p><a class="btn large" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Book / Buy Tickets</a></p>`:""}<p><a href="/whats-on">&larr; Back to What's On</a></p></div></section>`,
  "index,follow",e.image||"/assets/images/event.webp",sc||schema(c))
 }
 function book(){return shell("Book a Table | Village Limits Restaurant Woodhall Spa","Reserve a table at Village Limits restaurant in Woodhall Spa using our secure online table booking system.","/book-table",`${ph("Restaurant","Book a Table","Reserve your table using our secure booking system.")}<section class="section"><div class="container booking-box"><script src="https://touchreservation.net/customer/javascript/embed.js?coalias=villagelimits&site=1"></script></div></section>`)}
