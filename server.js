@@ -151,7 +151,6 @@ function largeBody(req,max=8500000){return new Promise((ok,no)=>{let b="";req.on
 function formBody(req){return new Promise((ok,no)=>{let b="";req.on("data",c=>{b+=c;if(b.length>1e5)no(new Error("Request too large"))});req.on("end",()=>{try{const p=new URLSearchParams(b);ok(Object.fromEntries(p.entries()))}catch{no(new Error("Invalid form"))}});req.on("error",no)})}
 function loginPage(error=false){return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website Administration | Village Limits</title><meta name="robots" content="noindex,nofollow,noarchive"><link rel="stylesheet" href="/assets/css/styles.css?v=${AV}"></head><body class="admin-body"><div class="admin-login"><div class="login-card"><img src="/assets/images/logo-gold.png" alt="Village Limits"><div class="eyebrow">Version ${VERSION}</div><h1>Website administration</h1><p>Sign in to manage menus, events and website details.</p>${error?'<p class="form-error" role="alert">Incorrect username or password</p>':""}<form method="post" action="/admin/login"><label>Username<input name="username" required autocomplete="username"></label><label>Password<input name="password" type="password" required autocomplete="current-password"></label><button class="btn" type="submit">Sign in</button></form></div></div></body></html>`}
 function seedMainMenu(){
-  const freshContent = !fs.existsSync(CONTENT);
   const c=read();
   if(c.mainMenuSeed==="2026-08-main-menu") return;
   const menuPath=path.join(__dirname,"main-menu.json");
@@ -161,8 +160,18 @@ function seedMainMenu(){
   const defaultMain=JSON.parse(fs.readFileSync(DEFAULT,"utf8").replace(/^\uFEFF/,""))
     .menus.find(m=>m.id==="main");
   // Fill a bundled placeholder on first setup; preserve any edited menu.
-  if(i>=0){if(freshContent||JSON.stringify(c.menus[i])===JSON.stringify(defaultMain))c.menus[i]=main;} else c.menus.unshift(main);
+  if(i>=0){if(JSON.stringify(c.menus[i])===JSON.stringify(defaultMain))c.menus[i]=main;} else c.menus.unshift(main);
   c.mainMenuSeed="2026-08-main-menu";
+  write(c);
+}
+function restoreCamembertPrice(){
+  const c=read();
+  if(c.camembertPriceCorrection==="2026-10-02")return;
+  const main=(c.menus||[]).find(menu=>menu.id==="main");
+  for(const section of main?.sections||[])for(const item of section.items||[]){
+    if(item.id==="main-camembert"&&/^£?8\.50$/.test(String(item.price).trim()))item.price="£12.00";
+  }
+  c.camembertPriceCorrection="2026-10-02";
   write(c);
 }
 function migrateEventSeo(){
@@ -520,6 +529,7 @@ function uploadFile(p,res){
 }
 function staticFile(p,res){const f=path.normalize(path.join(ROOT,p));if(!f.startsWith(ROOT)){res.writeHead(403);return res.end("Forbidden")}fs.stat(f,(e,s)=>{if(e||!s.isFile()){res.writeHead(404);return res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
 seedMainMenu();
+restoreCamembertPrice();
 migrateEventSeo();
 migrateEncoding();
 http.createServer(async(req,res)=>{try{res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("Referrer-Policy","strict-origin-when-cross-origin");res.setHeader("X-Frame-Options","SAMEORIGIN");const u=new URL(req.url,`http://${req.headers.host||"localhost"}`),p=decodeURIComponent(u.pathname);

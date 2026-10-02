@@ -22,7 +22,7 @@ function seedSundayMenu() {
     .menus.find(menu => menu.id === "sunday");
   // Seed a fresh or untouched placeholder menu, but preserve back-office edits.
   if (index >= 0) {
-    if (freshContent || JSON.stringify(content.menus[index]) === JSON.stringify(defaultSunday)) content.menus[index] = sunday;
+    if (JSON.stringify(content.menus[index]) === JSON.stringify(defaultSunday)) content.menus[index] = sunday;
   } else content.menus.push(sunday);
 
   content.sundayMenuSeed = SEED;
