@@ -2,6 +2,7 @@ const http=require("http"),fs=require("fs"),path=require("path"),crypto=require(
 const {EnquiryError,timingToken,processEnquiry,log:logEnquiry}=require("./enquiry-security");
 const formatSpecialsTitle=require("./specials-title");
 const contentRevision=require("./content-revision");
+const syncSundayStarters=require("./shared-menu-starters");
 const PORT=process.env.PORT||8080,ROOT=path.join(__dirname,"public"),DEFAULT=path.join(__dirname,"data","default-content.json");
 const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,"site","data"):path.join(__dirname,"data")),CONTENT=path.join(DATA_DIR,"content.json"),UPLOADS_DIR=path.join(DATA_DIR,"uploads");
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
@@ -11,8 +12,8 @@ const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VER
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});const backup=path.join(__dirname,"data","live-content-backup.json");if(!fs.existsSync(CONTENT))fs.copyFileSync(fs.existsSync(backup)?backup:DEFAULT,CONTENT);const bundledUploads=path.join(__dirname,"data","uploads");if(fs.existsSync(bundledUploads))for(const name of fs.readdirSync(bundledUploads)){const source=path.join(bundledUploads,name),target=path.join(UPLOADS_DIR,name);if(fs.statSync(source).isFile()&&!fs.existsSync(target))fs.copyFileSync(source,target)}}
-function read(){ensure();return JSON.parse(fs.readFileSync(CONTENT,"utf8").replace(/^\uFEFF/,""))}
-function write(c){ensure();const t=CONTENT+".tmp";fs.writeFileSync(t,JSON.stringify(c,null,2),"utf8");fs.renameSync(t,CONTENT)}
+function read(){ensure();return syncSundayStarters(JSON.parse(fs.readFileSync(CONTENT,"utf8").replace(/^\uFEFF/,"")))}
+function write(c){syncSundayStarters(c);ensure();const t=CONTENT+".tmp";fs.writeFileSync(t,JSON.stringify(c,null,2),"utf8");fs.renameSync(t,CONTENT)}
 function saveUploadedImage(payload){
   ensure();
   const allowed={"image/jpeg":".jpg","image/png":".png","image/webp":".webp"};

@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const syncSundayStarters = require("./shared-menu-starters");
 const {printMenuPage} = require("./menu-print-page");
 const contentRevision = require("./content-revision");
 
@@ -111,8 +112,9 @@ function sameOrigin(req) {
   if (!origin) return true;
   try { return new URL(origin).host === req.headers.host; } catch { return false; }
 }
-function readContent() { return JSON.parse(fs.readFileSync(CONTENT_FILE, "utf8").replace(/^\uFEFF/, "")); }
+function readContent() { return syncSundayStarters(JSON.parse(fs.readFileSync(CONTENT_FILE, "utf8").replace(/^\uFEFF/, ""))); }
 function writeContent(content) {
+  syncSundayStarters(content);
   const temp = CONTENT_FILE + ".rbac.tmp";
   fs.writeFileSync(temp, JSON.stringify(content, null, 2), "utf8");
   fs.renameSync(temp, CONTENT_FILE);
