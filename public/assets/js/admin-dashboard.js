@@ -13,19 +13,32 @@
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   async function request(url, options={}) {
-    const response = await fetch(url, {
-      ...options,
-      credentials: "same-origin",
-      headers: {"Content-Type":"application/json", ...(url === "/api/admin/content" && options.method === "PUT" ? {"If-Match":contentRevision || ""} : {}), ...(options.headers || {})}
-    });
-    const data = await response.json().catch(() => ({}));
-    if (response.status === 401) {
-      location.href = "/admin";
-      throw new Error("Your session has expired.");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        credentials: "same-origin",
+        headers: {"Content-Type":"application/json", ...(url === "/api/admin/content" && options.method === "PUT" ? {"If-Match":contentRevision || ""} : {}), ...(options.headers || {})}
+      });
+      const data = await response.json().catch(error => {
+        if (controller.signal.aborted) throw error;
+        return {};
+      });
+      if (response.status === 401) {
+        location.href = "/admin";
+        throw new Error("Your session has expired.");
+      }
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      if (url === "/api/admin/content") contentRevision = response.headers.get("ETag") || contentRevision;
+      return data;
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error("The server did not confirm the request within 20 seconds. Check the saved menu before trying again.");
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-    if (url === "/api/admin/content") contentRevision = response.headers.get("ETag") || contentRevision;
-    return data;
   }
 
   function toLocalInput(value){
@@ -179,9 +192,19 @@
       const printMenu = async () => {
         const preview = window.open("", "_blank");
         if (!preview) { $("#menuSaveStatus").textContent = "Please allow pop-ups to print this menu."; return; }
-        preview.document.write("<p>Saving menu and preparing print view…</p>");
-        if (await saveContent()) preview.location.href = `/admin/menus/print/${encodeURIComponent(menu.id)}`;
-        else preview.close();
+        const printUrl = `/admin/menus/print/${encodeURIComponent(menu.id)}`;
+        const showPreview = message => {
+          if (preview.closed) return;
+          preview.document.open();
+          preview.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Print menu | Village Limits</title></head><body style="font-family:Arial,sans-serif;padding:24px;line-height:1.5"><p>${message}</p><p><a href="${esc(printUrl)}">Print the saved menu</a></p><p>This link uses the menu saved on the website. Unsaved edits may not appear.</p></body></html>`);
+          preview.document.close();
+        };
+        showPreview("Saving menu and preparing print view…");
+        if (await saveContent()) {
+          if (!preview.closed) preview.location.replace(printUrl);
+        } else {
+          showPreview("The menu save could not be confirmed. Return to the administration tab for the error details, or print the saved menu below.");
+        }
       };
       $("[data-print-menu]", el).onclick = printMenu;
       shortcut.onclick = printMenu;
