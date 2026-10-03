@@ -1,9 +1,9 @@
 (()=>{
   const PERMS=[
-    ['dashboard','Dashboard'],['enquiries','Enquiries'],['menus','Menus'],['specials','Chef Specials'],
+    ['dashboard','Dashboard'],['enquiries','Enquiries'],['reservations','Reservations'],['menus','Menus'],['specials','Chef Specials'],
     ['events',"What's On"],['guest_sms','Guest SMS'],['settings','Website Details']
   ];
-  const PANEL_PERM={dashboard:'dashboard',enquiries:'enquiries',menus:'menus','specials-sms':'specials',events:'events',sms:'guest_sms',settings:'settings',users:'users'};
+  const PANEL_PERM={dashboard:'dashboard',enquiries:'enquiries',reservations:'reservations',menus:'menus','specials-sms':'specials',events:'events',sms:'guest_sms',settings:'settings',users:'users'};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let session=null;
 
