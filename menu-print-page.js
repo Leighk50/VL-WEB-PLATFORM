@@ -1,7 +1,28 @@
 "use strict";
 const formatSpecialsTitle = require("./specials-title");
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function printMenuPage(menu) {
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+function upcomingEvents(events, now = new Date()) {
+  const today = new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(now);
+  return (events || []).filter(event => event.visible === true).map(event => {
+    let date = event.startDate ? new Date(event.startDate) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+      const match = String(event.date || "").match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)\s+(\d{4})\b/i);
+      if (!match) return null;
+      const month = MONTHS.indexOf(match[2].toLowerCase());
+      if (month < 0) return null;
+      date = new Date(Date.UTC(Number(match[3]),month,Number(match[1]),12));
+      if (date.getUTCMonth() !== month || date.getUTCDate() !== Number(match[1])) return null;
+    }
+    const day = new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
+    if (day < today) return null;
+    const label = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/London",weekday:"short",day:"numeric",month:"short",year:"numeric"}).format(date);
+    return {title:event.title, date:label, sort:date.getTime()};
+  }).filter(Boolean).sort((a,b)=>a.sort-b.sort).slice(0,3);
+}
+function printMenuPage(menu, events = [], now = new Date()) {
+  const upcoming = upcomingEvents(events, now);
+  const eventsList = upcoming.length ? `<ul class="upcoming-events">${upcoming.map(event=>`<li><strong>${esc(event.title)}</strong><span>${esc(event.date)}</span></li>`).join("")}</ul>` : '<p class="events-empty">Discover our latest events and entertainment online.</p>';
   const sections = (menu.sections || []).map(section => {
     const items = (section.items || []).filter(item => item.visible !== false);
     if (!items.length) return "";
@@ -36,10 +57,11 @@ h2{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:15px;font-weig
 .menu-item{padding:8px 3px 8px;border-bottom:1px solid rgba(128,100,58,.16);break-inside:avoid}.menu-item:last-child{border-bottom:0}
 .dish-row{display:flex;align-items:baseline;gap:8px}.dish-row h3{margin:0;font-size:16px;font-weight:700;line-height:1.25;letter-spacing:.1px}.dots{flex:1;border-bottom:1px dotted rgba(128,100,58,.38);transform:translateY(-3px)}.dish-row strong{font-family:Arial,sans-serif;font-size:13px;font-variant-numeric:tabular-nums;color:var(--gold-dark);white-space:nowrap}
 .description{margin:3px 0 0;font-size:13px;line-height:1.35;color:#514e49;font-style:italic}.allergens{margin:4px 0 0;font-family:Arial,sans-serif;font-size:9.5px;line-height:1.35;color:#766d64;text-transform:none}.allergens span{font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#5d544b;margin-right:4px}
-footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-top:1px solid rgba(182,148,82,.4);text-align:center;font-family:Arial,sans-serif;color:#6f655c;font-size:9.5px;line-height:1.45;letter-spacing:.15px}
+footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-top:1px solid rgba(182,148,82,.4);text-align:center;font-family:Arial,sans-serif;color:#6f655c;font-size:9.5px;line-height:1.45;letter-spacing:.15px;break-inside:avoid}
 .footer-brand{display:block;margin-top:5px;text-transform:uppercase;letter-spacing:2px;color:var(--gold-dark);font-size:9px}
-.footer-social{display:flex;justify-content:center;align-items:center;gap:9px;margin-top:7px;color:var(--muted);font-size:9px;letter-spacing:.15px;break-inside:avoid}
-.footer-social img{display:block;width:58px;height:58px;padding:2px;background:#fff;border:1px solid rgba(182,148,82,.4)}
+.footer-promotions{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;break-inside:avoid;text-align:left}
+.footer-social{display:flex;justify-content:flex-start;align-items:center;gap:9px;color:var(--muted);font-size:9px;letter-spacing:.15px;break-inside:avoid;min-width:0}
+.footer-social img{display:block;width:76px;height:76px;flex:none;padding:2px;background:#fff;border:1px solid rgba(182,148,82,.4)}
 .footer-social strong{font-weight:600;color:var(--gold-dark)}
 .footer-social a{color:var(--gold-dark);text-decoration:none}
 .two-column .menu-sheet{padding:22px 38px 25px}
@@ -59,13 +81,19 @@ footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-to
 .two-column .allergens{font-size:8px;line-height:1.18;margin-top:2px}
 .two-column footer{margin:10px 15px 0;padding-top:5px;font-size:8px}
 .two-column .footer-social{margin-top:4px;font-size:7.5px;gap:6px}
-.two-column .footer-social img{width:52px;height:52px}
-@media print{html,body{background:#fff}.screen{display:none}.menu-sheet{box-shadow:none;margin:0;min-height:auto;max-width:none;width:100%;padding:24px 40px 28px}.menu-sheet:before{inset:5px}.menu-sheet:after{inset:11px}.corner.tl{top:9px;left:9px}.corner.tr{top:9px;right:9px}.corner.bl{bottom:9px;left:9px}.corner.br{bottom:9px;right:9px}header{padding-left:0;padding-right:0}header img{max-width:100%}}
+.two-column .footer-social img{width:76px;height:76px}
+.upcoming-events{list-style:none;padding:0;margin:4px 0}
+.upcoming-events li{margin:0 0 3px;line-height:1.25}
+.upcoming-events li strong,.upcoming-events li span{display:block}
+.events-empty{margin:4px 0}
+.footer-events{border-left:1px solid rgba(182,148,82,.4);padding-left:12px}
+footer a{overflow-wrap:anywhere}
+@media print{.two-column .menu-sheet{padding:12px 28px 14px}.two-column header img{width:115px;max-height:75px}.two-column header{padding-bottom:5px}.two-column .location{margin-bottom:5px}.two-column .menu-item{padding:3px 2px}.two-column .description{font-size:10px}.two-column .allergens{font-size:7.5px}.two-column .menu-section{margin-top:6px}html,body{background:#fff}.screen{display:none}.menu-sheet{box-shadow:none;margin:0;min-height:auto;max-width:none;width:100%;padding:24px 40px 28px}.menu-sheet:before{inset:5px}.menu-sheet:after{inset:11px}.corner.tl{top:9px;left:9px}.corner.tr{top:9px;right:9px}.corner.bl{bottom:9px;left:9px}.corner.br{bottom:9px;right:9px}header{padding-left:0;padding-right:0}header img{max-width:100%}}
 </style></head><body class="${compact ? "two-column" : ""}">
 <div class="screen"><button type="button" onclick="window.print()">Print ${esc(menu.name)}</button></div>
 <main class="menu-sheet"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
 <header><img src="/assets/images/logo-gold.png" alt="Village Limits"><p class="location">Woodhall Spa</p><h1>${esc(menu.name)}</h1>${menu.description ? `<p class="subtitle">${esc(menu.description)}</p>` : ""}<div class="gold-rule"><span></span><b>◆</b><span></span></div></header>
 ${sections || '<p style="text-align:center">No dishes have been added yet.</p>'}
-<footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span><span class="footer-social"><img src="/assets/images/keep-in-touch-qr.svg" alt="QR code for Keep in Touch"><span><strong>Keep in touch</strong> · Be first to hear about offers, menus and events.<br>Scan the code or visit <a href="https://villagelimits.co.uk/keep-in-touch">villagelimits.co.uk/keep-in-touch</a></span></span></footer></main></body></html>`;
+<footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span><div class="footer-promotions"><div class="footer-social"><img src="/assets/images/keep-in-touch-qr.svg" alt="QR code for Keep in Touch"><span><strong>Keep in touch</strong> · Be first to hear about offers, menus and events.<br>Scan the code or visit <a href="https://villagelimits.co.uk/keep-in-touch">villagelimits.co.uk/keep-in-touch</a></span></div><div class="footer-social footer-events"><img src="/assets/images/whats-on-qr.svg" alt="QR code for upcoming Village Limits events"><div><strong>Coming up at Village Limits</strong>${eventsList}<a href="https://www.villagelimits.co.uk/whats-on">villagelimits.co.uk/whats-on</a><br>Scan for details and booking.</div></div></div></footer></main></body></html>`;
 }
-module.exports = {printMenuPage};
+module.exports = {printMenuPage, upcomingEvents};
