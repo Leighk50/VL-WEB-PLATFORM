@@ -134,10 +134,11 @@ async function handle(req, res, pathname) {
     if (!has(identity, "menus")) { res.writeHead(403); res.end("Access denied"); return true; }
     if (req.method !== "GET") { res.writeHead(405); res.end("Method not allowed"); return true; }
     const id = pathname.slice("/admin/menus/print/".length);
-    const menu = readContent().menus.find(item => item.id === id);
+    const content = readContent();
+    const menu = content.menus.find(item => item.id === id);
     if (!menu) { res.writeHead(404); res.end("Menu not found"); return true; }
     res.writeHead(200, {"Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"});
-    res.end(printMenuPage(menu)); return true;
+    res.end(printMenuPage(menu, content.events)); return true;
   }
   if ((pathname === "/admin/login" || pathname === "/api/admin/login") && req.method === "POST") {
     const payload = parsePayload(await parseRaw(req), req.headers["content-type"]);
