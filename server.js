@@ -517,7 +517,18 @@ const LEGACY_REDIRECTS=new Map([
   ["/accommodation-woodhall-spa/","/stay"],
   ["/christmas-parties-woodhall-spa/","/christmas"],
   ["/christmas-party-menu/","/christmas"],
-  ["/events-…252 tokens truncated…turn res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
+  ["/events-woodhall-spa/","/whats-on"],
+  ["/whats-on-woodhall-spa/","/whats-on"],
+  ["/bulletin/","/whats-on"]
+]);
+function legacyRedirect(pathname,res){const key=pathname.endsWith("/")?pathname:`${pathname}/`,target=LEGACY_REDIRECTS.get(key);if(!target)return false;res.writeHead(301,{"Location":`${SITE}${target}`,"Cache-Control":"public, max-age=86400"});res.end();return true}
+function uploadFile(p,res){
+  const name=path.basename(String(p||"")),f=path.join(UPLOADS_DIR,name);
+  fs.stat(f,(e,st)=>{if(e||!st.isFile()){res.writeHead(404);return res.end("Not found")}
+    fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f).toLowerCase()]||"application/octet-stream","Cache-Control":"public, max-age=86400"});res.end(x?"Error":d)})
+  })
+}
+function staticFile(p,res){const f=path.normalize(path.join(ROOT,p));if(!f.startsWith(ROOT)){res.writeHead(403);return res.end("Forbidden")}fs.stat(f,(e,s)=>{if(e||!s.isFile()){res.writeHead(404);return res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
 seedMainMenu();
 restoreCamembertPrice();
 migrateEventSeo();
