@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
+const {handleReservations} = require("./reservations-api");
 const syncSundayStarters = require("./shared-menu-starters");
 const {printMenuPage} = require("./menu-print-page");
 const contentRevision = require("./content-revision");
@@ -14,7 +15,7 @@ const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
 const DATA_DIR = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, "site", "data") : path.join(__dirname, "data"));
 const USERS_FILE = path.join(DATA_DIR, "admin-users.json");
 const CONTENT_FILE = path.join(DATA_DIR, "content.json");
-const ALL_PERMISSIONS = ["dashboard", "enquiries", "menus", "specials", "events", "guest_sms", "settings", "users"];
+const ALL_PERMISSIONS = ["dashboard", "enquiries", "reservations", "menus", "specials", "events", "guest_sms", "settings", "users"];
 const SECONDARY_PERMISSIONS = ALL_PERMISSIONS.filter(p => p !== "users");
 const SESSION_MS = 8 * 60 * 60 * 1000;
 
@@ -120,6 +121,7 @@ function writeContent(content) {
   fs.renameSync(temp, CONTENT_FILE);
 }
 function requiredPermission(pathname) {
+  if (pathname === "/api/admin/reservations" || pathname.startsWith("/api/admin/reservations/")) return "reservations";
   if (pathname.startsWith("/admin/menus/print/")) return "menus";
   if (pathname === "/api/admin/test-email") return "dashboard";
   if (pathname === "/api/admin/upload-image") return "events";
@@ -244,6 +246,7 @@ async function handle(req, res, pathname) {
     if (!identity) { json(res, 401, {error:"Your admin session has expired."}); return true; }
     json(res, 403, {error:"Your account does not have access to this admin area."}); return true;
   }
+  if (permission === "reservations") return handleReservations(req, res, identity, new URL(req.url, `http://${req.headers.host || "localhost"}`));
   if (pathname.startsWith("/api/admin/") && identity && !identity.isOwner && !permission && !["/api/admin/content","/api/admin/status","/api/admin/logout"].includes(pathname)) {
     json(res, 403, {error:"Your account does not have access to this admin function."}); return true;
   }
