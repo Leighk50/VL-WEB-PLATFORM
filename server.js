@@ -2,6 +2,7 @@ const http=require("http"),fs=require("fs"),path=require("path"),crypto=require(
 const {EnquiryError,timingToken,processEnquiry,log:logEnquiry}=require("./enquiry-security");
 const formatSpecialsTitle=require("./specials-title");
 const contentRevision=require("./content-revision");
+const syncSundayStarters=require("./shared-menu-starters");
 const PORT=process.env.PORT||8080,ROOT=path.join(__dirname,"public"),DEFAULT=path.join(__dirname,"data","default-content.json");
 const DATA_DIR=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,"site","data"):path.join(__dirname,"data")),CONTENT=path.join(DATA_DIR,"content.json"),UPLOADS_DIR=path.join(DATA_DIR,"uploads");
 const USER=process.env.ADMIN_USERNAME||"admin",PASS=process.env.ADMIN_PASSWORD||"ChangeMe-Immediately",SECRET=process.env.SESSION_SECRET||"replace-this-secret";
@@ -11,8 +12,8 @@ const BUILD=process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):"local",VER
 const mime={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".svg":"image/svg+xml"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 function ensure(){fs.mkdirSync(DATA_DIR,{recursive:true});fs.mkdirSync(UPLOADS_DIR,{recursive:true});const backup=path.join(__dirname,"data","live-content-backup.json");if(!fs.existsSync(CONTENT))fs.copyFileSync(fs.existsSync(backup)?backup:DEFAULT,CONTENT);const bundledUploads=path.join(__dirname,"data","uploads");if(fs.existsSync(bundledUploads))for(const name of fs.readdirSync(bundledUploads)){const source=path.join(bundledUploads,name),target=path.join(UPLOADS_DIR,name);if(fs.statSync(source).isFile()&&!fs.existsSync(target))fs.copyFileSync(source,target)}}
-function read(){ensure();return JSON.parse(fs.readFileSync(CONTENT,"utf8").replace(/^\uFEFF/,""))}
-function write(c){ensure();const t=CONTENT+".tmp";fs.writeFileSync(t,JSON.stringify(c,null,2),"utf8");fs.renameSync(t,CONTENT)}
+function read(){ensure();return syncSundayStarters(JSON.parse(fs.readFileSync(CONTENT,"utf8").replace(/^\uFEFF/,"")))}
+function write(c){syncSundayStarters(c);ensure();const t=CONTENT+".tmp";fs.writeFileSync(t,JSON.stringify(c,null,2),"utf8");fs.renameSync(t,CONTENT)}
 function saveUploadedImage(payload){
   ensure();
   const allowed={"image/jpeg":".jpg","image/png":".png","image/webp":".webp"};
@@ -516,18 +517,7 @@ const LEGACY_REDIRECTS=new Map([
   ["/accommodation-woodhall-spa/","/stay"],
   ["/christmas-parties-woodhall-spa/","/christmas"],
   ["/christmas-party-menu/","/christmas"],
-  ["/events-woodhall-spa/","/whats-on"],
-  ["/whats-on-woodhall-spa/","/whats-on"],
-  ["/bulletin/","/whats-on"]
-]);
-function legacyRedirect(pathname,res){const key=pathname.endsWith("/")?pathname:`${pathname}/`,target=LEGACY_REDIRECTS.get(key);if(!target)return false;res.writeHead(301,{"Location":`${SITE}${target}`,"Cache-Control":"public, max-age=86400"});res.end();return true}
-function uploadFile(p,res){
-  const name=path.basename(String(p||"")),f=path.join(UPLOADS_DIR,name);
-  fs.stat(f,(e,st)=>{if(e||!st.isFile()){res.writeHead(404);return res.end("Not found")}
-    fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f).toLowerCase()]||"application/octet-stream","Cache-Control":"public, max-age=86400"});res.end(x?"Error":d)})
-  })
-}
-function staticFile(p,res){const f=path.normalize(path.join(ROOT,p));if(!f.startsWith(ROOT)){res.writeHead(403);return res.end("Forbidden")}fs.stat(f,(e,s)=>{if(e||!s.isFile()){res.writeHead(404);return res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
+  ["/events-…252 tokens truncated…turn res.end("Not found")}fs.readFile(f,(x,d)=>{res.writeHead(x?500:200,{"Content-Type":mime[path.extname(f)]||"application/octet-stream","Cache-Control":path.extname(f)===".html"?"no-store":"public, max-age=3600"});res.end(x?"Error":d)})})}
 seedMainMenu();
 restoreCamembertPrice();
 migrateEventSeo();

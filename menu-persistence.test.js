@@ -14,7 +14,7 @@ test("startup preserves edited menus when seed markers are missing", () => {
     for (const id of ["main", "sunday", "desserts"]) {
       const menu = content.menus.find(item => item.id === id);
       assert.ok(menu, `${id} menu exists in defaults`);
-      menu.sections[0].items[0].price = `£999-${id}`;
+      menu.sections.at(-1).items[0].price = `£999-${id}`;
     }
     fs.writeFileSync(path.join(dir, "content.json"), JSON.stringify(content));
     const env = {...process.env, CONTENT_DATA_DIR: dir, PORT: "0"};
@@ -27,7 +27,7 @@ test("startup preserves edited menus when seed markers are missing", () => {
     assert.equal(started.status, 0, started.stderr);
     const after = JSON.parse(fs.readFileSync(path.join(dir, "content.json"), "utf8"));
     for (const id of ["main", "sunday", "desserts"]) {
-      assert.equal(after.menus.find(item => item.id === id).sections[0].items[0].price, `£999-${id}`);
+      assert.equal(after.menus.find(item => item.id === id).sections.at(-1).items[0].price, `£999-${id}`);
       assert.equal(after.menus.filter(item => item.id === id).length, 1);
     }
   } finally {
@@ -49,6 +49,7 @@ test("first startup replaces only bundled placeholder menus", () => {
     const after = JSON.parse(fs.readFileSync(path.join(dir, "content.json"), "utf8"));
     for (const [id, file] of [["main", "main-menu.json"], ["sunday", "sunday-menu.json"], ["desserts", "dessert-menu.json"]]) {
       const expected = JSON.parse(fs.readFileSync(path.join(__dirname, file), "utf8"));
+      if (id === "sunday") expected.sections[0] = after.menus.find(menu => menu.id === "main").sections[0];
       assert.deepEqual(after.menus.find(menu => menu.id === id), expected);
     }
   } finally {
@@ -66,7 +67,7 @@ test("restoring a deployment backup preserves every edited menu without seed mar
     }
     fs.copyFileSync(path.join(__dirname,"data/default-content.json"),path.join(app,"data/default-content.json"));
     const content = JSON.parse(fs.readFileSync(path.join(__dirname,"data/default-content.json"),"utf8"));
-    for (const menu of content.menus) menu.sections[0].items[0].price = `£saved-${menu.id}`;
+    for (const menu of content.menus) menu.sections.at(-1).items[0].price = `£saved-${menu.id}`;
     fs.writeFileSync(path.join(app,"data/live-content-backup.json"),JSON.stringify(content));
     for (const entry of ["seed-sunday-menu.js","seed-dessert-menu.js","server.js"]) {
       const dir = path.join(root,entry);
@@ -76,7 +77,7 @@ test("restoring a deployment backup preserves every edited menu without seed mar
       assert.equal(result.status,0,result.stderr);
       const after = JSON.parse(fs.readFileSync(path.join(dir,"content.json"),"utf8"));
       for (const menu of content.menus) {
-        assert.equal(after.menus.find(m=>m.id===menu.id).sections[0].items[0].price,`£saved-${menu.id}`,`${entry}: ${menu.id}`);
+        assert.equal(after.menus.find(m=>m.id===menu.id).sections.at(-1).items[0].price,`£saved-${menu.id}`,`${entry}: ${menu.id}`);
       }
     }
   } finally { fs.rmSync(root,{recursive:true,force:true}); }
@@ -109,4 +110,37 @@ test("Camembert correction restores the reported old price once and preserves su
     fs.writeFileSync(file,JSON.stringify(after));
     assert.equal(getDish(start()).price,"£13.00");
   } finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test("Sunday starters follow main edits and reject an independent Sunday copy", () => {
+  const sync = require("./shared-menu-starters");
+  const main = JSON.parse(fs.readFileSync(path.join(__dirname,"main-menu.json"),"utf8"));
+  const sunday = JSON.parse(fs.readFileSync(path.join(__dirname,"sunday-menu.json"),"utf8"));
+  const otherCourses = structuredClone(sunday.sections.slice(1));
+  const content = {menus:[main,sunday]};
+  sync(content);
+  assert.deepEqual(sunday.sections[0],main.sections[0]);
+  assert.notEqual(sunday.sections[0],main.sections[0]);
+  main.sections[0].items[0].price="£14.00";
+  main.sections[0].items[0].allergens="Dairy";
+  main.sections[0].items[0].visible=false;
+  main.sections[0].items.push({id:"new-starter",name:"New starter",price:"£10.00"});
+  sunday.sections[0].items[0].price="£1.00";
+  sync(content);
+  assert.deepEqual(sunday.sections[0],main.sections[0]);
+  assert.deepEqual(sunday.sections.slice(1),otherCourses);
+  assert.deepEqual(sync(structuredClone(content)),content);
+  main.sections[0].items=[];
+  sync(content);
+  assert.deepEqual(sunday.sections[0].items,[]);
+});
+
+test("shared starters insert a missing section and remove it when main no longer has starters", () => {
+  const sync = require("./shared-menu-starters");
+  const content = {menus:[{id:"main",sections:[{name:"Starters",items:[]}]},{id:"sunday",sections:[{name:"Roasts",items:[]}]}]};
+  sync(content);
+  assert.equal(content.menus[1].sections[0].name,"Starters");
+  content.menus[0].sections=[];
+  sync(content);
+  assert.deepEqual(content.menus[1].sections,[{name:"Roasts",items:[]}]);
 });

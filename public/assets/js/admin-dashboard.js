@@ -119,7 +119,8 @@
     </div>`;
   }
 
-  function sectionHtml(s) {
+  function sectionHtml(s, shared = false) {
+    if (shared) return `<div class="admin-card"><h3>Starters</h3><p>Sunday starters automatically match the Main Menu. Edit the starters in the Main Menu above, then save.</p></div>`;
     return `<div class="admin-card section-editor">
       <div class="item-actions"><h3>Section</h3><button type="button" data-delete-section class="danger-btn">Delete</button></div>
       <label>Section Name<input data-section-name value="${esc(s.name)}"></label>
@@ -185,7 +186,7 @@
           <label class="switchline"><input type="checkbox" data-menu="visible" ${menu.visible ? "checked" : ""}> Show menu</label>
         </div>
         <label>Description<textarea data-menu="description">${esc(menu.description || "")}</textarea></label>
-        <div>${(menu.sections || []).map(sectionHtml).join("")}</div>`;
+        <div>${(menu.sections || []).map(s => sectionHtml(s, menu.id === "sunday" && /^starters?$/i.test(String(s.name || "").trim()))).join("")}</div>`;
 
       box.appendChild(el);
 
@@ -229,7 +230,10 @@
         }
       };
 
-      $$(".section-editor", el).forEach((sectionEl, sectionIndex) => bindSection(sectionEl, menu, sectionIndex));
+      $$(".section-editor", el).forEach(sectionEl => {
+        const sectionIndex = Array.from(sectionEl.parentElement.children).indexOf(sectionEl);
+        bindSection(sectionEl, menu, sectionIndex);
+      });
     });
   }
 
