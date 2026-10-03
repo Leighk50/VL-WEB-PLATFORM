@@ -37,14 +37,7 @@ html,body{margin:0;padding:0;background:#ece7df;color:var(--ink)}
 body{font-family:Georgia,"Times New Roman",serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .screen{padding:14px;text-align:center;font-family:Arial,sans-serif}
 .screen button{border:0;border-radius:999px;background:#2d2924;color:#fff;padding:11px 20px;font-weight:700;cursor:pointer}
-.menu-sheet{position:relative;max-width:794px;min-height:1115px;margin:0 auto;background:var(--paper);padding:30px 46px 34px;box-shadow:0 8px 28px rgba(0,0,0,.12);overflow:hidden}
-.menu-sheet:before,.menu-sheet:after{content:"";position:absolute;pointer-events:none}
-.menu-sheet:before{inset:14px;border:1px solid rgba(128,100,58,.5)}
-.menu-sheet:after{inset:19px;border:1px solid rgba(182,154,103,.12)}
-.corner{position:absolute;width:64px;height:64px;z-index:0;opacity:.42}
-.corner:before,.corner:after{content:"";position:absolute;background:var(--gold)}
-.corner:before{width:52px;height:1px;top:10px;left:0}.corner:after{width:1px;height:52px;left:10px;top:0}
-.corner.tl{top:18px;left:18px}.corner.tr{top:18px;right:18px;transform:rotate(90deg)}.corner.bl{bottom:18px;left:18px;transform:rotate(270deg)}.corner.br{bottom:18px;right:18px;transform:rotate(180deg)}
+.menu-sheet{position:relative;max-width:794px;min-height:1115px;margin:0 auto;background:var(--paper);padding:20px 18px 22px;box-shadow:0 8px 28px rgba(0,0,0,.12);overflow:hidden}
 header{position:relative;z-index:1;text-align:center;padding:4px 20px 20px}
 header img{display:block;margin:0 auto 10px;width:285px;max-width:100%;height:auto;max-height:145px;object-fit:contain}
 .location{font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:3.5px;font-size:9px;color:var(--gold-dark);margin:0 0 10px}
@@ -64,7 +57,7 @@ footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-to
 .footer-social img{display:block;width:76px;height:76px;flex:none;padding:2px;background:#fff;border:1px solid rgba(182,148,82,.4)}
 .footer-social strong{font-weight:600;color:var(--gold-dark)}
 .footer-social a{color:var(--gold-dark);text-decoration:none}
-.two-column .menu-sheet{padding:22px 38px 25px}
+.two-column .menu-sheet{padding:14px 16px 18px}
 .two-column header{padding:0 16px 8px}
 .two-column header img{width:160px;max-height:105px;margin-bottom:4px}
 .two-column h1{font-size:26px;letter-spacing:2.5px}
@@ -88,10 +81,10 @@ footer{position:relative;z-index:1;margin:24px 24px 0;padding-top:12px;border-to
 .events-empty{margin:4px 0}
 .footer-events{border-left:1px solid rgba(182,148,82,.4);padding-left:12px}
 footer a{overflow-wrap:anywhere}
-@media print{.two-column .menu-sheet{padding:12px 28px 14px}.two-column header img{width:115px;max-height:75px}.two-column header{padding-bottom:5px}.two-column .location{margin-bottom:5px}.two-column .menu-item{padding:3px 2px}.two-column .description{font-size:10px}.two-column .allergens{font-size:7.5px}.two-column .menu-section{margin-top:6px}html,body{background:#fff}.screen{display:none}.menu-sheet{box-shadow:none;margin:0;min-height:auto;max-width:none;width:100%;padding:24px 40px 28px}.menu-sheet:before{inset:5px}.menu-sheet:after{inset:11px}.corner.tl{top:9px;left:9px}.corner.tr{top:9px;right:9px}.corner.bl{bottom:9px;left:9px}.corner.br{bottom:9px;right:9px}header{padding-left:0;padding-right:0}header img{max-width:100%}}
+@media print{.two-column .menu-sheet{padding:8px 6px 10px}.two-column header img{width:115px;max-height:75px}.two-column header{padding-bottom:5px}.two-column .location{margin-bottom:5px}.two-column .menu-item{padding:3px 2px}.two-column .description{font-size:10px}.two-column .allergens{font-size:7.5px}.two-column .menu-section{margin-top:6px}html,body{background:#fff}.screen{display:none}.menu-sheet{box-shadow:none;margin:0;min-height:auto;max-width:none;width:100%;padding:14px 8px 16px}header{padding-left:0;padding-right:0}header img{max-width:100%}}
 </style></head><body class="${compact ? "two-column" : ""}">
 <div class="screen"><button type="button" onclick="window.print()">Print ${esc(menu.name)}</button></div>
-<main class="menu-sheet"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<main class="menu-sheet">
 <header><img src="/assets/images/logo-gold.png" alt="Village Limits"><p class="location">Woodhall Spa</p><h1>${esc(menu.name)}</h1>${menu.description ? `<p class="subtitle">${esc(menu.description)}</p>` : ""}<div class="gold-rule"><span></span><b>◆</b><span></span></div></header>
 ${sections || '<p style="text-align:center">No dishes have been added yet.</p>'}
 <footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span><div class="footer-promotions"><div class="footer-social"><img src="/assets/images/keep-in-touch-qr.svg" alt="QR code for Keep in Touch"><span><strong>Keep in touch</strong> · Be first to hear about offers, menus and events.<br>Scan the code or visit <a href="https://villagelimits.co.uk/keep-in-touch">villagelimits.co.uk/keep-in-touch</a></span></div><div class="footer-social footer-events"><img src="/assets/images/whats-on-qr.svg" alt="QR code for upcoming Village Limits events"><div><strong>Coming up at Village Limits</strong>${eventsList}<a href="https://www.villagelimits.co.uk/whats-on">villagelimits.co.uk/whats-on</a><br>Scan for details and booking.</div></div></div></footer></main></body></html>`;
