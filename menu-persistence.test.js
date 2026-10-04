@@ -144,3 +144,22 @@ test("shared starters insert a missing section and remove it when main no longer
   sync(content);
   assert.deepEqual(content.menus[1].sections,[{name:"Roasts",items:[]}]);
 });
+
+test("Sunday print adds only selected visible main courses without changing saved menus", () => {
+  const {sundayPrintMenu, printMenuPage} = require("./menu-print-page");
+  const main = {id:"main",sections:[{name:"Starters",items:[{id:"starter",name:"Starter",includeOnSunday:true}]},{name:"Mains",items:[
+    {id:"chosen",name:"Selected dish",price:"£24",description:"Fresh description",allergens:"Dairy",includeOnSunday:true},
+    {id:"off",name:"Unchecked dish"}, {id:"hidden",name:"Hidden dish",includeOnSunday:true,visible:false}
+  ]}]};
+  const sunday = {id:"sunday",name:"Sunday",sections:[{name:"Sunday Roasts",items:[{id:"roast",name:"Roast"}]},{name:"Mains",items:[{id:"own",name:"Sunday dish"}]}]};
+  const before = JSON.stringify([main,sunday]);
+  const result = sundayPrintMenu(sunday,[main,sunday]);
+  assert.deepEqual(result.sections[1].items.map(item=>item.id),["own","chosen"]);
+  const html = printMenuPage(sunday,[],new Date(),[main,sunday]);
+  for (const text of ["Selected dish","£24","Fresh description","Dairy","Roast","Sunday dish"]) assert.ok(html.includes(text));
+  for (const text of ["Unchecked dish","Hidden dish","<h3>Starter</h3>"]) assert.ok(!html.includes(text));
+  assert.equal(JSON.stringify([main,sunday]),before);
+  main.sections[1].items[0].includeOnSunday = false;
+  assert.equal(sundayPrintMenu(sunday,[main,sunday]),sunday);
+  assert.equal(sundayPrintMenu(main,[main,sunday]),main);
+});

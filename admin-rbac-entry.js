@@ -140,7 +140,7 @@ async function handle(req, res, pathname) {
     const menu = content.menus.find(item => item.id === id);
     if (!menu) { res.writeHead(404); res.end("Menu not found"); return true; }
     res.writeHead(200, {"Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"});
-    res.end(printMenuPage(menu, content.events)); return true;
+    res.end(printMenuPage(menu, content.events, new Date(), content.menus)); return true;
   }
   if ((pathname === "/admin/login" || pathname === "/api/admin/login") && req.method === "POST") {
     const payload = parsePayload(await parseRaw(req), req.headers["content-type"]);
