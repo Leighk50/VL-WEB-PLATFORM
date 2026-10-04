@@ -127,7 +127,7 @@
       <div class="item-actions"><h3>Section</h3><button type="button" data-delete-section class="danger-btn">Delete</button></div>
       <label>Section Name<input data-section-name value="${esc(s.name)}"></label>
       <button type="button" data-add-dish class="small-btn">Add Dish</button>
-      <div class="dish-grid">${(s.items || []).map(d => dishHtml(d, mainMenu && /^main(?:s| courses?)?$/i.test(String(s.name || "").trim()), menu.id === "main")).join("")}</div>
+      <div class="dish-grid">${(s.items || []).map(d => dishHtml(d, mainMenu && /^main(?:s| courses?)?$/i.test(String(s.name || "").trim()))).join("")}</div>
     </div>`;
   }
 
