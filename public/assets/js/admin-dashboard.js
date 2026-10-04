@@ -3,6 +3,7 @@
 
   let content = null;
   let contentRevision = null;
+  let activeMenuId = "main";
   const $ = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -164,6 +165,48 @@
   function renderMenus() {
     const box = $("#menusEditor");
     const printButtons = $("#menuPrintButtons");
+    const tabs = $("#menuTabs");
+    tabs.innerHTML = "";
+    if (!content.menus.some(menu => menu.id === activeMenuId)) activeMenuId = content.menus[0]?.id;
+    const preferredOrder = ["main", "sunday", "specials", "desserts"];
+    const orderedMenus = [...content.menus].sort((a,b) => {
+      const rank = menu => preferredOrder.includes(menu.id) ? preferredOrder.indexOf(menu.id) : preferredOrder.length;
+      return rank(a) - rank(b);
+    });
+    const selectMenu = id => {
+      activeMenuId = id;
+      $$("[role=tab]", tabs).forEach(tab => {
+        const active = tab.dataset.menuId === id;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      $$(".menu-editor", box).forEach(panel => { panel.hidden = panel.dataset.menuId !== id; });
+    };
+    orderedMenus.forEach(menu => {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.id = `menu-tab-${encodeURIComponent(menu.id)}`;
+      tab.dataset.menuId = menu.id;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", `menu-editor-${encodeURIComponent(menu.id)}`);
+      tab.textContent = menu.id === "sunday" ? "Sunday Menu" : menu.name;
+      tab.onclick = () => selectMenu(menu.id);
+      tab.onkeydown = event => {
+        const buttons = $$("[role=tab]", tabs);
+        const index = buttons.indexOf(tab);
+        let next;
+        if (event.key === "ArrowRight") next = (index + 1) % buttons.length;
+        if (event.key === "ArrowLeft") next = (index - 1 + buttons.length) % buttons.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = buttons.length - 1;
+        if (next !== undefined) {
+          event.preventDefault();
+          selectMenu(buttons[next].dataset.menuId);
+          buttons[next].focus();
+        }
+      };
+      tabs.appendChild(tab);
+    });
     box.innerHTML = "";
     printButtons.innerHTML = "";
 
@@ -175,6 +218,11 @@
       printButtons.appendChild(shortcut);
       const el = document.createElement("div");
       el.className = "menu-editor";
+      el.id = `menu-editor-${encodeURIComponent(menu.id)}`;
+      el.dataset.menuId = menu.id;
+      el.setAttribute("role", "tabpanel");
+      el.setAttribute("aria-labelledby", `menu-tab-${encodeURIComponent(menu.id)}`);
+      el.hidden = menu.id !== activeMenuId;
       el.innerHTML = `<div class="menu-head">
           <h2>${esc(menu.name)}</h2>
           <div><button type="button" data-print-menu class="small-btn">Print Menu</button>
@@ -213,7 +261,11 @@
       $$("[data-menu]", el).forEach(input => {
         input.oninput = () => {
           menu[input.dataset.menu] = input.type === "checkbox" ? input.checked : input.value;
-          if (input.dataset.menu === "name") shortcut.textContent = `Print ${menu.name}`;
+          if (input.dataset.menu === "name") {
+            shortcut.textContent = `Print ${menu.name}`;
+            const tab = $$("[role=tab]", tabs).find(button => button.dataset.menuId === menu.id);
+            if (tab) tab.textContent = menu.id === "sunday" ? "Sunday Menu" : menu.name;
+          }
         };
       });
 
@@ -235,6 +287,7 @@
         bindSection(sectionEl, menu, sectionIndex);
       });
     });
+    selectMenu(activeMenuId);
   }
 
   function renderEvents() {
@@ -340,7 +393,8 @@
   });
 
   $("#addMenu").onclick = () => {
-    content.menus.push({id:uid(), name:"New Menu", description:"", visible:false, sections:[]});
+    activeMenuId = uid();
+    content.menus.push({id:activeMenuId, name:"New Menu", description:"", visible:false, sections:[]});
     renderMenus();
     renderStats();
   };

@@ -236,3 +236,5 @@ body{overflow-x:hidden}
 }
 
 .menu-print-title{font-size:1.5rem;margin:0 0 14px}.menu-print-buttons{display:flex;flex-wrap:wrap;gap:10px}.menu-print-buttons .small-btn{font-size:.9rem;cursor:pointer}
+
+.menu-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 16px;border-bottom:1px solid #d6cbb9;padding-bottom:12px}.menu-tabs button{font:inherit;font-weight:600;padding:11px 20px;border:1px solid #d6cbb9;border-radius:8px;background:#fff;color:#3b352d;cursor:pointer}.menu-tabs button[aria-selected="true"]{background:#3b352d;color:#fff;border-color:#3b352d}.menu-tabs button:focus-visible{outline:3px solid #b69a67;outline-offset:3px}.menu-editor[hidden]{display:none!important}
