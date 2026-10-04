@@ -20,7 +20,21 @@ function upcomingEvents(events, now = new Date()) {
     return {title:event.title, date:label, sort:date.getTime()};
   }).filter(Boolean).sort((a,b)=>a.sort-b.sort).slice(0,3);
 }
-function printMenuPage(menu, events = [], now = new Date()) {
+function sundayPrintMenu(menu, menus = []) {
+  if (menu.id !== "sunday") return menu;
+  const main = menus.find(candidate => candidate.id === "main");
+  const selected = (main?.sections || []).filter(section => /^main(?:s| courses?)?$/i.test(String(section.name || "").trim()))
+    .flatMap(section => section.items || []).filter(item => item.includeOnSunday === true && item.visible !== false);
+  if (!selected.length) return menu;
+  const result = structuredClone(menu);
+  let mains = result.sections.find(section => /^main(?:s| courses?)?$/i.test(String(section.name || "").trim()));
+  if (!mains) { mains = {name:"Mains", items:[]}; result.sections.push(mains); }
+  const ids = new Set(selected.map(item => item.id).filter(Boolean));
+  mains.items = [...(mains.items || []).filter(item => !ids.has(item.id)), ...structuredClone(selected)];
+  return result;
+}
+function printMenuPage(menu, events = [], now = new Date(), menus = []) {
+  menu = sundayPrintMenu(menu, menus);
   const upcoming = upcomingEvents(events, now);
   const eventsList = upcoming.length ? `<ul class="upcoming-events">${upcoming.map(event=>`<li><strong>${esc(event.title)}</strong><span>${esc(event.date)}</span></li>`).join("")}</ul>` : '<p class="events-empty">Discover our latest events and entertainment online.</p>';
   const sections = (menu.sections || []).map(section => {
@@ -89,4 +103,4 @@ footer a{overflow-wrap:anywhere}
 ${sections || '<p style="text-align:center">No dishes have been added yet.</p>'}
 <footer>Please speak to a member of the team about allergies or dietary requirements before ordering.<span class="footer-brand">Village Limits · Stixwould Road · Woodhall Spa</span><div class="footer-promotions"><div class="footer-social"><img src="/assets/images/keep-in-touch-qr.svg" alt="QR code for Keep in Touch"><span><strong>Keep in touch</strong> · Be first to hear about offers, menus and events.<br>Scan the code or visit <a href="https://villagelimits.co.uk/keep-in-touch">villagelimits.co.uk/keep-in-touch</a></span></div><div class="footer-social footer-events"><img src="/assets/images/whats-on-qr.svg" alt="QR code for upcoming Village Limits events"><div><strong>Coming up at Village Limits</strong>${eventsList}<a href="https://www.villagelimits.co.uk/whats-on">villagelimits.co.uk/whats-on</a><br>Scan for details and booking.</div></div></div></footer></main></body></html>`;
 }
-module.exports = {printMenuPage, upcomingEvents};
+module.exports = {printMenuPage, upcomingEvents, sundayPrintMenu};

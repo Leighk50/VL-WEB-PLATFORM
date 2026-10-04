@@ -107,7 +107,7 @@
     });
   }
 
-  function dishHtml(d) {
+  function dishHtml(d, sundayOption = false) {
     return `<div class="item-card">
       <div class="item-actions"><h3>Dish</h3><button type="button" data-delete-dish class="danger-btn">Delete</button></div>
       <label>Name<input data-dish="name" value="${esc(d.name)}"></label>
@@ -115,18 +115,19 @@
         <label>Price<input data-dish="price" value="${esc(d.price || "")}"></label>
         <label class="switchline"><input type="checkbox" data-dish="visible" ${d.visible !== false ? "checked" : ""}> Show</label>
       </div>
+      ${sundayOption ? `<label class="switchline"><input type="checkbox" data-dish="includeOnSunday" ${d.includeOnSunday === true ? "checked" : ""}> Include on Sunday</label>` : ""}
       <label>Description<textarea data-dish="description">${esc(d.description || "")}</textarea></label>
       <label>Allergens<input data-dish="allergens" value="${esc(d.allergens || "")}"></label>
     </div>`;
   }
 
-  function sectionHtml(s, shared = false) {
+  function sectionHtml(s, shared = false, mainMenu = false) {
     if (shared) return `<div class="admin-card"><h3>Starters</h3><p>Sunday starters automatically match the Main Menu. Edit the starters in the Main Menu above, then save.</p></div>`;
     return `<div class="admin-card section-editor">
       <div class="item-actions"><h3>Section</h3><button type="button" data-delete-section class="danger-btn">Delete</button></div>
       <label>Section Name<input data-section-name value="${esc(s.name)}"></label>
       <button type="button" data-add-dish class="small-btn">Add Dish</button>
-      <div class="dish-grid">${(s.items || []).map(dishHtml).join("")}</div>
+      <div class="dish-grid">${(s.items || []).map(d => dishHtml(d, mainMenu && /^main(?:s| courses?)?$/i.test(String(s.name || "").trim()), menu.id === "main")).join("")}</div>
     </div>`;
   }
 
@@ -234,7 +235,7 @@
           <label class="switchline"><input type="checkbox" data-menu="visible" ${menu.visible ? "checked" : ""}> Show menu</label>
         </div>
         <label>Description<textarea data-menu="description">${esc(menu.description || "")}</textarea></label>
-        <div>${(menu.sections || []).map(s => sectionHtml(s, menu.id === "sunday" && /^starters?$/i.test(String(s.name || "").trim()))).join("")}</div>`;
+        <div>${(menu.sections || []).map(s => sectionHtml(s, menu.id === "sunday" && /^starters?$/i.test(String(s.name || "").trim()), menu.id === "main")).join("")}</div>`;
 
       box.appendChild(el);
 
