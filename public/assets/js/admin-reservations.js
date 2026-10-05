@@ -30,8 +30,33 @@
       tables();form.querySelector('[type=submit]').disabled=!form.time.value;
     }catch(e){if(ticket===generation){availability=[];form.time.innerHTML='';form.tableId.innerHTML='<option value="">Unavailable</option>';message(e.message);}}
   }
-  function reset(){form.reset();form.elements.id.value='';$('#reservationFormTitle').textContent='New booking';return refreshAvailability();}
+  function reset(){form.reset();bookingDate();form.elements.id.value='';$('#reservationFormTitle').textContent='New booking';return refreshAvailability();}
+  function renderCalendar(){
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const start=new Date(today+'T12:00:00Z');start.setUTCDate(1);
+    const months=[];
+    for(let offset=0;offset<3;offset++){
+      const month=new Date(start);month.setUTCMonth(month.getUTCMonth()+offset);
+      const year=month.getUTCFullYear(),number=month.getUTCMonth(),count=new Date(Date.UTC(year,number+1,0)).getUTCDate();
+      let cells=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<strong style="text-align:center">${d}</strong>`).join('');
+      cells+='<span></span>'.repeat((month.getUTCDay()+6)%7);
+      for(let day=1;day<=count;day++){
+        const d=new Date(Date.UTC(year,number,day,12)),key=d.toISOString().slice(0,10);
+        const blocked=state.blockedDates.includes(key),open=state.openDays.includes(d.getUTCDay());
+        const label=blocked?'Blocked':open?'Open':'Weekly closed';
+        const color=blocked?'#f9d2ce':open?'#dcecdf':'#e8e8e8';
+        cells+=`<button type="button" data-calendar-date="${key}" aria-label="${key}: ${label}" aria-pressed="${key===date.value}" style="padding:7px 2px;min-height:58px;background:${color};color:#17231a;border:${key===date.value?'3px solid #8c651d':'1px solid #aaa'};border-radius:5px;cursor:pointer"><strong>${day}</strong><br><small>${label}</small></button>`;
+      }
+      months.push(`<section><h3>${new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(month)}</h3><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cells}</div></section>`);
+    }
+    $('#reservationCalendar').innerHTML=months.join('');
+  }
+  function bookingDate(){
+    $('#reservationBookingDate').value=date.value;
+    $('#reservationBookingDateLabel').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(date.value+'T12:00:00Z'));
+  }
   function render(){
+    renderCalendar();bookingDate();
     const active=state.bookings.filter(x=>x.status!=='cancelled');
     $('#reservationSummary').textContent=`${active.reduce((n,x)=>n+x.covers,0)} covers · ${active.length} bookings · ${active.filter(x=>x.dogs).length}/2 dog bookings. Two-hour sittings; maximum 12 guests in any rolling 40-minute period.`;
     $('#reservationTables').innerHTML=state.tables.map(t=>{
@@ -76,6 +101,8 @@
     try{await mutate('/api/admin/reservations/'+button.dataset.id+'/status','PUT',{status:button.dataset.status});}catch(err){message(err.message);}
   });
   form.covers.addEventListener('change',refreshAvailability);form.dogs.addEventListener('change',refreshAvailability);form.time.addEventListener('change',tables);
+  $('#reservationBookingDate').addEventListener('change',async e=>{if(!e.target.value)return;date.value=e.target.value;await load();});
+  $('#reservationCalendar').addEventListener('click',async e=>{const b=e.target.closest('[data-calendar-date]');if(!b)return;date.value=b.dataset.calendarDate;await load();});
   date.addEventListener('change',load);$('#reservationReload').addEventListener('click',load);$('#reservationReset').addEventListener('click',reset);$('#reservationNew').addEventListener('click',()=>{reset();form.scrollIntoView({behavior:'smooth'});});
   document.querySelector('[data-panel="reservations"]').addEventListener('click',load);
 })();
