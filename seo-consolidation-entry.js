@@ -64,3 +64,5 @@ http.createServer = function hardSeoCreateServer(options, requestListener) {
 };
 
 require("./stock-pricing-entry");
+
+require("./site-backup").startScheduler();
