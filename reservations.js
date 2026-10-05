@@ -23,7 +23,7 @@ function clock(n) { return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n
 function slots(date,overrides={}) {
   if(!dateValid(date)) throw new ReservationError('Choose a valid date.');
   const day=new Date(date+'T12:00:00Z').getUTCDay();
-  if(day===1||day===2) return [];
+  if(!(overrides._openDays||[0,3,4,5,6]).includes(day)) return [];
   const start=day===0?720:1080, normalLast=start+90;
   const override=overrides[date];
   if(override?.closed) return [];

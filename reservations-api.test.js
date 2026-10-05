@@ -26,6 +26,15 @@ test('staff API enforces authentication, permissions, revisions, capacity and se
     const cancel=await call('/api/admin/reservations/'+saved.data.result.id+'/status','PUT',{status:'cancelled',revision:2});assert.equal(cancel.status,200);
     assert.equal((await call('/api/admin/reservations/service','PUT',{date:b.date,lastArrival:'20:00',closed:true,revision:3})).status,200);
     assert.deepEqual((await call(route)).data.slots,[]);
+    assert.equal((await call('/api/admin/reservations/open-days','PUT',{openDays:[1],revision:4})).status,200);
+    assert.equal((await call('/api/admin/reservations?date=2030-01-07')).data.slots[0],'18:00');
+    assert.equal((await call('/api/admin/reservations/block-date','PUT',{date:'2030-01-07',closed:true,revision:5})).status,200);
+    assert.deepEqual((await call('/api/admin/reservations?date=2030-01-07')).data.slots,[]);
+    assert.deepEqual((await call(route)).data.blockedDates,['2030-01-07','2030-01-09']);
+    assert.equal((await call('/api/admin/reservations/block-date','PUT',{date:'2030-01-07',closed:false,revision:6})).status,200);
+    assert.equal((await call('/api/admin/reservations?date=2030-01-07')).data.slots[0],'18:00');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'reservations.json'))).overrides._openDays,[1]);
+    assert.equal((await call('/api/admin/reservations/open-days','PUT',{openDays:[7],revision:7})).status,400);
     assert.equal(fs.existsSync(path.join(dir,'content.json')),false);
   }finally{await new Promise(resolve=>server.close(resolve));fs.rmSync(dir,{recursive:true,force:true});}
 });

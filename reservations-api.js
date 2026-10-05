@@ -17,7 +17,7 @@ async function handleReservations(req,res,identity,url){
     if(req.method==='GET'&&pathname==='/api/admin/reservations'){
       const date=url.searchParams.get('date');if(!dateValid(date))throw new ReservationError('Choose a valid date.');
       const state=store.read();
-      json(res,200,{revision:state.revision,bookings:state.bookings.filter(b=>b.date===date).sort((a,b)=>a.time.localeCompare(b.time)),tables:TABLES,rules:RULES,slots:slots(date,state.overrides),override:state.overrides[date]||null,cardCollectionEnabled:false});return true;
+      json(res,200,{revision:state.revision,bookings:state.bookings.filter(b=>b.date===date).sort((a,b)=>a.time.localeCompare(b.time)),tables:TABLES,rules:RULES,slots:slots(date,state.overrides),override:state.overrides[date]||null,openDays:state.overrides._openDays||[0,3,4,5,6],blockedDates:Object.entries(state.overrides).filter(([d,v])=>dateValid(d)&&v.closed).map(([date])=>date).sort(),cardCollectionEnabled:false});return true;
     }
     if(req.method==='GET'&&pathname==='/api/admin/reservations/availability'){
       const date=url.searchParams.get('date'),covers=Number(url.searchParams.get('covers')),dogs=url.searchParams.get('dogs')==='true';
@@ -31,10 +31,16 @@ async function handleReservations(req,res,identity,url){
     }
     const input=await body(req),revision=input.revision;
     let action,change;
-    if(pathname==='/api/admin/reservations/service'&&req.method==='PUT'){
+    if(pathname==='/api/admin/reservations/open-days'&&req.method==='PUT'){
+      if(!Array.isArray(input.openDays)||input.openDays.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(input.openDays).size!==input.openDays.length)throw new ReservationError('Choose valid opening days.');
+      action='opening_days_updated';change=state=>{state.overrides._openDays=input.openDays;return {openDays:input.openDays};};
+    }else if(pathname==='/api/admin/reservations/block-date'&&req.method==='PUT'){
+      if(!dateValid(input.date)||typeof input.closed!=='boolean')throw new ReservationError('Choose a valid date and closure status.');
+      action='date_block_updated';change=state=>{state.overrides[input.date]={...state.overrides[input.date],closed:input.closed};return {date:input.date,closed:input.closed};};
+    }else if(pathname==='/api/admin/reservations/service'&&req.method==='PUT'){
       action='service_updated';
       if(!dateValid(input.date))throw new ReservationError('Choose a valid date.');
-      const normal=slots(input.date);if(!normal.length)throw new ReservationError('Monday and Tuesday are closed.');
+      const normal=slots(input.date,{_openDays:store.read().overrides._openDays});if(!normal.length)throw new ReservationError('This weekday is closed in the standard opening schedule.');
       if(typeof input.closed!=='boolean')throw new ReservationError('Specify whether the service is closed.');
       const end=minute(input.lastArrival);
       if(end<minute(normal.at(-1))||end>(normal[0]==='12:00'?16*60:23*60))throw new ReservationError('Choose a last arrival from the normal cutoff to 16:00 on Sunday or 23:00 in the evening.');
