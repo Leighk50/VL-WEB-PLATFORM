@@ -218,12 +218,13 @@ function tok(req){const a=req.headers.authorization||"";if(a.startsWith("Bearer 
 function valid(req){const t=tok(req);if(!t.includes("."))return false;const[e,s]=t.split(".");let r="";try{r=Buffer.from(e,"base64url").toString()}catch{return false}const x=sign(r);if(s.length!==x.length||!crypto.timingSafeEqual(Buffer.from(s),Buffer.from(x)))return false;const[u,d]=r.split("|");return u===USER&&Number(d)>Date.now()}
 function canonicalRedirect(req,res,url){
   const host=String(req.headers.host||"").split(":")[0].toLowerCase();
-  const canonicalHost="www.villagelimits.co.uk";
+  const canonicalSite=new URL(SITE);
+  const canonicalHost=canonicalSite.hostname.toLowerCase();
   const isCanonical=host===canonicalHost;
   const isRoot=host==="villagelimits.co.uk";
   const isAzure=host.endsWith(".azurewebsites.net");
   if(!isCanonical&&(isRoot||isAzure)){
-    const target=`https://${canonicalHost}${url.pathname}${url.search}`;
+    const target=`${canonicalSite.origin}${url.pathname}${url.search}`;
     const status=(req.method==="GET"||req.method==="HEAD")?301:308;
     res.writeHead(status,{
       "Location":target,
