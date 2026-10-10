@@ -28,11 +28,11 @@ try {
             $config.DocumentElement.AppendChild($element) | Out-Null
         }
     }
-    $config.DocumentElement.SetAttribute('version', '0.3.1')
+    $config.DocumentElement.SetAttribute('version', '0.3.2')
     $config.Save($configPath)
     foreach ($file in $files) { Copy-Item (Join-Path $staging $file) (Join-Path $Project $file) -Force }
-    Write-Host "Room 3 source upgraded to 0.3.1. Backup: $backup"
-    Write-Host 'Existing application IDs and signing settings preserved. Refresh the project in Tizen Studio, then Run As > Tizen Web Application.'
+    Write-Host "Room 3 source upgraded to 0.3.2. Backup: $backup"
+    Write-Host 'Existing application IDs and signing settings preserved. Refresh the project in Tizen Studio, then Build Signed Package and upload the new .wgt for the Room 3 pilot.'
 } finally {
     Remove-Item $staging -Recurse -Force
 }

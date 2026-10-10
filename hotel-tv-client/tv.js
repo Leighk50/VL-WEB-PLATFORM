@@ -24,7 +24,7 @@ function render(){
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
   var tiles=node('div','','tiles');tiles.appendChild(tile('▣','Watch TV','Your room channels','live'));tiles.appendChild(tile('▶','Movies / Airtime','Settle in for a film','movies'));tiles.appendChild(tile('◷','Dining','Menus & service times','dining'));panel.appendChild(tiles);
  }else if(view==='live'){
-  heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Watch your room’s television channels. Press Return to come back to the hotel menu.');
+  heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Return-to-menu behaviour is being tested on Room 3.');
   panel.appendChild(action('Watch TV',startLive));
  }else if(view==='movies'){
   heading('A NIGHT IN','Movies / Airtime','Choose a film in your room’s installed Airtime app.');
@@ -58,19 +58,15 @@ function render(){
  var newActions=panel.querySelectorAll('[data-action]');if(actionIndex>=0&&newActions[actionIndex])newActions[actionIndex].focus();
 }
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
-function hideWindow(){if(preview||!tizen.tvwindow)return;try{tizen.tvwindow.hide(function(){},function(e){say('TV window could not close: '+e.name);},'MAIN');}catch(e){say('TV window could not close: '+e.name);}}
-function stopLive(){var was=mode==='tv'||mode==='tv-loading';if(!was)return;tvToken++;clearTimeout(tvTimer);mode='menu';document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';if(was)hideWindow();}
-function tvFailed(e,token){if(token!==tvToken)return;stopLive();say('Watch TV could not open: '+(e&&e.name||e&&e.message||'TV source unavailable')+'. Return keeps the hotel menu open.');}
+function stopLive(){if(mode!=='tv-loading')return;tvToken++;clearTimeout(tvTimer);mode='menu';}
 function startLive(){
- if(preview){say('Watch TV is available on the room TV. Return will bring you back to this menu.');return;}
+ if(preview){say('Watch TV opens Samsung’s native TV screen on the room TV.');return;}
  if(mode!=='menu')return;
- if(!tizen.tvwindow||!tizen.systeminfo){say('Live TV is not available through this app on this television.');return;}
- mode='tv-loading';var token=++tvToken;say('Opening live TV…');
- tvTimer=setTimeout(function(){tvFailed({name:'TV response timed out'},token);},12000);
- function show(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(){if(token!==tvToken){if(mode!=='tv'&&mode!=='tv-loading')hideWindow();return;}clearTimeout(tvTimer);mode='tv';document.documentElement.className='live';document.body.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();},function(e){tvFailed(e,token);},['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){tvFailed(e,token);}}
- try{var source=tizen.tvwindow.getSource('MAIN');if(source&&source.type==='TV'){show();return;}
- tizen.systeminfo.getPropertyValue('VIDEOSOURCE',function(sources){if(token!==tvToken)return;var tuner=null;for(var i=0;i<sources.connected.length;i++)if(sources.connected[i].type==='TV'){tuner=sources.connected[i];break;}if(!tuner){tvFailed({name:'No TV tuner source found'},token);return;}try{tizen.tvwindow.setSource(tuner,show,function(e){tvFailed(e,token);},'MAIN');}catch(e){tvFailed(e,token);}},function(e){tvFailed(e,token);});
- }catch(e){tvFailed(e,token);}
+ if(!tizen.application||!tizen.application.launch){say('Samsung TV could not open: application launch is unavailable.');return;}
+ mode='tv-loading';var token=++tvToken;say('Opening Samsung TV…');
+ function failed(e){if(token!==tvToken)return;stopLive();say('Samsung TV could not open: '+(e&&e.name||e&&e.message||'Unknown error')+'. The hotel menu remains available.');}
+ tvTimer=setTimeout(function(){failed({name:'TV launch timed out'});},12000);
+ try{tizen.application.launch('org.tizen.tv-viewer',function(){if(token!==tvToken)return;clearTimeout(tvTimer);mode='menu';view='welcome';focus(0);render();},failed);}catch(e){failed(e);}
 }
 function stopVideo(){clip.pause();clip.removeAttribute('src');clip.load();document.getElementById('video-overlay').className='hidden';if(mode==='video'){mode='menu';document.body.className='';}}
 function playRejected(){document.getElementById('clip-status').textContent='Press OK to play. If playback fails, press Return.';}
@@ -88,7 +84,7 @@ document.getElementById('video-return').onclick=function(){stopVideo();open(navF
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
 document.addEventListener('keydown',function(e){var k=e.keyCode;
- if(mode==='tv'||mode==='tv-loading'){if(isBack(k)||k===13&&mode==='tv'){stopLive();open(0);e.preventDefault();}return;}
+ if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
  if(isBack(k)){open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;

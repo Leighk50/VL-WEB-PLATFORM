@@ -50,3 +50,7 @@ Install address: `https://www.villagelimits.co.uk/tv/install/room3/`
 The server serves the unchanged signed package uploaded by Leigh, stored as base64 to preserve its bytes through the text-only repository connector. SHA-256: `17465b5ff8e54a7ace4cf5a295bef6fe9c2e72c251013735b9a6e5bd6846ccbb`. Manifest version 0.3.1 and byte size 102599 match the package. No private signing keys are included.
 
 Set hospitality H.Browser Mode ON, vendor Others, and use URL Launcher Settings > Install Web App with the install directory above. Do not use the browser preview or JSON feed address. Confirm installation before power cycling. URL Launcher certificate acceptance, power-on launch and Home-button return remain hardware checks for Room 3; do not roll out to other rooms yet.
+
+## Native TV pilot source (0.3.2)
+
+Watch TV now launches Samsung's documented `org.tizen.tv-viewer` application instead of embedding TVWindow. The hotel menu remains recoverable on launch errors. Resuming the widget restores Welcome. No Home interception or automatic foreground timer is used: Guide, Home and return behaviour must be tested on Room 3. The hosted signed installer remains 0.3.1 until Leigh builds and supplies a signed 0.3.2 package; do not change its manifest prematurely.
