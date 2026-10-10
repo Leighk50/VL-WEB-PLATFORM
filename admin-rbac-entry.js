@@ -7,6 +7,7 @@ const http = require("http");
 const syncSundayStarters = require("./shared-menu-starters");
 const {printMenuPage} = require("./menu-print-page");
 const contentRevision = require("./content-revision");
+const {handleHotelTv} = require("./hotel-tv");
 
 const OWNER = process.env.ADMIN_USERNAME || "admin";
 const OWNER_PASSWORD = process.env.ADMIN_PASSWORD || "ChangeMe-Immediately";
@@ -130,6 +131,7 @@ function requiredPermission(pathname) {
 }
 
 async function handle(req, res, pathname) {
+  if (await handleHotelTv(req, res, pathname, currentIdentity(req))) return true;
   if (pathname.startsWith("/admin/menus/print/")) {
     const identity = currentIdentity(req);
     if (!identity) { redirect(res, "/admin"); return true; }
