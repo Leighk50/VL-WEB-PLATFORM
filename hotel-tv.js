@@ -34,7 +34,7 @@ async function handleHotelTv(req,res,pathname,identity){
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'});res.end();return true;}
   const pkg=Buffer.from(fs.readFileSync(path.join(__dirname,'hotel-tv-install','VillageLimits.wgt.base64'),'utf8'),'base64');
   const manifest=installerFiles[pathname]==='manifest';
-  const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>0.3.2</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;
+  const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>0.3.3</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;
   res.writeHead(200,{'Content-Type':manifest?'application/xml; charset=utf-8':'application/widget','Content-Length':data.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
   res.end(req.method==='HEAD'?undefined:data);return true;
  }

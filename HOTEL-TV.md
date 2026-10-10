@@ -62,3 +62,7 @@ Leigh supplied the signed 0.3.2 widget on 10 October 2026. The same Room 3 insta
 ## Guide diagnostic source 0.3.3
 
 Room 3 confirmed native TV, Home return and power-on startup. Guide and Channel List do nothing with H.Browser ON but work with it OFF; Channel Menu Display ON did not resolve it. Diagnostics reads installed apps and supported keys, paginates inventory six apps at a time, and offers explicit launch tests only for Guide/EPG/channel-list candidates. It never guesses IDs or launches an app during scanning. Candidate matching is a heuristic, not proof of app functionality. Key logging and temporary Guide/ChannelList registration apply only while Diagnostics is foreground; registration is removed when leaving. Home interception in native TV is not claimed. Returning from a diagnostic launch restores Diagnostics. Cloud signed installer remains 0.3.2 until a signed 0.3.3 package is supplied.
+
+## Signed diagnostic installer 0.3.3
+
+Published unchanged signed package supplied by Leigh: 103612 bytes, SHA-256 `d46db0932f94f59bdd31531cba71ad63753894e3803e0ec3d7058c56721abc7e`. Room 3 install directory serves matching 0.3.3 manifest. Open Diagnostics, scan installed apps, photograph candidates and supported-key line. Test a Guide/Channel List candidate explicitly; report launch result and whether Home restores menu. No native-guide fix is claimed yet.
