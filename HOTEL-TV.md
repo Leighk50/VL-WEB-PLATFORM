@@ -41,3 +41,5 @@ The dashboard accepts up to six titled HTTPS video links. Use a direct hosted MP
 `hotel-tv-client/install-room3.ps1` downloads the new source into the existing Studio project, backs up changed files outside the project, preserves application/package IDs and adds the public `tv.window`, `tv.inputdevice` and `system` privileges to the existing config.xml. It does not sign or install an app. Refresh/build/sign and run with the existing tested certificate profile. Keep the backup until Room 3 has passed the device checks.
 
 References: [TVWindow](https://developer.samsung.com/smarttv/develop/api-references/tizen-web-device-api-references/tvwindow-api.html), [HTML5 video](https://developer.samsung.com/smarttv/develop/guides/multimedia/media-playback/using-video-elements.html).
+
+Version 0.3.1 changes the presentation to white with dark green text and sans-serif headings. The original website logo-gold.png is bundled unchanged in the TV package; the installer downloads it alongside the screen files. The HTML frames the logo’s transparent margins without changing the artwork.

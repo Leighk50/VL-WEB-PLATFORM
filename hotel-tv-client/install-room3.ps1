@@ -9,7 +9,7 @@ $source = 'https://raw.githubusercontent.com/Leighk50/VL-WEB-PLATFORM/main/hotel
 $staging = Join-Path $env:TEMP ('VL-TV-download-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
-    $files = @('index.html','settings.js','tv.js','tv.css')
+    $files = @('index.html','settings.js','tv.js','tv.css','logo-gold.png')
     foreach ($file in $files) {
         Invoke-WebRequest "$source/$file" -OutFile (Join-Path $staging $file)
     }
@@ -28,10 +28,10 @@ try {
             $config.DocumentElement.AppendChild($element) | Out-Null
         }
     }
-    $config.DocumentElement.SetAttribute('version', '0.3.0')
+    $config.DocumentElement.SetAttribute('version', '0.3.1')
     $config.Save($configPath)
     foreach ($file in $files) { Copy-Item (Join-Path $staging $file) (Join-Path $Project $file) -Force }
-    Write-Host "Room 3 source upgraded to 0.3.0. Backup: $backup"
+    Write-Host "Room 3 source upgraded to 0.3.1. Backup: $backup"
     Write-Host 'Existing application IDs and signing settings preserved. Refresh the project in Tizen Studio, then Run As > Tizen Web Application.'
 } finally {
     Remove-Item $staging -Recurse -Force
