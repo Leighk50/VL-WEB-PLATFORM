@@ -27,7 +27,7 @@ function publicFeed(content,config,roomId,now=new Date()){
  const feed={schemaVersion:1,room:{id:room.id,label:room.label},pages:[{title:config.welcomeTitle,text:welcome},{title:'Dining at The Village Limits',text:dining||'Please speak to our team about dining.'},{title:"What's on",text:happening}],menus,events,videos,contact:{telephone:text(settings.telephone),openingHours:text(settings.openingHours)},links:{menus:'/eat',events:'/whats-on'},apps:[{name:'Airtime',id:'34r7A9IqwB.airwave'}]};feed.revision=revision(feed).slice(1,-1);return feed;
 }
 function json(res,status,value,headers={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers});res.end(JSON.stringify(value));}
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>25000)throw Error('TV settings are too large.');}return JSON.parse(raw);}
+async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>40000)throw Error('TV settings are too large.');}return JSON.parse(raw);}
 async function handleHotelTv(req,res,pathname,identity){
  if(pathname==='/admin/tv'){if(!identity){res.writeHead(302,{Location:'/admin'});res.end();return true;}if(!identity.isOwner&&!identity.permissions.includes('settings')){res.writeHead(403);res.end('Access denied');return true;}if(req.method!=='GET'){res.writeHead(405);res.end();return true;}res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(fs.readFileSync(path.join(__dirname,'hotel-tv-admin.html')));return true;}
  if(pathname==='/api/admin/tv'){
