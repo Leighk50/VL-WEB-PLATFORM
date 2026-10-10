@@ -32,3 +32,7 @@ p{color:#4e6357;font-size:1.2vw}.lead{color:#52675b;font-size:1.25vw}.welcome-co
 button:focus,#content:focus{outline-color:#b28b45}
 html.live,body.live{background:transparent}
 @media(max-width:700px){aside{width:27%}.workspace{width:73%}nav button{font-size:2vw}h1{font-size:5vw}p,.lead{font-size:1.8vw}.tile strong{font-size:1.8vw}.tile small{font-size:1.4vw}}
+
+/* Room 3 diagnostic pilot */
+.diag-log{white-space:pre-wrap;overflow-wrap:break-word;font:20px Arial,sans-serif;line-height:1.45;background:#f2f5f1;padding:16px;}
+#nav button{padding-top:10px;padding-bottom:10px;}

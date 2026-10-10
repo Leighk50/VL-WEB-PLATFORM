@@ -58,3 +58,7 @@ Watch TV now launches Samsung's documented `org.tizen.tv-viewer` application ins
 ## Signed native-TV pilot installer (0.3.2)
 
 Leigh supplied the signed 0.3.2 widget on 10 October 2026. The same Room 3 installation directory now serves that unchanged package (102316 bytes), SHA-256 `b523cda80944fc4ee5376529645e930cb30b7d6cc8e583c26c4260f4702a72f1`, with matching manifest version 0.3.2. Reinstall through URL Launcher Settings > Install Web App. Guide and return/Home are still hardware checks; startup succeeded for 0.3.1.
+
+## Guide diagnostic source 0.3.3
+
+Room 3 confirmed native TV, Home return and power-on startup. Guide and Channel List do nothing with H.Browser ON but work with it OFF; Channel Menu Display ON did not resolve it. Diagnostics reads installed apps and supported keys, paginates inventory six apps at a time, and offers explicit launch tests only for Guide/EPG/channel-list candidates. It never guesses IDs or launches an app during scanning. Candidate matching is a heuristic, not proof of app functionality. Key logging and temporary Guide/ChannelList registration apply only while Diagnostics is foreground; registration is removed when leaving. Home interception in native TV is not claimed. Returning from a diagnostic launch restores Diagnostics. Cloud signed installer remains 0.3.2 until a signed 0.3.3 package is supplied.
