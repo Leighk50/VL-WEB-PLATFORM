@@ -54,3 +54,7 @@ Set hospitality H.Browser Mode ON, vendor Others, and use URL Launcher Settings 
 ## Native TV pilot source (0.3.2)
 
 Watch TV now launches Samsung's documented `org.tizen.tv-viewer` application instead of embedding TVWindow. The hotel menu remains recoverable on launch errors. Resuming the widget restores Welcome. No Home interception or automatic foreground timer is used: Guide, Home and return behaviour must be tested on Room 3. The hosted signed installer remains 0.3.1 until Leigh builds and supplies a signed 0.3.2 package; do not change its manifest prematurely.
+
+## Signed native-TV pilot installer (0.3.2)
+
+Leigh supplied the signed 0.3.2 widget on 10 October 2026. The same Room 3 installation directory now serves that unchanged package (102316 bytes), SHA-256 `b523cda80944fc4ee5376529645e930cb30b7d6cc8e583c26c4260f4702a72f1`, with matching manifest version 0.3.2. Reinstall through URL Launcher Settings > Install Web App. Guide and return/Home are still hardware checks; startup succeeded for 0.3.1.
