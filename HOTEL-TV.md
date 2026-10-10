@@ -43,3 +43,10 @@ The dashboard accepts up to six titled HTTPS video links. Use a direct hosted MP
 References: [TVWindow](https://developer.samsung.com/smarttv/develop/api-references/tizen-web-device-api-references/tvwindow-api.html), [HTML5 video](https://developer.samsung.com/smarttv/develop/guides/multimedia/media-playback/using-video-elements.html).
 
 Version 0.3.1 changes the presentation to white with dark green text and sans-serif headings. The original website logo-gold.png is bundled unchanged in the TV package; the installer downloads it alongside the screen files. The HTML frames the logo’s transparent margins without changing the artwork.
+
+## Room 3 URL Launcher pilot (0.3.1)
+
+Install address: `https://www.villagelimits.co.uk/tv/install/room3/`
+The server serves the unchanged signed package uploaded by Leigh, stored as base64 to preserve its bytes through the text-only repository connector. SHA-256: `17465b5ff8e54a7ace4cf5a295bef6fe9c2e72c251013735b9a6e5bd6846ccbb`. Manifest version 0.3.1 and byte size 102599 match the package. No private signing keys are included.
+
+Set hospitality H.Browser Mode ON, vendor Others, and use URL Launcher Settings > Install Web App with the install directory above. Do not use the browser preview or JSON feed address. Confirm installation before power cycling. URL Launcher certificate acceptance, power-on launch and Home-button return remain hardware checks for Room 3; do not roll out to other rooms yet.

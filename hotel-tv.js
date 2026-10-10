@@ -29,6 +29,16 @@ function publicFeed(content,config,roomId,now=new Date()){
 function json(res,status,value,headers={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers});res.end(JSON.stringify(value));}
 async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>40000)throw Error('TV settings are too large.');}return JSON.parse(raw);}
 async function handleHotelTv(req,res,pathname,identity){
+ const installerFiles={'/tv/install/room3/sssp_config.xml':'manifest','/tv/install/room3/VillageLimits.wgt':'package'};
+ if(Object.hasOwn(installerFiles,pathname)){
+  if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'});res.end();return true;}
+  const pkg=Buffer.from(fs.readFileSync(path.join(__dirname,'hotel-tv-install','VillageLimits.wgt.base64'),'utf8'),'base64');
+  const manifest=installerFiles[pathname]==='manifest';
+  const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>0.3.1</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;
+  res.writeHead(200,{'Content-Type':manifest?'application/xml; charset=utf-8':'application/widget','Content-Length':data.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+  res.end(req.method==='HEAD'?undefined:data);return true;
+ }
+
  if(pathname==='/admin/tv'){if(!identity){res.writeHead(302,{Location:'/admin'});res.end();return true;}if(!identity.isOwner&&!identity.permissions.includes('settings')){res.writeHead(403);res.end('Access denied');return true;}if(req.method!=='GET'){res.writeHead(405);res.end();return true;}res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(fs.readFileSync(path.join(__dirname,'hotel-tv-admin.html')));return true;}
  if(pathname==='/api/admin/tv'){
   if(!identity)return json(res,401,{error:'Please sign in.'}),true;
