@@ -29,3 +29,15 @@ The client polls every 30 seconds, renders text safely, supports remote arrow/OK
 ## Validation
 
 `npm test` includes feed filtering, public-data boundaries, auth/permission checks, input validation, same-origin writes, revision conflicts, persistent TV settings, existing menu persistence and enquiry tests. Full application route smoke tests use isolated temporary content, never production data.
+
+## Version 0.3 Room 3 pilot
+
+The compact side menu and fixed content area keep navigation and instructions within the screen. Dining has individual menu tabs; events have separate cards with guest-facing upload images. Right enters the content area; up/down scrolls, left/right chooses tabs, and Return returns to Welcome.
+
+Watch TV uses the documented public `tizen.tvwindow` API with the tuner source and a full-screen window behind the app. The app stays running and Return hides that window and shows Welcome. API failures leave the menu available; a pending start can be cancelled with Return. Channel/number/Guide keys are not registered or intercepted by this app: native handling must be tested on HG49EJ690U. Do not enable other rooms until video, tuner picture/audio, channel changing, guide, Return, Home and power-on have been verified. Home still needs hospitality URL Launcher installation; this source upgrade does not configure it.
+
+The dashboard accepts up to six titled HTTPS video links. Use a direct hosted MP4, initially H.264/AAC, and test the encoding and HTTPS certificate on Room 3. YouTube page links are not video file links. Clips play on demand with HTML5 video. OK pauses/resumes, left/right seeks ten seconds, and Return stops playback and returns to clips. Failed playback has an on-screen error and an escape route. Video clips are streamed; they are not downloaded for offline playback.
+
+`hotel-tv-client/install-room3.ps1` downloads the new source into the existing Studio project, backs up changed files outside the project, preserves application/package IDs and adds the public `tv.window`, `tv.inputdevice` and `system` privileges to the existing config.xml. It does not sign or install an app. Refresh/build/sign and run with the existing tested certificate profile. Keep the backup until Room 3 has passed the device checks.
+
+References: [TVWindow](https://developer.samsung.com/smarttv/develop/api-references/tizen-web-device-api-references/tvwindow-api.html), [HTML5 video](https://developer.samsung.com/smarttv/develop/guides/multimedia/media-playback/using-video-elements.html).

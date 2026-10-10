@@ -21,3 +21,12 @@ assert.equal((await fetch(base+'/api/tv/rooms/1/content')).status,404);assert.eq
 assert.ok((await (await fetch(base+'/api/admin/tv',{headers:owner})).json()).activity.find(a=>a.room===3).lastRequest);
 }finally{await new Promise(resolve=>server.close(resolve));}
 });
+test('Video settings migrate older saved configurations and only publish validated HTTPS clip links',()=>{
+ const old=defaults();delete old.videos;assert.deepEqual(clean(old).videos,[]);
+ const settings=defaults();settings.videos=[{title:'  Welcome film  ',url:'https://media.example/hotel.mp4'}];
+ const valid=clean(settings);assert.equal(valid.videos[0].title,'Welcome film');assert.deepEqual(publicFeed(content,valid,3).videos,valid.videos);
+ for(const url of ['javascript:alert(1)','http://media.example/hotel.mp4','https://user:secret@media.example/hotel.mp4'])assert.throws(()=>clean({...settings,videos:[{title:'Film',url}]}));
+ assert.throws(()=>clean({...settings,videos:Array(7).fill(settings.videos[0])}));
+ const eventContent=structuredClone(content);eventContent.events[0].image='/uploads/event-123.jpg';assert.equal(publicFeed(eventContent,valid,3).events[0].image,'/uploads/event-123.jpg');
+ eventContent.events[0].image='https://private.example/secret';assert.equal(publicFeed(eventContent,valid,3).events[0].image,'');
+});

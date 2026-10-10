@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://villagelimits.co.uk/tv-test" version="0.2.0" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://villagelimits.co.uk/tv-test" version="0.3.0" viewmodes="maximized">
 <tizen:application id="VLRoomTest.RoomTest" package="VLRoomTest" required_version="2.4"/>
 <content src="index.html"/><name>Village Limits Hotel TV</name><tizen:profile name="tv-samsung"/>
 <tizen:privilege name="http://tizen.org/privilege/internet"/>
 <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+<tizen:privilege name="http://tizen.org/privilege/tv.window"/>
+<tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+<tizen:privilege name="http://tizen.org/privilege/system"/>
 <access origin="*" subdomains="true"/>
 <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>
