@@ -3,6 +3,7 @@
 var room=VL_ROOM_ID,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);if(match)room=Number(match[1]);}
 var url=origin+'/api/tv/rooms/'+room+'/content',cacheKey='vl-cloud-room-'+room,data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
+var staySection='',eventIndex=0;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -48,9 +49,10 @@ function render(){
   if(!videos.length)panel.appendChild(node('p','New clips will appear here when they are added.'));
   videos.forEach(function(video){panel.appendChild(action('▶ '+video.title,function(){playVideo(video);}));});
  }else if(view==='diagnostics'){renderDiagnostics();
+ }else if(view==='info'){renderStay();
  }else if(!data){message('Connecting to hotel information','Please try again shortly. Watch TV and Airtime remain available from the menu.');
  }else if(view==='dining'){
-  heading('AT OUR TABLE','Our Restaurant Menu',data.contact.openingHours);
+  heading('AT OUR TABLE','Our Restaurant Menu','Wednesday–Saturday from 6pm · Sunday from 12pm');
   if(!data.menus.length){panel.appendChild(node('p','Please ask our team about current menus.'));}
   else{
    if(menuIndex>=data.menus.length)menuIndex=0;
@@ -63,18 +65,40 @@ function render(){
   var localEvents=data.localEvents||[];
   localEvents.forEach(function(event){var card=node('article','','event-card');card.appendChild(node('h2',event.title));if(event.date)card.appendChild(node('div',event.date,'date'));card.appendChild(node('p',event.description));panel.appendChild(card);});
   if(!localEvents.length)panel.appendChild(node('p','Ask our team for local recommendations and upcoming events.'));
- }else if(view==='events'){
-  heading('GOOD TIMES AHEAD',"What's on",'Food, entertainment and evenings worth coming out for.');
-  data.events.forEach(function(event){var card=node('article','','event-card');if(event.image&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(event.image)){var img=document.createElement('img');img.src=origin+event.image;img.alt='';img.onerror=function(){this.style.display='none';};card.appendChild(img);}card.appendChild(node('h2',event.title));card.appendChild(node('div',event.date||event.startDate,'date'));card.appendChild(node('p',event.description));if(event.soldOut||event.price)card.appendChild(node('span',event.soldOut?'Currently sold out':price(event.price),'badge'));panel.appendChild(card);});
-  if(!data.events.length)panel.appendChild(node('p','Please ask our team about forthcoming events.'));
- }else{
-  heading('MAKE YOURSELF AT HOME','Your stay','We’re here to help you enjoy your visit.');
-  var info=node('div','','info-card');info.appendChild(node('h3','Speak to our team'));info.appendChild(node('p',data.contact.telephone?'Telephone: '+data.contact.telephone:'Please speak to a member of our team.'));panel.appendChild(info);
-  var hours=node('div','','info-card');hours.appendChild(node('h3','Dining & service'));hours.appendChild(node('p',data.contact.openingHours));panel.appendChild(hours);
-  panel.appendChild(node('p','Menus and events: www.villagelimits.co.uk'));
+ }else if(view==='events'){renderEventPoster();
  }
+
  panel.scrollTop=scroll;
  var newActions=panel.querySelectorAll('[data-action]');if(actionIndex>=0&&newActions[actionIndex])newActions[actionIndex].focus();
+}
+function guestCard(title,text){var card=node('article','','info-card');card.appendChild(node('h2',title));card.appendChild(node('p',text));panel.appendChild(card);}
+function renderStay(){
+ heading('YOUR ROOM, YOUR COMFORT','Your Stay','Useful information for a comfortable visit.');
+ var sections=[['breakfast','Breakfast'],['checkout','Checkout'],['heating','Heating & Air Conditioning'],['restaurant','Bar & Restaurant'],['emergency','Emergency Information']];
+ var tabs=node('div','','stay-buttons');sections.forEach(function(item){var button=action(item[1],function(){staySection=item[0];panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();});if(staySection===item[0])button.className+=' chosen';tabs.appendChild(button);});panel.appendChild(tabs);
+ if(!staySection){panel.appendChild(node('p','Choose a section using the arrows and press OK.'));return;}
+ if(staySection==='breakfast'){
+  guestCard('Breakfast · 8am–10am','Please help yourself to juices, yoghurt and cereals. Enjoy a freshly cooked breakfast to start your day.');
+  var dishes=[['Village Limits English Breakfast','Two grilled bacon, one Boston sausage, grilled tomato, mushroom, black pudding, hash brown, baked beans, toast and a choice of fried, scrambled or poached egg.','D, E, G, S, Sd'],['Vegan Breakfast','Two Moving Mountains sausages, grilled tomato, mushroom, baked beans, hash brown and toast.','G, S'],['Eggs Benedict','Two poached eggs, Parma ham, hollandaise and a toasted muffin. Florentine option: replace Parma ham with spinach and flat cap mushroom.','G, D, E, S, Sd'],['Poached or Scrambled Eggs','Served on brown or white toast.','D, E, G'],['Baked Beans and Bacon on Toast','Baked beans and chopped bacon on brown or white toast.','D, G, S, Sd'],['Sausage or Bacon Roll','Grilled bacon or sausage on a soft white roll. Vegan option available. Add an egg if you wish.','D, G, E, S, Sd'],['Pancake Stack','Three American-style pancakes, summer berry compote and Greek yoghurt, maple syrup and bacon OR chocolate chip sauce.','G, D, E, S'],['Three Egg Omelette','Choose three fillings: bacon, cheddar cheese, mushroom, tomato or spinach.','D, E']];
+  dishes.forEach(function(dish){var row=node('div','','item');row.appendChild(node('strong',dish[0]));row.appendChild(node('p',dish[1]));row.appendChild(node('p','Allergens: '+dish[2],'allergens'));panel.appendChild(row);});
+  guestCard('Hot Drinks','Pot of tea · Americano · Latte · Cappuccino · Hot chocolate');
+  guestCard('Allergies & Intolerances','Please advise a member of our team if anyone in your party has a food allergy or intolerance. We cannot guarantee that items are completely allergen-free, as our kitchen contains ingredients with allergens.\n\nC: Crustaceans · Ce: Celery · D: Dairy · E: Eggs · F: Fish · P: Peanuts · G: Gluten · L: Lupin · N: Nuts · M: Molluscs · Mu: Mustard · S: Soya · Sd: Sulphur dioxide · Se: Sesame seeds');
+ }else if(staySection==='checkout')guestCard('Checkout','Monday–Friday: by 10am\nSaturday & Sunday: by 11am\n\nPlease leave your room key in your room when you depart.\n\nThank you for staying at The Village Limits. We hope to welcome you back soon.');
+ else if(staySection==='heating'){
+  guestCard('Radiator Heating','Each radiator has a thermostatic valve. Turn it towards a higher number for more warmth or a lower number for less warmth. The radiator may cool down once the room reaches the selected temperature.');
+  guestCard('Fujitsu Air Conditioning','1. Press the power button at the bottom right of the wall controller to turn it on or off.\n2. Use ◀ ▶ to highlight Mode, then ▲ ▼ to select Cool or Heat, where available.\n3. Use ◀ ▶ to highlight Set temp., then ▲ ▼ to adjust the temperature.\n4. Highlight Fan to adjust the fan speed. Auto is a simple choice.\n\nKeep windows and doors closed while it is running. Please speak to our team if you need help.');
+ }else if(staySection==='restaurant'){
+  guestCard('Restaurant Opening Times','Wednesday–Saturday: from 6pm\nSunday: from 12pm');
+  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));panel.focus();}));
+ }else if(staySection==='emergency')guestCard('Emergency Information','In an emergency, please call\n01526 353312\nand select Option 0.');
+}
+function renderEventPoster(){
+ heading('GOOD TIMES AHEAD',"What's On",'Discover our upcoming events.');var events=data&&data.events||[];
+ if(!events.length){panel.appendChild(node('p','Please ask our team about forthcoming events.'));return;}
+ eventIndex=Math.max(0,Math.min(eventIndex,events.length-1));var event=events[eventIndex];
+ var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){eventIndex=(eventIndex+events.length-1)%events.length;render();}));controls.appendChild(node('span',(eventIndex+1)+' of '+events.length));controls.appendChild(action('Next ▶',function(){eventIndex=(eventIndex+1)%events.length;render();}));panel.appendChild(controls);
+ var layout=node('div','','poster-layout');if(event.image&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(event.image)){var img=document.createElement('img');img.src=origin+event.image;img.alt=event.title+' poster';img.className='event-poster';img.onerror=function(){this.style.display='none';};layout.appendChild(img);}
+ var details=node('article','','poster-details');details.appendChild(node('h2',event.title));details.appendChild(node('div',event.date||event.startDate,'date'));details.appendChild(node('p',event.description));if(event.soldOut||event.price)details.appendChild(node('span',event.soldOut?'Currently sold out':price(event.price),'badge'));layout.appendChild(details);panel.appendChild(layout);
 }
 function diagRecord(text){diagLog.push(new Date().toLocaleTimeString()+' · '+text);if(diagLog.length>100)diagLog.shift();try{sessionStorage.setItem('vl-epg-log',JSON.stringify(diagLog));}catch(ignore){}var log=document.getElementById('diag-log');if(log)log.textContent=diagLog.join('\n');}
 function diagCandidate(app){var label=(app.name+' '+app.id).toLowerCase();return /guide|epg|channel[-_ ]?list|ep-hotel-channel$/.test(label)&&!/service|daemon|editor|manager/.test(label);}
@@ -104,7 +128,7 @@ function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(
 function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
 function readTunerData(){
  if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
- var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.5');
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.6');
  try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
  try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
@@ -197,7 +221,7 @@ function registerChannelKeys(){
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.4.5 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.6 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -227,7 +251,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.5: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.6: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -270,7 +294,7 @@ clip.addEventListener('pause',function(){if(mode==='video')document.getElementBy
 clip.addEventListener('waiting',function(){document.getElementById('clip-status').textContent='Buffering…';});
 clip.addEventListener('error',function(){if(mode==='video')document.getElementById('clip-status').textContent='Clip could not play. Press Return to go back.';});
 clip.addEventListener('ended',function(){stopVideo();open(navFor('videos'));});
-function open(i){cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=buttons[i].getAttribute('data-view');panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
+function open(i){cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=buttons[i].getAttribute('data-view');if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
 for(var i=0;i<buttons.length;i++)(function(index){buttons[index].onclick=function(){open(index);};})(i);
 document.getElementById('live-return').onclick=function(){embeddedGuideResume=false;stopLive();open(0);};
 document.getElementById('video-return').onclick=function(){stopVideo();open(navFor('videos'));};
@@ -280,7 +304,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(k===guideCode
  if(mode==='tv-embedded'){if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
- if(isBack(k)){open(0);e.preventDefault();return;}
+ if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
