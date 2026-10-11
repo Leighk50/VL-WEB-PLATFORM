@@ -83,13 +83,34 @@ function launchGuide(){
  diagRecord('Opening EPG; widget '+(document.hidden?'hidden':'visible'));
  try{tizen.application.launch('org.tizen.epg',function(){diagRecord('EPG launch accepted');},function(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+e.name);say('Unable to open TV Guide: '+e.name);});}catch(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+(e.name||e.message));say('Unable to open TV Guide: '+(e.name||e.message));}
 }
+var channelBusy=false,channelTimer=null;
+function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(e&&e.message?' — '+e.message:''));}
+function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
+function readTunerData(){
+ if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.0');
+ try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
+ try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
+ var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
+ try{api.getChannelList(function(channels){if(done)return;done=true;clearTimeout(timer);diagRecord('Channel list received: '+channels.length);channels.slice(0,10).forEach(function(c){tunerValue('Channel',c);});},function(e){if(done)return;done=true;clearTimeout(timer);tunerError('Channel list failed',e);},'ALL',0,10);}catch(e){done=true;clearTimeout(timer);tunerError('Channel list failed',e);}
+}
+function changeEmbeddedChannel(up){
+ if(preview||mode!=='tv-embedded'||document.hidden||channelBusy)return;
+ var api=tizen.tvchannel,method=up?'tuneUp':'tuneDown';
+ if(!api||typeof api[method]!=='function'){diagRecord(method+': unavailable');return;}
+ channelBusy=true;var token=tvToken,done=false;diagRecord('Request '+method+'; widget visible');
+ function finish(){done=true;clearTimeout(channelTimer);channelTimer=null;channelBusy=false;}
+ channelTimer=setTimeout(function(){finish();diagRecord(method+': no callback after 8 seconds');},8000);
+ try{api[method](function(){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);try{tunerValue('Tuned channel',api.getCurrentChannel());}catch(e){tunerError('Tuned channel read failed',e);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
+}
+
 function registerChannelKeys(){
  if(preview)return;
  ['ChannelUp','ChannelDown'].forEach(function(name){try{var key=tizen.tvinputdevice.getKey(name);tizen.tvinputdevice.registerKey(name);diagRecord(name+' registered ('+(key?key.code:'unknown')+')');}catch(e){diagRecord(name+' registration: '+(e.name||e.message));}});
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.3.9 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.0 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -112,13 +133,14 @@ function renderDiagnostics(){
  panel.appendChild(action('Watch TV inside widget — Room 3 test',startEmbeddedTV));
  panel.appendChild(action('TV Guide',launchGuide));
  panel.appendChild(action('Scan tuner APIs',scanTunerCapabilities));
+ panel.appendChild(action('Read channel and programme data',readTunerData));
  panel.appendChild(action('Clear diagnostic log',function(){diagLog=[];diagRecord('Log cleared');render();}));
  panel.appendChild(action('Close widget',closeDiagnosticWidget));
  panel.appendChild(node('p','Exit test: closes this application. Test GUIDE and CH LIST on live TV, then HOME. If HOME does not restore the welcome screen, restart the TV.'));
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.9: GUIDE opens org.tizen.epg when its event reaches this widget. Channel Up/Down are registered for logging only, not yet connected to tuning. Scan tuner APIs, then test P up/down inside embedded TV and inspect the log.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.0: GUIDE opens org.tizen.epg when its event reaches this widget. Channel Up/Down now test tuneUp/tuneDown inside embedded TV. Read channel and programme data, then test P up/down. Native GUIDE still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -129,7 +151,7 @@ function renderDiagnostics(){
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
 function stopLive(){
  if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
- var embedded=mode==='tv-embedded';tvToken++;clearTimeout(tvTimer);mode='menu';
+ var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
 }
 function startEmbeddedTV(){
@@ -168,7 +190,7 @@ document.getElementById('video-return').onclick=function(){stopVideo();open(navF
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
 document.addEventListener('keydown',function(e){var k=e.keyCode;if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat)launchGuide();return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
- if(mode==='tv-embedded'){diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
+ if(mode==='tv-embedded'){if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
  if(isBack(k)){open(0);e.preventDefault();return;}
