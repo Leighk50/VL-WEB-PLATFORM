@@ -36,3 +36,5 @@ html.live,body.live{background:transparent}
 /* Room 3 diagnostic pilot */
 .diag-log{white-space:pre-wrap;overflow-wrap:break-word;font:20px Arial,sans-serif;line-height:1.45;background:#f2f5f1;padding:16px;}
 #nav button{padding-top:10px;padding-bottom:10px;}
+
+#channel-guide{position:absolute;z-index:10;left:5vw;top:6vh;width:42vw;height:88vh;padding:3vh 2vw;background:rgba(250,249,244,.97);color:#164d35;border-radius:1vw;box-shadow:0 1vh 4vh #0006}#channel-guide h2{margin:0;font-size:2vw}#channel-guide p{color:#164d35;font-size:1.15vw}#channel-list{height:63vh;overflow-y:auto;position:relative}#channel-list button{display:block;width:96%;text-align:left;font-size:1.6vw;padding:1.5vh 1vw;margin:1vh 0;border:1px solid #c3cec5;border-radius:.5vw;background:#fff;color:#164d35}#channel-list button.chosen{background:#146b45;color:#fff;border-color:#c6a660}
