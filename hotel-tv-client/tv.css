@@ -38,3 +38,5 @@ html.live,body.live{background:transparent}
 #nav button{padding-top:10px;padding-bottom:10px;}
 
 #channel-guide{position:absolute;z-index:10;left:5vw;top:6vh;width:42vw;height:88vh;padding:3vh 2vw;background:rgba(250,249,244,.97);color:#164d35;border-radius:1vw;box-shadow:0 1vh 4vh #0006}#channel-guide h2{margin:0;font-size:2vw}#channel-guide p{color:#164d35;font-size:1.15vw}#channel-list{height:63vh;overflow-y:auto;position:relative}#channel-list button{display:block;width:96%;text-align:left;font-size:1.6vw;padding:1.5vh 1vw;margin:1vh 0;border:1px solid #c3cec5;border-radius:.5vw;background:#fff;color:#164d35}#channel-list button.chosen{background:#146b45;color:#fff;border-color:#c6a660}
+
+#channel-guide{width:90vw}.guide-columns{display:flex;height:63vh;margin-top:1vh}#channel-list{width:36%;height:100%;flex-shrink:0}#programme-details{width:64%;height:100%;padding:0 2vw;overflow-y:auto}#programme-details h2{font-size:1.8vw}#programme-details h3{font-size:1.5vw;margin:1vh 0}#programme-details p{font-size:1.2vw;line-height:1.5}.programme-card{padding:1.5vh 0;border-bottom:1px solid #c3cec5}.programme-card small{font-size:1.1vw;color:#596d5e}
