@@ -88,7 +88,7 @@ function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(
 function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
 function readTunerData(){
  if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
- var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.0');
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.1');
  try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
  try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
@@ -101,7 +101,7 @@ function changeEmbeddedChannel(up){
  channelBusy=true;var token=tvToken,done=false;diagRecord('Request '+method+'; widget visible');
  function finish(){done=true;clearTimeout(channelTimer);channelTimer=null;channelBusy=false;}
  channelTimer=setTimeout(function(){finish();diagRecord(method+': no callback after 8 seconds');},8000);
- try{api[method](function(){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);try{tunerValue('Tuned channel',api.getCurrentChannel());}catch(e){tunerError('Tuned channel read failed',e);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
+ try{api[method]({onsuccess:function(channel){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);tunerValue('Tune callback channel',channel);try{tunerValue('Tuned channel',api.getCurrentChannel());tunerValue('Programme after tuning',api.getCurrentProgram());}catch(e){tunerError('Tuned data read failed',e);}},onnosignal:function(){if(done)return;finish();diagRecord(method+': no signal');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Tune programme event',program);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
 }
 
 function registerChannelKeys(){
@@ -110,7 +110,7 @@ function registerChannelKeys(){
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.4.0 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.1 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -140,7 +140,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.0: GUIDE opens org.tizen.epg when its event reaches this widget. Channel Up/Down now test tuneUp/tuneDown inside embedded TV. Read channel and programme data, then test P up/down. Native GUIDE still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.1: GUIDE opens org.tizen.epg when its event reaches this widget. Channel Up/Down now test tuneUp/tuneDown inside embedded TV. Read channel and programme data, then test P up/down. Native GUIDE still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
