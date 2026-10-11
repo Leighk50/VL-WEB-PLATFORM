@@ -84,11 +84,11 @@ function launchGuide(){
  try{tizen.application.launch('org.tizen.epg',function(){diagRecord('EPG launch accepted');},function(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+e.name);say('Unable to open TV Guide: '+e.name);});}catch(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+(e.name||e.message));say('Unable to open TV Guide: '+(e.name||e.message));}
 }
 var channelBusy=false,channelTimer=null;
-function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(e&&e.message?' — '+e.message:''));}
+function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(e&&e.message?' — '+String(e.message).slice(0,300):''));}
 function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
 function readTunerData(){
  if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
- var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.3');
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.4');
  try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
  try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
@@ -129,13 +129,14 @@ function readSelectedSchedule(force){
  function fail(e){if(!active())return;done=true;clearTimeout(scheduleTimer);programmeCache[id]={message:'Upcoming listings unavailable. Current programme is shown when tuned.'};tunerError('Schedule read failed',e);if(channelGuideOpen)renderProgrammeDetails();}
  function success(items){if(!active())return;done=true;clearTimeout(scheduleTimer);if(!Array.isArray(items)){programmeCache[id]={message:'Unexpected schedule response'};tunerValue('Schedule response',items);return;}scheduleShape=attempt;programmeCache[id]={items:items};diagRecord('Schedule received '+items.length+' programmes for '+channel.channelName+'; shape='+attempt);items.slice(0,3).forEach(function(pr){tunerValue('Schedule programme',pr);diagRecord('Programme time: '+programmeRange(pr)+'; start type='+Object.prototype.toString.call(pr.startTime));});if(channelGuideOpen)renderProgrammeDetails();}
  // Read-only pilot: old hospitality API documentation is unavailable.
- // Try another argument layout only after a synchronous type mismatch.
+ // TV 4.0 validation confirms ChannelInfo, time, then callback positions.
+ // Omit unverified optional range arguments in this pilot.
  function call(){
   var now;try{now=tizen.time.getCurrentDateTime();}catch(ignore){now=new Date();}
-  var args=[[success,fail,channel,now,21600],[channel,success,fail,now,21600],[channel,now,21600,success,fail]];
+  var args=[[channel,now,success,fail]];
   diagRecord('Read schedule for '+channel.channelName+'; argument layout '+attempt);
   scheduleTimer=setTimeout(function(){fail({name:'TimeoutError',message:'No schedule callback after 8 seconds'});},8000);
-  try{api.getProgramList.apply(api,args[attempt]);}catch(e){clearTimeout(scheduleTimer);tunerError('Schedule layout '+attempt,e);if(e.name==='TypeMismatchError'&&scheduleShape<0&&attempt<2){attempt++;call();}else fail(e);}
+  try{api.getProgramList.apply(api,args[attempt]);}catch(e){clearTimeout(scheduleTimer);tunerError('Schedule layout '+attempt,e);fail(e);}
  }
  call();
 }
@@ -180,7 +181,7 @@ function registerChannelKeys(){
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.4.3 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.4 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -210,7 +211,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.3: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.4: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
