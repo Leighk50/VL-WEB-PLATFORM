@@ -61,9 +61,9 @@ function render(){
 function diagRecord(text){diagLog.push(text);if(diagLog.length>12)diagLog.shift();var log=document.getElementById('diag-log');if(log)log.textContent=diagLog.join('\n');}
 function diagCandidate(app){var label=(app.name+' '+app.id).toLowerCase();return /guide|epg|channel[-_ ]?list|ep-hotel-channel$/.test(label)&&!/service|daemon|editor|manager/.test(label);}
 function diagKeyMode(enable){
- if(preview||!tizen.tvinputdevice)return;
- if(!enable){diagRegistered.forEach(function(k){try{tizen.tvinputdevice.unregisterKey(k);}catch(e){}});diagRegistered=[];return;}
- try{diagKeys=tizen.tvinputdevice.getSupportedKeys();diagKeys.forEach(function(k){if(/^(Guide|ChannelList)$/.test(k.name)&&diagRegistered.indexOf(k.name)<0){try{tizen.tvinputdevice.registerKey(k.name);diagRegistered.push(k.name);}catch(e){diagRecord(k.name+' registration: '+e.name);}}});}catch(e){diagRecord('Key discovery: '+e.name);}
+ // Pilot: never subscribe to Guide or ChannelList, including Diagnostics.
+ if(preview||!tizen.tvinputdevice||!enable)return;
+ try{diagKeys=tizen.tvinputdevice.getSupportedKeys();}catch(e){diagRecord('Key discovery: '+e.name);}
 }
 function scanDiagnosticApps(){
  if(preview){diagRecord('Installed apps can only be read on the TV.');return;}
@@ -80,7 +80,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Key logging only works while this widget is on screen.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.4: Guide and ChannelList are never registered by this widget.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
