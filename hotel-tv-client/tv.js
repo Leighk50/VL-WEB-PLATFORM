@@ -83,6 +83,22 @@ function launchGuide(){
  diagRecord('Opening EPG; widget '+(document.hidden?'hidden':'visible'));
  try{tizen.application.launch('org.tizen.epg',function(){diagRecord('EPG launch accepted');},function(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+e.name);say('Unable to open TV Guide: '+e.name);});}catch(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+(e.name||e.message));say('Unable to open TV Guide: '+(e.name||e.message));}
 }
+function registerChannelKeys(){
+ if(preview)return;
+ ['ChannelUp','ChannelDown'].forEach(function(name){try{var key=tizen.tvinputdevice.getKey(name);tizen.tvinputdevice.registerKey(name);diagRecord(name+' registered ('+(key?key.code:'unknown')+')');}catch(e){diagRecord(name+' registration: '+(e.name||e.message));}});
+}
+function scanTunerCapabilities(){
+ if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
+ diagRecord('Tuner API scan 0.3.9 — read only; no tuning calls');
+ function inspect(label,obj){
+  if(!obj){diagRecord(label+': unavailable');return;}
+  try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
+ }
+ inspect('tizen.tvchannel',tizen.tvchannel);
+ function inspectLibrary(name){try{var lib=window[name];if(!lib){diagRecord(name+': unavailable');return;}var modules=Object.getOwnPropertyNames(lib);diagRecord(name+' modules: '+modules.join(', '));modules.filter(function(n){return /broadcast|channel|input|control|epg/i.test(n);}).forEach(function(n){try{inspect(name+'.'+n,lib[n]);}catch(e){diagRecord(name+'.'+n+': '+e.name);}});}catch(e){diagRecord(name+': '+(e.name||e.message));}}
+ inspectLibrary('webapis');inspectLibrary('b2bapis');
+}
+
 function registerGuide(){
  if(preview)return;
  try{var key=tizen.tvinputdevice.getKey('Guide');if(key)guideCode=key.code;tizen.tvinputdevice.registerKey('Guide');diagRecord('Guide registered ('+guideCode+')');}catch(e){diagRecord('Guide registration failed: '+(e.name||e.message));}
@@ -95,13 +111,14 @@ function renderDiagnostics(){
  heading('ROOM 3 TEST ONLY','TV diagnostics','Scan apps, then test a Guide or Channel List candidate. Home should return here. No apps are launched automatically.');
  panel.appendChild(action('Watch TV inside widget — Room 3 test',startEmbeddedTV));
  panel.appendChild(action('TV Guide',launchGuide));
+ panel.appendChild(action('Scan tuner APIs',scanTunerCapabilities));
  panel.appendChild(action('Clear diagnostic log',function(){diagLog=[];diagRecord('Log cleared');render();}));
  panel.appendChild(action('Close widget',closeDiagnosticWidget));
  panel.appendChild(node('p','Exit test: closes this application. Test GUIDE and CH LIST on live TV, then HOME. If HOME does not restore the welcome screen, restart the TV.'));
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.8: GUIDE opens org.tizen.epg when its event reaches this widget. ChannelList remains unregistered. Press GUIDE during TV viewing, then HOME and inspect this log.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.9: GUIDE opens org.tizen.epg when its event reaches this widget. Channel Up/Down are registered for logging only, not yet connected to tuning. Scan tuner APIs, then test P up/down inside embedded TV and inspect the log.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -170,7 +187,7 @@ function poll(){if(busy)return;busy=true;var xhr=new XMLHttpRequest();xhr.open('
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
 try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause','MediaStop'].forEach(function(key){try{tizen.tvinputdevice.registerKey(key);}catch(ignore){}});}catch(ignore){}
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
-registerGuide();
+registerGuide();registerChannelKeys();
 function clock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
 focus(0);render();poll();setInterval(poll,30000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
