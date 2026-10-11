@@ -75,12 +75,18 @@ function diagLaunch(app){
  diagResume=true;diagRecord('Launching '+app.id);
  try{tizen.application.launch(app.id,function(){diagRecord('Launch accepted: '+app.id);},function(e){diagResume=false;diagRecord('Launch failed: '+app.id+' — '+e.name);});}catch(e){diagResume=false;diagRecord('Launch failed: '+e.message);}
 }
+function closeDiagnosticWidget(){
+ if(preview){say('Close widget can only be tested on the room TV.');return;}
+ try{tizen.application.getCurrentApplication().exit();}catch(e){diagRecord('Close widget failed: '+(e.name||e.message));say('Unable to close widget: '+(e.name||e.message));}
+}
 function renderDiagnostics(){
  heading('ROOM 3 TEST ONLY','TV diagnostics','Scan apps, then test a Guide or Channel List candidate. Home should return here. No apps are launched automatically.');
+ panel.appendChild(action('Close widget',closeDiagnosticWidget));
+ panel.appendChild(node('p','Exit test: closes this application. Test GUIDE and CH LIST on live TV, then HOME. If HOME does not restore the welcome screen, restart the TV.'));
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.4: Guide and ChannelList are never registered by this widget.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.3.5: Guide and ChannelList are never registered by this widget.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
