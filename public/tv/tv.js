@@ -3,7 +3,7 @@
 var room=null,setupIndex=0,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=match?Number(match[1]):3;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
 var url=room?origin+'/api/tv/rooms/'+room+'/content':'',cacheKey=room?'vl-cloud-room-'+room:'',data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
-var staySection='',eventIndex=0;
+var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -72,16 +72,36 @@ function render(){
    menu.sections.forEach(function(section){panel.appendChild(node('h2',section.name,'section-name'));section.items.forEach(function(item){var row=node('div','','item');row.appendChild(node('span',price(item.price),'price'));row.appendChild(node('strong',item.name));if(item.description)row.appendChild(node('p',item.description));if(item.allergens)row.appendChild(node('p','Allergens: '+item.allergens,'allergens'));panel.appendChild(row);});});
   }
  }else if(view==='local'){
-  heading('EXPLORE YOUR SURROUNDINGS','What’s happening in Woodhall Spa','Local experiences, events and places to explore.');
-  var localEvents=data.localEvents||[];
-  localEvents.forEach(function(event){var card=node('article','','event-card');card.appendChild(node('h2',event.title));if(event.date)card.appendChild(node('div',event.date,'date'));card.appendChild(node('p',event.description));panel.appendChild(card);});
-  if(!localEvents.length)panel.appendChild(node('p','Ask our team for local recommendations and upcoming events.'));
+  renderExplore();
  }else if(view==='events'){renderEventPoster();
  }
 
  panel.scrollTop=scroll;
  var newActions=panel.querySelectorAll('[data-action]');if(actionIndex>=0&&newActions[actionIndex])newActions[actionIndex].focus();
 }
+function renderExplore(){
+ heading('EXPLORE YOUR SURROUNDINGS','Explore Woodhall Spa','Local favourites, aviation heritage and days out.');
+ var tabs=node('div','','tabs explore-tabs'),sections=[['cinema','Today at the Kinema'],['village','Woodhall Spa'],['aviation','Aviation & Museums'],['days','Nearby Days Out']];
+ sections.forEach(function(item){var button=action(item[1],function(){localSection=item[0];localIndex=0;panel.scrollTop=0;render();var chosen=panel.querySelector('.explore-tabs .chosen');if(chosen)chosen.focus();});if(localSection===item[0])button.className+=' chosen';tabs.appendChild(button);});panel.appendChild(tabs);
+ var info=data.explore;if(!info){panel.appendChild(node('p','Visitor information is loading. Please try again shortly.'));return;}
+ var kinema=info.attractions.filter(function(p){return p.id==='kinema';})[0];
+ if(localSection==='cinema'){
+  var cinema=info.cinema,days=cinema.days||[],controls=node('div','','event-controls');
+  ['Today','Tomorrow'].forEach(function(label,index){var button=action(label,function(){cinemaDay=index;panel.scrollTop=0;render();});if(index===cinemaDay)button.className+=' chosen';controls.appendChild(button);});panel.appendChild(controls);
+  var day=days[cinemaDay];panel.appendChild(node('h2',(cinemaDay?'Tomorrow':'Today')+' at the Kinema'));if(day)panel.appendChild(node('p',day.date,'date'));
+  var layout=node('div','','explore-layout'),list=node('div','','cinema-list');
+  if(cinema.status!=='available'||!cinema.updatedAt||Date.now()-Date.parse(cinema.updatedAt)>=3600000)list.appendChild(node('p','Screening times are temporarily unavailable. Scan the QR code for the latest listings and tickets.'));
+  else if(!day||!day.films.length)list.appendChild(node('p','No screenings are currently listed for this day. Check the Kinema website for updates.'));
+  else day.films.forEach(function(film){var card=node('article','','cinema-film');card.appendChild(node('h3',film.title));card.appendChild(node('p',film.times.join(' · '),'showtimes'));list.appendChild(card);});
+  layout.appendChild(list);if(kinema)layout.appendChild(exploreQR(kinema,'Scan for listings & tickets'));panel.appendChild(layout);
+  if(cinema.updatedAt)panel.appendChild(node('p','Listings checked '+new Date(cinema.updatedAt).toLocaleString('en-GB')+' · Times may change; confirm when booking.','allergens'));
+ }else{
+  var places=info.attractions.filter(function(p){return p.category===localSection;});if(!places.length)return;localIndex=Math.max(0,Math.min(localIndex,places.length-1));
+  var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
+  var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
+ }
+}
+function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',label));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
 function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
 function moveStayFocus(k,active){
  if(view!=='info'||(k!==38&&k!==40))return false;
@@ -335,7 +355,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(!room){var ch
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.0.0'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.1.0'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
