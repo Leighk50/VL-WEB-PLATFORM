@@ -71,11 +71,19 @@ function render(){
  panel.scrollTop=scroll;
  var newActions=panel.querySelectorAll('[data-action]');if(actionIndex>=0&&newActions[actionIndex])newActions[actionIndex].focus();
 }
+function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
+function moveStayFocus(k,active){
+ if(view!=='info'||(k!==38&&k!==40))return false;
+ var tabs=panel.querySelector('.stay-buttons');if(!tabs)return false;
+ if(active&&active.parentNode===tabs&&k===40){var all=panel.querySelectorAll('[data-action]');for(var i=0;i<all.length;i++)if(all[i].parentNode!==tabs){all[i].focus();return true;}return false;}
+ if(active&&active.getAttribute&&active.getAttribute('data-action')==='yes'&&active.parentNode!==tabs&&k===38){focusStayTab();return true;}
+ return false;
+}
 function guestCard(title,text){var card=node('article','','info-card');card.appendChild(node('h2',title));card.appendChild(node('p',text));panel.appendChild(card);}
 function renderStay(){
  heading('YOUR ROOM, YOUR COMFORT','Your Stay','Useful information for a comfortable visit.');
  var sections=[['breakfast','Breakfast'],['checkout','Checkout'],['heating','Heating & Air Conditioning'],['restaurant','Bar & Restaurant'],['emergency','Emergency Information']];
- var tabs=node('div','','stay-buttons');sections.forEach(function(item){var button=action(item[1],function(){staySection=item[0];panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();});if(staySection===item[0])button.className+=' chosen';tabs.appendChild(button);});panel.appendChild(tabs);
+ var tabs=node('div','','stay-buttons');sections.forEach(function(item){var button=action(item[1],function(){staySection=item[0];panel.scrollTop=0;render();focusStayTab();});if(staySection===item[0])button.className+=' chosen';tabs.appendChild(button);});panel.appendChild(tabs);
  if(!staySection){panel.appendChild(node('p','Choose a section using the arrows and press OK.'));return;}
  if(staySection==='breakfast'){
   guestCard('Breakfast · 8am–10am','Please help yourself to juices, yoghurt and cereals. Enjoy a freshly cooked breakfast to start your day.');
@@ -128,7 +136,7 @@ function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(
 function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
 function readTunerData(){
  if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
- var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.6');
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.7');
  try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
  try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
@@ -221,7 +229,7 @@ function registerChannelKeys(){
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.4.6 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.7 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -251,7 +259,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.6: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.7: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -307,6 +315,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(k===guideCode
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
+ else if(moveStayFocus(k,active)){e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
  else if(inNav&&k===39){if(actions.length)actions[0].focus();else panel.focus();e.preventDefault();}
  else if(k===37){if(n>0)actions[n-1].focus();else focus(selected);e.preventDefault();}
