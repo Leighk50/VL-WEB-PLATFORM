@@ -19,7 +19,7 @@ function stopWelcomeVideo(){if(welcomeVideo){welcomeVideo.pause();welcomeVideo.r
 function renderWelcomeVideo(){
  var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=true;video.autoplay=true;video.setAttribute('muted','');video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
  var caption=node('div','','media-caption');caption.appendChild(node('span','THE VILLAGE LIMITS','eyebrow'));caption.appendChild(node('h2','Good food. Great company.'));var state=node('p','Discover more during your stay.');caption.appendChild(state);card.appendChild(caption);panel.appendChild(card);
- welcomeVideo=video;welcomeVideoSources=(data&&data.videos||[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
+ welcomeVideo=video;welcomeVideoSources=(data&&data.welcomeVideo?[data.welcomeVideo]:[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
  function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=true;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
  video.onended=function(){welcomeVideoIndex++;next();};video.onerror=function(){state.textContent='Video is temporarily unavailable.';};
  if(welcomeVideoSources.length){state.textContent='A taste of life at The Village Limits';next();}else state.textContent='Our hotel video will appear here when added.';
@@ -31,10 +31,11 @@ function render(){
  while(panel.firstChild)panel.removeChild(panel.firstChild);
  for(var b=0;b<buttons.length;b++){var isActive=buttons[b].getAttribute('data-view')===view;buttons[b].className=isActive?'active':'';buttons[b].setAttribute('aria-current',isActive?'page':'false');}
  if(data)document.getElementById('room').textContent=data.room.label.toUpperCase();
+ panel.className=view==='welcome'?'welcome-layout':'';
  if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',data?data.pages[0].title:'Make yourself at home','A little comfort. A good meal. Something to look forward to.');
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  renderWelcomeVideo();
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Return-to-menu behaviour is being tested on Room 3.');
   panel.appendChild(action('Watch TV inside widget — Room 3 test',startEmbeddedTV));
@@ -136,7 +137,7 @@ function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(
 function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
 function readTunerData(){
  if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
- var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.7');
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.8');
  try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
  try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
@@ -229,7 +230,7 @@ function registerChannelKeys(){
 }
 function scanTunerCapabilities(){
  if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
- diagRecord('Tuner API scan 0.4.7 — read only; no tuning calls');
+ diagRecord('Tuner API scan 0.4.8 — read only; no tuning calls');
  function inspect(label,obj){
   if(!obj){diagRecord(label+': unavailable');return;}
   try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
@@ -259,7 +260,7 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.7: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.8: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -347,3 +348,4 @@ function onWidgetVisibility(){
 document.addEventListener('visibilitychange',onWidgetVisibility);
 window.addEventListener('pagehide',function(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
 })();
+

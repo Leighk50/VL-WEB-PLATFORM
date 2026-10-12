@@ -2,7 +2,8 @@
 'use strict';
 var room=VL_ROOM_ID,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);if(match)room=Number(match[1]);}
-var url=origin+'/api/tv/rooms/'+room+'/content',cacheKey='vl-cloud-room-'+room,data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false;
+var url=origin+'/api/tv/rooms/'+room+'/content',cacheKey='vl-cloud-room-'+room,data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
+var staySection='',eventIndex=0;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -13,19 +14,33 @@ function navFor(name){for(var i=0;i<buttons.length;i++)if(buttons[i].getAttribut
 function heading(label,title,text){panel.appendChild(node('div',label,'eyebrow'));message(title,text);}
 function price(value){if(!value)return '';return /^\d+(\.\d+)?$/.test(value)?'£'+value:value;}
 function tile(symbol,title,detail,name){var el=action('',function(){open(navFor(name));},'tile');var mark=node('span','','tile-symbol');var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('aria-hidden','true');var path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',name==='live'?'M4 5h16v12H4z M8 21h8 M12 17v4':name==='movies'?'M8 5l12 7-12 7z':'M5 3v6 M8 3v6 M11 3v6 M5 9h6 M8 9v12 M18 3v18 M18 3c-4 3-4 8 0 8');svg.appendChild(path);mark.appendChild(svg);el.appendChild(mark);el.appendChild(node('strong',title));el.appendChild(node('small',detail));return el;}
+var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[];
+function stopWelcomeVideo(){if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;}}
+function renderWelcomeVideo(){
+ var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=true;video.autoplay=true;video.setAttribute('muted','');video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
+ var caption=node('div','','media-caption');caption.appendChild(node('span','THE VILLAGE LIMITS','eyebrow'));caption.appendChild(node('h2','Good food. Great company.'));var state=node('p','Discover more during your stay.');caption.appendChild(state);card.appendChild(caption);panel.appendChild(card);
+ welcomeVideo=video;welcomeVideoSources=(data&&data.welcomeVideo?[data.welcomeVideo]:[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
+ function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=true;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
+ video.onended=function(){welcomeVideoIndex++;next();};video.onerror=function(){state.textContent='Video is temporarily unavailable.';};
+ if(welcomeVideoSources.length){state.textContent='A taste of life at The Village Limits';next();}else state.textContent='Our hotel video will appear here when added.';
+}
 function render(){
+ stopWelcomeVideo();
  var scroll=panel.scrollTop,active=document.activeElement,actionIndex=-1,oldActions=panel.querySelectorAll('[data-action]');
  for(var a=0;a<oldActions.length;a++)if(oldActions[a]===active)actionIndex=a;
  while(panel.firstChild)panel.removeChild(panel.firstChild);
  for(var b=0;b<buttons.length;b++){var isActive=buttons[b].getAttribute('data-view')===view;buttons[b].className=isActive?'active':'';buttons[b].setAttribute('aria-current',isActive?'page':'false');}
  if(data)document.getElementById('room').textContent=data.room.label.toUpperCase();
+ panel.className=view==='welcome'?'welcome-layout':'';
  if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',data?data.pages[0].title:'Make yourself at home','A little comfort. A good meal. Something to look forward to.');
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  var tiles=node('div','','tiles');tiles.appendChild(tile('▣','Watch TV','Your room channels','live'));tiles.appendChild(tile('▶','Movies / Airtime','Settle in for a film','movies'));tiles.appendChild(tile('◷','Dining','Menus & service times','dining'));panel.appendChild(tiles);
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Return-to-menu behaviour is being tested on Room 3.');
-  panel.appendChild(action('Watch TV',startLive));
+  panel.appendChild(action('Watch TV inside widget — Room 3 test',startEmbeddedTV));
+  panel.appendChild(action('Watch TV — native screen',startLive));
+  panel.appendChild(action('TV Guide',launchGuide));
  }else if(view==='movies'){
   heading('A NIGHT IN','Movies / Airtime','Choose a film in your room’s installed Airtime app.');
   panel.appendChild(action('Open Airtime',launchMovies));
@@ -35,9 +50,10 @@ function render(){
   if(!videos.length)panel.appendChild(node('p','New clips will appear here when they are added.'));
   videos.forEach(function(video){panel.appendChild(action('▶ '+video.title,function(){playVideo(video);}));});
  }else if(view==='diagnostics'){renderDiagnostics();
+ }else if(view==='info'){renderStay();
  }else if(!data){message('Connecting to hotel information','Please try again shortly. Watch TV and Airtime remain available from the menu.');
  }else if(view==='dining'){
-  heading('AT OUR TABLE','Dining',data.contact.openingHours);
+  heading('AT OUR TABLE','Our Restaurant Menu','Wednesday–Saturday from 6pm · Sunday from 12pm');
   if(!data.menus.length){panel.appendChild(node('p','Please ask our team about current menus.'));}
   else{
    if(menuIndex>=data.menus.length)menuIndex=0;
@@ -45,25 +61,60 @@ function render(){
    var menu=data.menus[menuIndex];if(menu.description)panel.appendChild(node('p',menu.description));
    menu.sections.forEach(function(section){panel.appendChild(node('h2',section.name,'section-name'));section.items.forEach(function(item){var row=node('div','','item');row.appendChild(node('span',price(item.price),'price'));row.appendChild(node('strong',item.name));if(item.description)row.appendChild(node('p',item.description));if(item.allergens)row.appendChild(node('p','Allergens: '+item.allergens,'allergens'));panel.appendChild(row);});});
   }
- }else if(view==='events'){
-  heading('GOOD TIMES AHEAD',"What's on",'Food, entertainment and evenings worth coming out for.');
-  data.events.forEach(function(event){var card=node('article','','event-card');if(event.image&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(event.image)){var img=document.createElement('img');img.src=origin+event.image;img.alt='';img.onerror=function(){this.style.display='none';};card.appendChild(img);}card.appendChild(node('h2',event.title));card.appendChild(node('div',event.date||event.startDate,'date'));card.appendChild(node('p',event.description));if(event.soldOut||event.price)card.appendChild(node('span',event.soldOut?'Currently sold out':price(event.price),'badge'));panel.appendChild(card);});
-  if(!data.events.length)panel.appendChild(node('p','Please ask our team about forthcoming events.'));
- }else{
-  heading('MAKE YOURSELF AT HOME','Your stay','We’re here to help you enjoy your visit.');
-  var info=node('div','','info-card');info.appendChild(node('h3','Speak to our team'));info.appendChild(node('p',data.contact.telephone?'Telephone: '+data.contact.telephone:'Please speak to a member of our team.'));panel.appendChild(info);
-  var hours=node('div','','info-card');hours.appendChild(node('h3','Dining & service'));hours.appendChild(node('p',data.contact.openingHours));panel.appendChild(hours);
-  panel.appendChild(node('p','Menus and events: www.villagelimits.co.uk'));
+ }else if(view==='local'){
+  heading('EXPLORE YOUR SURROUNDINGS','What’s happening in Woodhall Spa','Local experiences, events and places to explore.');
+  var localEvents=data.localEvents||[];
+  localEvents.forEach(function(event){var card=node('article','','event-card');card.appendChild(node('h2',event.title));if(event.date)card.appendChild(node('div',event.date,'date'));card.appendChild(node('p',event.description));panel.appendChild(card);});
+  if(!localEvents.length)panel.appendChild(node('p','Ask our team for local recommendations and upcoming events.'));
+ }else if(view==='events'){renderEventPoster();
  }
+
  panel.scrollTop=scroll;
  var newActions=panel.querySelectorAll('[data-action]');if(actionIndex>=0&&newActions[actionIndex])newActions[actionIndex].focus();
 }
-function diagRecord(text){diagLog.push(text);if(diagLog.length>12)diagLog.shift();var log=document.getElementById('diag-log');if(log)log.textContent=diagLog.join('\n');}
+function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
+function moveStayFocus(k,active){
+ if(view!=='info'||(k!==38&&k!==40))return false;
+ var tabs=panel.querySelector('.stay-buttons');if(!tabs)return false;
+ if(active&&active.parentNode===tabs&&k===40){var all=panel.querySelectorAll('[data-action]');for(var i=0;i<all.length;i++)if(all[i].parentNode!==tabs){all[i].focus();return true;}return false;}
+ if(active&&active.getAttribute&&active.getAttribute('data-action')==='yes'&&active.parentNode!==tabs&&k===38){focusStayTab();return true;}
+ return false;
+}
+function guestCard(title,text){var card=node('article','','info-card');card.appendChild(node('h2',title));card.appendChild(node('p',text));panel.appendChild(card);}
+function renderStay(){
+ heading('YOUR ROOM, YOUR COMFORT','Your Stay','Useful information for a comfortable visit.');
+ var sections=[['breakfast','Breakfast'],['checkout','Checkout'],['heating','Heating & Air Conditioning'],['restaurant','Bar & Restaurant'],['emergency','Emergency Information']];
+ var tabs=node('div','','stay-buttons');sections.forEach(function(item){var button=action(item[1],function(){staySection=item[0];panel.scrollTop=0;render();focusStayTab();});if(staySection===item[0])button.className+=' chosen';tabs.appendChild(button);});panel.appendChild(tabs);
+ if(!staySection){panel.appendChild(node('p','Choose a section using the arrows and press OK.'));return;}
+ if(staySection==='breakfast'){
+  guestCard('Breakfast · 8am–10am','Please help yourself to juices, yoghurt and cereals. Enjoy a freshly cooked breakfast to start your day.');
+  var dishes=[['Village Limits English Breakfast','Two grilled bacon, one Boston sausage, grilled tomato, mushroom, black pudding, hash brown, baked beans, toast and a choice of fried, scrambled or poached egg.','D, E, G, S, Sd'],['Vegan Breakfast','Two Moving Mountains sausages, grilled tomato, mushroom, baked beans, hash brown and toast.','G, S'],['Eggs Benedict','Two poached eggs, Parma ham, hollandaise and a toasted muffin. Florentine option: replace Parma ham with spinach and flat cap mushroom.','G, D, E, S, Sd'],['Poached or Scrambled Eggs','Served on brown or white toast.','D, E, G'],['Baked Beans and Bacon on Toast','Baked beans and chopped bacon on brown or white toast.','D, G, S, Sd'],['Sausage or Bacon Roll','Grilled bacon or sausage on a soft white roll. Vegan option available. Add an egg if you wish.','D, G, E, S, Sd'],['Pancake Stack','Three American-style pancakes, summer berry compote and Greek yoghurt, maple syrup and bacon OR chocolate chip sauce.','G, D, E, S'],['Three Egg Omelette','Choose three fillings: bacon, cheddar cheese, mushroom, tomato or spinach.','D, E']];
+  dishes.forEach(function(dish){var row=node('div','','item');row.appendChild(node('strong',dish[0]));row.appendChild(node('p',dish[1]));row.appendChild(node('p','Allergens: '+dish[2],'allergens'));panel.appendChild(row);});
+  guestCard('Hot Drinks','Pot of tea · Americano · Latte · Cappuccino · Hot chocolate');
+  guestCard('Allergies & Intolerances','Please advise a member of our team if anyone in your party has a food allergy or intolerance. We cannot guarantee that items are completely allergen-free, as our kitchen contains ingredients with allergens.\n\nC: Crustaceans · Ce: Celery · D: Dairy · E: Eggs · F: Fish · P: Peanuts · G: Gluten · L: Lupin · N: Nuts · M: Molluscs · Mu: Mustard · S: Soya · Sd: Sulphur dioxide · Se: Sesame seeds');
+ }else if(staySection==='checkout')guestCard('Checkout','Monday–Friday: by 10am\nSaturday & Sunday: by 11am\n\nPlease leave your room key in your room when you depart.\n\nThank you for staying at The Village Limits. We hope to welcome you back soon.');
+ else if(staySection==='heating'){
+  guestCard('Radiator Heating','Each radiator has a thermostatic valve. Turn it towards a higher number for more warmth or a lower number for less warmth. The radiator may cool down once the room reaches the selected temperature.');
+  guestCard('Fujitsu Air Conditioning','1. Press the power button at the bottom right of the wall controller to turn it on or off.\n2. Use ◀ ▶ to highlight Mode, then ▲ ▼ to select Cool or Heat, where available.\n3. Use ◀ ▶ to highlight Set temp., then ▲ ▼ to adjust the temperature.\n4. Highlight Fan to adjust the fan speed. Auto is a simple choice.\n\nKeep windows and doors closed while it is running. Please speak to our team if you need help.');
+ }else if(staySection==='restaurant'){
+  guestCard('Restaurant Opening Times','Wednesday–Saturday: from 6pm\nSunday: from 12pm');
+  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));panel.focus();}));
+ }else if(staySection==='emergency')guestCard('Emergency Information','In an emergency, please call\n01526 353312\nand select Option 0.');
+}
+function renderEventPoster(){
+ heading('GOOD TIMES AHEAD',"What's On",'Discover our upcoming events.');var events=data&&data.events||[];
+ if(!events.length){panel.appendChild(node('p','Please ask our team about forthcoming events.'));return;}
+ eventIndex=Math.max(0,Math.min(eventIndex,events.length-1));var event=events[eventIndex];
+ var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){eventIndex=(eventIndex+events.length-1)%events.length;render();}));controls.appendChild(node('span',(eventIndex+1)+' of '+events.length));controls.appendChild(action('Next ▶',function(){eventIndex=(eventIndex+1)%events.length;render();}));panel.appendChild(controls);
+ var layout=node('div','','poster-layout');if(event.image&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(event.image)){var img=document.createElement('img');img.src=origin+event.image;img.alt=event.title+' poster';img.className='event-poster';img.onerror=function(){this.style.display='none';};layout.appendChild(img);}
+ var details=node('article','','poster-details');details.appendChild(node('h2',event.title));details.appendChild(node('div',event.date||event.startDate,'date'));details.appendChild(node('p',event.description));if(event.soldOut||event.price)details.appendChild(node('span',event.soldOut?'Currently sold out':price(event.price),'badge'));layout.appendChild(details);panel.appendChild(layout);
+}
+function diagRecord(text){diagLog.push(new Date().toLocaleTimeString()+' · '+text);if(diagLog.length>100)diagLog.shift();try{sessionStorage.setItem('vl-epg-log',JSON.stringify(diagLog));}catch(ignore){}var log=document.getElementById('diag-log');if(log)log.textContent=diagLog.join('\n');}
 function diagCandidate(app){var label=(app.name+' '+app.id).toLowerCase();return /guide|epg|channel[-_ ]?list|ep-hotel-channel$/.test(label)&&!/service|daemon|editor|manager/.test(label);}
 function diagKeyMode(enable){
- if(preview||!tizen.tvinputdevice)return;
- if(!enable){diagRegistered.forEach(function(k){try{tizen.tvinputdevice.unregisterKey(k);}catch(e){}});diagRegistered=[];return;}
- try{diagKeys=tizen.tvinputdevice.getSupportedKeys();diagKeys.forEach(function(k){if(/^(Guide|ChannelList)$/.test(k.name)&&diagRegistered.indexOf(k.name)<0){try{tizen.tvinputdevice.registerKey(k.name);diagRegistered.push(k.name);}catch(e){diagRecord(k.name+' registration: '+e.name);}}});}catch(e){diagRecord('Key discovery: '+e.name);}
+ // GUIDE registration is retained for this pilot, including while hidden.
+ if(preview||!tizen.tvinputdevice||!enable)return;
+ try{diagKeys=tizen.tvinputdevice.getSupportedKeys();}catch(e){diagRecord('Key discovery: '+e.name);}
 }
 function scanDiagnosticApps(){
  if(preview){diagRecord('Installed apps can only be read on the TV.');return;}
@@ -75,12 +126,141 @@ function diagLaunch(app){
  diagResume=true;diagRecord('Launching '+app.id);
  try{tizen.application.launch(app.id,function(){diagRecord('Launch accepted: '+app.id);},function(e){diagResume=false;diagRecord('Launch failed: '+app.id+' — '+e.name);});}catch(e){diagResume=false;diagRecord('Launch failed: '+e.message);}
 }
+function launchGuide(){
+ if(preview){say('TV Guide opens on the room television.');return;}
+ embeddedGuideResume=mode==='tv-embedded';stopLive();if(mode==='video')stopVideo();
+ diagRecord('Opening EPG; widget '+(document.hidden?'hidden':'visible'));
+ try{tizen.application.launch('org.tizen.epg',function(){diagRecord('EPG launch accepted');},function(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+e.name);say('Unable to open TV Guide: '+e.name);});}catch(e){embeddedGuideResume=false;diagRecord('EPG launch failed: '+(e.name||e.message));say('Unable to open TV Guide: '+(e.name||e.message));}
+}
+var channelBusy=false,channelTimer=null;
+function tunerError(label,e){diagRecord(label+': '+(e&&e.name||'UnknownError')+(e&&e.message?' — '+String(e.message).slice(0,300):''));}
+function tunerValue(label,value){var text;try{text=JSON.stringify(value);}catch(e){text=String(value);}diagRecord(label+': '+(text===undefined?'no synchronous result':text.slice(0,1800)));}
+function readTunerData(){
+ if(preview||!tizen.tvchannel){diagRecord('TV channel API unavailable');return;}
+ var api=tizen.tvchannel;diagRecord('Reading tuner data 0.4.8');
+ try{tunerValue('Current channel',api.getCurrentChannel());}catch(e){tunerError('Current channel failed',e);}
+ try{tunerValue('Current programme',api.getCurrentProgram());}catch(e){tunerError('Current programme failed',e);}
+ var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
+ try{api.getChannelList(function(channels){if(done)return;done=true;clearTimeout(timer);diagRecord('Channel list received: '+channels.length);channels.slice(0,10).forEach(function(c){tunerValue('Channel',c);});},function(e){if(done)return;done=true;clearTimeout(timer);tunerError('Channel list failed',e);},'ALL',0,10);}catch(e){done=true;clearTimeout(timer);tunerError('Channel list failed',e);}
+}
+function changeEmbeddedChannel(up){
+ if(preview||mode!=='tv-embedded'||document.hidden||channelBusy)return;
+ var api=tizen.tvchannel,method=up?'tuneUp':'tuneDown';
+ if(!api||typeof api[method]!=='function'){diagRecord(method+': unavailable');return;}
+ channelBusy=true;var token=tvToken,done=false;diagRecord('Request '+method+'; widget visible');
+ function finish(){done=true;clearTimeout(channelTimer);channelTimer=null;channelBusy=false;}
+ channelTimer=setTimeout(function(){finish();diagRecord(method+': no callback after 8 seconds');},8000);
+ try{api[method]({onsuccess:function(channel){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);tunerValue('Tune callback channel',channel);try{tunerValue('Tuned channel',api.getCurrentChannel());tunerValue('Programme after tuning',api.getCurrentProgram());}catch(e){tunerError('Tuned data read failed',e);}},onnosignal:function(){if(done)return;finish();diagRecord(method+': no signal');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Tune programme event',program);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
+}
+
+
+var channelGuideOpen=false,guideChannels=[],guideIndex=0,guideGeneration=0,guideTimer=null;
+
+var programmeCache={},scheduleSequence=0,scheduleTimer=null,scheduleShape=-1;
+function programmeTime(value){try{if(value&&typeof value.getHours==='function')return ('0'+value.getHours()).slice(-2)+':'+('0'+value.getMinutes()).slice(-2);if(value&&typeof value.getTime==='function'){var d=new Date(value.getTime());if(isFinite(d.getTime()))return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}}catch(ignore){}return '';}
+function programmeRange(program){var start=programmeTime(program.startTime),end='';try{if(start&&program.startTime&&typeof program.startTime.addDuration==='function'&&tizen.TimeDuration)end=programmeTime(program.startTime.addDuration(new tizen.TimeDuration(program.duration,'SECS')));}catch(ignore){}return start+(end?' – '+end:'');}
+function renderProgrammeDetails(){
+ var box=document.getElementById('programme-details');box.textContent='';var c=guideChannels[guideIndex];if(!c)return;
+ box.appendChild(node('h2',c.channelName||c.serviceName||'Channel'));
+ var cached=programmeCache[String(c._serviceId)],current=null;
+ try{var tuned=tizen.tvchannel.getCurrentChannel();if(tuned._serviceId===c._serviceId)current=tizen.tvchannel.getCurrentProgram();}catch(ignore){}
+ var items=cached&&cached.items&&cached.items.length?cached.items:(current?[current]:[]);
+ if(!items.length){box.appendChild(node('p',cached&&cached.message||'Programme listings not yet available for this channel.'));return;}
+ items.slice(0,12).forEach(function(program){var card=node('div');card.className='programme-card';card.appendChild(node('small',programmeRange(program)||'Time unavailable'));card.appendChild(node('h3',program.title||'Programme information'));if(program.detailedDescription)card.appendChild(node('p',program.detailedDescription));box.appendChild(card);});
+}
+function readSelectedSchedule(force){
+ if(preview||!guideChannels[guideIndex])return;
+ var channel=guideChannels[guideIndex],id=String(channel._serviceId),api=tizen.tvchannel;
+ renderProgrammeDetails();if(!force&&programmeCache[id])return;
+ if(!api||typeof api.getProgramList!=='function'){programmeCache[id]={message:'Schedule API unavailable'};return;}
+ var seq=++scheduleSequence;clearTimeout(scheduleTimer);var done=false,attempt=scheduleShape>=0?scheduleShape:0;
+ function active(){return seq===scheduleSequence&&!done;}
+ function fail(e){if(!active())return;done=true;clearTimeout(scheduleTimer);programmeCache[id]={message:'Upcoming listings unavailable. Current programme is shown when tuned.'};tunerError('Schedule read failed',e);if(channelGuideOpen)renderProgrammeDetails();}
+ function success(items){if(!active())return;done=true;clearTimeout(scheduleTimer);if(!Array.isArray(items)){programmeCache[id]={message:'Unexpected schedule response'};tunerValue('Schedule response',items);return;}scheduleShape=attempt;programmeCache[id]={items:items};diagRecord('Schedule received '+items.length+' programmes for '+channel.channelName+'; shape='+attempt);items.slice(0,3).forEach(function(pr){tunerValue('Schedule programme',pr);diagRecord('Programme time: '+programmeRange(pr)+'; start type='+Object.prototype.toString.call(pr.startTime));});if(channelGuideOpen)renderProgrammeDetails();}
+ // Read-only pilot: old hospitality API documentation is unavailable.
+ // TV 4.0 validation confirms ChannelInfo, time, then callback positions.
+ // Omit unverified optional range arguments in this pilot.
+ function call(){
+  var now;try{now=tizen.time.getCurrentDateTime();}catch(ignore){now=new Date();}
+  var args=[[channel,now,success,fail]];
+  diagRecord('Read schedule for '+channel.channelName+'; argument layout '+attempt);
+  scheduleTimer=setTimeout(function(){fail({name:'TimeoutError',message:'No schedule callback after 8 seconds'});},8000);
+  try{api.getProgramList.apply(api,args[attempt]);}catch(e){clearTimeout(scheduleTimer);tunerError('Schedule layout '+attempt,e);fail(e);}
+ }
+ call();
+}
+function probeCurrentSchedule(){
+ if(preview||!tizen.tvchannel){diagRecord('Schedule test requires the TV');return;}
+ try{var c=tizen.tvchannel.getCurrentChannel();guideChannels=[c];guideIndex=0;programmeCache={};readSelectedSchedule(true);}catch(e){tunerError('Schedule probe failed',e);}
+}
+
+function guideMessage(text){document.getElementById('channel-message').textContent=text;}
+function closeChannelGuide(){channelGuideOpen=false;scheduleSequence++;clearTimeout(scheduleTimer);guideGeneration++;clearTimeout(guideTimer);document.getElementById('channel-guide').className='hidden';if(mode==='tv-embedded')document.getElementById('live-return').focus();}
+function renderChannelGuide(){
+ var list=document.getElementById('channel-list');list.textContent='';
+ guideChannels.forEach(function(c,i){var b=node('button',String(c.lcn||c.major||'')+'  '+(c.channelName||c.serviceName||'Channel'));b.className=i===guideIndex?'chosen':'';b.onclick=function(){guideIndex=i;tuneGuideChannel();};list.appendChild(b);});
+ renderProgrammeDetails();var chosen=list.children[guideIndex];if(chosen){chosen.focus();list.scrollTop=Math.max(0,chosen.offsetTop-list.offsetTop-list.clientHeight/2);}
+}
+function openChannelGuide(){
+ if(mode!=='tv-embedded'||document.hidden)return;
+ if(channelGuideOpen){closeChannelGuide();return;}
+ channelGuideOpen=true;document.getElementById('channel-guide').className='';guideMessage('Loading channels…');
+ var generation=++guideGeneration,channels=[],seen={},offset=0;
+ function active(){return channelGuideOpen&&generation===guideGeneration&&mode==='tv-embedded';}
+ function fail(e){if(!active())return;clearTimeout(guideTimer);tunerError('Widget channel list failed',e);guideMessage('Unable to load channels. Press Return, then GUIDE to retry.');}
+ function finish(){if(!active())return;clearTimeout(guideTimer);guideChannels=channels.sort(function(a,b){return Number(a.lcn||a.major||0)-Number(b.lcn||b.major||0);});guideIndex=0;try{var current=tizen.tvchannel.getCurrentChannel();guideChannels.forEach(function(c,i){if(c._serviceId===current._serviceId)guideIndex=i;});}catch(ignore){}renderChannelGuide();readSelectedSchedule(false);guideMessage(guideChannels.length?'Choose a channel · OK Watch · Return Close':'No channels returned');diagRecord('Widget guide loaded '+guideChannels.length+' channels; hidden='+document.hidden);}
+ function page(){
+  if(!active())return;clearTimeout(guideTimer);guideTimer=setTimeout(function(){fail({name:'TimeoutError'});},8000);
+  try{tizen.tvchannel.getChannelList(function(batch){if(!active())return;clearTimeout(guideTimer);var added=0;batch.forEach(function(c){var id=String(c._serviceId||[c.major,c.minor,c.programNumber,c.channelName].join(':'));if(!seen[id]){seen[id]=true;channels.push(c);added++;}});offset+=batch.length;if(batch.length===50&&added&&offset<500)page();else finish();},fail,'ALL',offset,50);}catch(e){fail(e);}
+ }
+ document.getElementById('channel-list').textContent='';page();
+}
+function tuneGuideChannel(){
+ if(channelBusy||!channelGuideOpen||!guideChannels.length)return;
+ var channel=guideChannels[guideIndex],token=tvToken,done=false,timer;
+ channelBusy=true;guideMessage('Tuning '+(channel.channelName||channel.serviceName||'channel')+'…');tunerValue('Widget guide tune request',channel);
+ function finish(){if(done)return false;done=true;clearTimeout(timer);if(token===tvToken)channelBusy=false;return token===tvToken&&mode==='tv-embedded';}
+ timer=setTimeout(function(){if(finish())guideMessage('Tuning timed out. Select a channel to retry.');},8000);
+ try{tizen.tvchannel.tune(channel,{onsuccess:function(c){if(!finish())return;diagRecord('Widget guide tune succeeded; hidden='+document.hidden+'; mode='+mode);tunerValue('Selected channel',c);closeChannelGuide();},onnosignal:function(){if(finish())guideMessage('No signal for this channel. Choose another channel.');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Selected programme',program);}},function(e){if(!finish())return;tunerError('Widget guide tune failed',e);guideMessage('Tuning failed: '+e.name+'. Choose another channel.');});}catch(e){if(finish()){tunerError('Widget guide tune failed',e);guideMessage('Tuning failed: '+e.name+'. Choose another channel.');}}
+}
+
+function registerChannelKeys(){
+ if(preview)return;
+ ['ChannelUp','ChannelDown'].forEach(function(name){try{var key=tizen.tvinputdevice.getKey(name);tizen.tvinputdevice.registerKey(name);diagRecord(name+' registered ('+(key?key.code:'unknown')+')');}catch(e){diagRecord(name+' registration: '+(e.name||e.message));}});
+}
+function scanTunerCapabilities(){
+ if(preview){diagRecord('Tuner API scan requires the room TV.');return;}
+ diagRecord('Tuner API scan 0.4.8 — read only; no tuning calls');
+ function inspect(label,obj){
+  if(!obj){diagRecord(label+': unavailable');return;}
+  try{var names=[],seen={};for(var depth=0;obj&&depth<3;depth++,obj=Object.getPrototypeOf(obj)){Object.getOwnPropertyNames(obj).forEach(function(name){if(name==='constructor'||seen[name])return;seen[name]=true;var d=Object.getOwnPropertyDescriptor(obj,name);if(d&&typeof d.value==='function')names.push(name);});}diagRecord(label+': methods '+(names.sort().join(', ')||'none enumerable'));}catch(e){diagRecord(label+': '+(e.name||e.message));}
+ }
+ inspect('tizen.tvchannel',tizen.tvchannel);
+ function inspectLibrary(name){try{var lib=window[name];if(!lib){diagRecord(name+': unavailable');return;}var modules=Object.getOwnPropertyNames(lib);diagRecord(name+' modules: '+modules.join(', '));modules.filter(function(n){return /broadcast|channel|input|control|epg/i.test(n);}).forEach(function(n){try{inspect(name+'.'+n,lib[n]);}catch(e){diagRecord(name+'.'+n+': '+e.name);}});}catch(e){diagRecord(name+': '+(e.name||e.message));}}
+ inspectLibrary('webapis');inspectLibrary('b2bapis');
+}
+
+function registerGuide(){
+ if(preview)return;
+ try{var key=tizen.tvinputdevice.getKey('Guide');if(key)guideCode=key.code;tizen.tvinputdevice.registerKey('Guide');diagRecord('Guide registered ('+guideCode+')');}catch(e){diagRecord('Guide registration failed: '+(e.name||e.message));}
+}
+function closeDiagnosticWidget(){
+ if(preview){say('Close widget can only be tested on the room TV.');return;}
+ try{tizen.application.getCurrentApplication().exit();}catch(e){diagRecord('Close widget failed: '+(e.name||e.message));say('Unable to close widget: '+(e.name||e.message));}
+}
 function renderDiagnostics(){
  heading('ROOM 3 TEST ONLY','TV diagnostics','Scan apps, then test a Guide or Channel List candidate. Home should return here. No apps are launched automatically.');
+ panel.appendChild(action('Watch TV inside widget — Room 3 test',startEmbeddedTV));
+ panel.appendChild(action('TV Guide',launchGuide));
+ panel.appendChild(action('Scan tuner APIs',scanTunerCapabilities));
+ panel.appendChild(action('Read channel and programme data',readTunerData));panel.appendChild(action('Test current channel schedule',probeCurrentSchedule));
+ panel.appendChild(action('Clear diagnostic log',function(){diagLog=[];diagRecord('Log cleared');render();}));
+ panel.appendChild(action('Close widget',closeDiagnosticWidget));
+ panel.appendChild(node('p','Exit test: closes this application. Test GUIDE and CH LIST on live TV, then HOME. If HOME does not restore the welcome screen, restart the TV.'));
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Key logging only works while this widget is on screen.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Test 0.4.8: Programme details and read-only schedule probe added. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -89,7 +269,22 @@ function renderDiagnostics(){
  panel.appendChild(node('h2','Diagnostic log'));var log=node('pre',diagLog.join('\n'),'diag-log');log.id='diag-log';panel.appendChild(log);
 }
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
-function stopLive(){if(mode!=='tv-loading')return;tvToken++;clearTimeout(tvTimer);mode='menu';}
+function stopLive(){
+ if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
+ welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
+ if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
+}
+function startEmbeddedTV(){
+ if(preview){welcomeGuidePending=false;say('Embedded antenna TV can only be tested on the room television.');return;}
+ if(mode!=='menu')return;
+ if(!tizen.tvwindow){welcomeGuidePending=false;diagRecord('TVWindow unavailable');say('TVWindow is unavailable. Native Watch TV remains available.');return;}
+ stopWelcomeVideo();mode='tv-loading';var token=++tvToken;diagRecord('Starting embedded antenna TV');say('Opening antenna TV inside widget…');
+ function failed(e){if(token!==tvToken)return;stopLive();embeddedGuideResume=false;diagRecord('Embedded TV failed: '+(e.name||e.message));say('Embedded TV failed: '+(e.name||e.message)+'. Use native Watch TV.');}
+ function showTV(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(rect){if(token!==tvToken){try{tizen.tvwindow.hide(function(){},function(){});}catch(ignore){}return;}clearTimeout(tvTimer);embeddedGuideResume=false;mode='tv-embedded';document.body.className='live';document.documentElement.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();diagRecord('Embedded TV visible; widget hidden='+document.hidden+'; rect='+rect.join(','));if(welcomeGuidePending){welcomeGuidePending=false;openChannelGuide();}},failed,['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){failed(e);}}
+ tvTimer=setTimeout(function(){failed({name:'TVWindow timed out'});},12000);
+ try{var current=tizen.tvwindow.getSource();diagRecord('Current TV source: '+current.type);if(current.type==='TV'){showTV();return;}}catch(e){diagRecord('Source discovery: '+(e.name||e.message));}
+ try{tizen.systeminfo.getPropertyValue('VIDEOSOURCE',function(info){if(token!==tvToken)return;var sources=info.connected||[],source=null;for(var i=0;i<sources.length;i++)if(sources[i].type==='TV'){source=sources[i];break;}if(!source){failed({name:'No TV tuner source reported'});return;}try{tizen.tvwindow.setSource(source,showTV,failed,'MAIN');}catch(e){failed(e);}},failed);}catch(e){failed(e);}
+}
 function startLive(){
  if(preview){say('Watch TV opens Samsung’s native TV screen on the room TV.');return;}
  if(mode!=='menu')return;
@@ -108,18 +303,20 @@ clip.addEventListener('pause',function(){if(mode==='video')document.getElementBy
 clip.addEventListener('waiting',function(){document.getElementById('clip-status').textContent='Buffering…';});
 clip.addEventListener('error',function(){if(mode==='video')document.getElementById('clip-status').textContent='Clip could not play. Press Return to go back.';});
 clip.addEventListener('ended',function(){stopVideo();open(navFor('videos'));});
-function open(i){diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=buttons[i].getAttribute('data-view');panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='live')startLive();else if(view==='movies')launchMovies();}
+function open(i){cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=buttons[i].getAttribute('data-view');if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
 for(var i=0;i<buttons.length;i++)(function(index){buttons[index].onclick=function(){open(index);};})(i);
-document.getElementById('live-return').onclick=function(){stopLive();open(0);};
+document.getElementById('live-return').onclick=function(){embeddedGuideResume=false;stopLive();open(0);};
 document.getElementById('video-return').onclick=function(){stopVideo();open(navFor('videos'));};
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
-document.addEventListener('keydown',function(e){var k=e.keyCode;if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
+document.addEventListener('keydown',function(e){var k=e.keyCode;if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat){if(mode==='tv-embedded')openChannelGuide();else if(mode==='tv-loading')welcomeGuidePending=true;else{if(mode==='video')stopVideo();cancelEmbeddedResume();view='live';welcomeGuidePending=true;startEmbeddedTV();}}return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
+ if(mode==='tv-embedded'){if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
- if(isBack(k)){open(0);e.preventDefault();return;}
+ if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
+ else if(moveStayFocus(k,active)){e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
  else if(inNav&&k===39){if(actions.length)actions[0].focus();else panel.focus();e.preventDefault();}
  else if(k===37){if(n>0)actions[n-1].focus();else focus(selected);e.preventDefault();}
@@ -132,8 +329,23 @@ function poll(){if(busy)return;busy=true;var xhr=new XMLHttpRequest();xhr.open('
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
 try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause','MediaStop'].forEach(function(key){try{tizen.tvinputdevice.registerKey(key);}catch(ignore){}});}catch(ignore){}
+try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
+registerGuide();registerChannelKeys();
 function clock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
 focus(0);render();poll();setInterval(poll,30000);
-document.addEventListener('visibilitychange',function(){if(document.hidden){diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}else{if(diagResume){diagResume=false;open(navFor('diagnostics'));diagRecord('Returned to diagnostic widget.');}else open(0);poll();}});
-window.addEventListener('pagehide',function(){stopLive();if(mode==='video')stopVideo();});
+function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
+function scheduleEmbeddedResume(){
+ clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;
+ if(!embeddedGuideResume||document.hidden)return;
+ diagRecord('Waiting 1500 ms of visible widget before TV restore');
+ embeddedResumeTimer=setTimeout(function(){embeddedResumeTimer=null;if(document.hidden||!embeddedGuideResume)return;diagRecord('Stable visibility: restoring embedded TV');mode='menu';startEmbeddedTV();},1500);
+}
+function onWidgetVisibility(){
+ diagRecord('Visibility: '+(document.hidden?'hidden':'visible'));
+ if(document.hidden){stopWelcomeVideo();clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;if(embeddedGuideResume)diagRecord('TV restore pending: widget hidden again');diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}
+ else{if(embeddedGuideResume){scheduleEmbeddedResume();poll();return;}if(diagResume){diagResume=false;open(navFor('diagnostics'));diagRecord('Returned to diagnostic widget.');}else open(0);poll();}
+}
+document.addEventListener('visibilitychange',onWidgetVisibility);
+window.addEventListener('pagehide',function(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
 })();
+
