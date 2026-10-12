@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const dir=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,'site','data'):path.join(__dirname,'data'));
 const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
+const {explore}=require('./hotel-tv-explore');
 const mediaDir=path.join(dir,'tv-media'),MAX_VIDEO_BYTES=100*1024*1024;
 function defaults(){return {version:1,notice:'',welcomeTitle:'Make yourself at home',welcomeText:'Welcome to The Village Limits. We hope you enjoy your stay.',videos:[],welcomeVideo:null,rooms:Array.from({length:6},(_,i)=>({id:i+1,label:'Room '+(i+1),enabled:false,message:''}))};}
 function readConfig(){try{return JSON.parse(fs.readFileSync(filename,'utf8'));}catch(e){if(e.code==='ENOENT')return defaults();throw e;}}
@@ -94,6 +95,7 @@ async function handleHotelTv(req,res,pathname,identity){
   const content=JSON.parse(fs.readFileSync(path.join(dir,'content.json'),'utf8').replace(/^\uFEFF/,''));
   const room=Number(match[1]),feed=publicFeed(content,readConfig(),room);if(!feed)return json(res,404,{error:'This room is not enabled.'},{'Access-Control-Allow-Origin':'*'}),true;
   if(new URL(req.url,'http://localhost').searchParams.get('preview')!=='1'){const reported=new URL(req.url,'http://localhost').searchParams.get('appVersion');activity.set(room,{lastRequest:new Date().toISOString(),appVersion:/^\d+\.\d+\.\d+$/.test(reported||'')?reported:null});}
+  feed.explore=await explore();feed.revision=revision(feed).slice(1,-1);
   json(res,200,feed,{'Access-Control-Allow-Origin':'*'});return true;
  }
  return false;

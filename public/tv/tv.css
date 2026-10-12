@@ -56,3 +56,5 @@ html.live,body.live{background:transparent}
 
 
 .room-choices{display:flex;flex-wrap:wrap;margin-top:4vh}.room-choices button{width:30%;min-height:12vh;margin:1vh 1%;font-size:1.8vw;background:#f1f6ee;border:1px solid #b7cabb;border-radius:1vw;color:#235744}
+
+.explore-tabs{display:flex;flex-wrap:wrap;gap:12px}.explore-layout{display:flex;gap:32px;margin-top:20px;align-items:flex-start}.explore-copy,.cinema-list{flex:1;min-width:0}.explore-copy{padding:26px;background:#f3f1e8;border-radius:16px}.explore-qr{width:235px;flex-shrink:0;text-align:center;padding:20px;background:#fff;border:1px solid #d4d8ce;border-radius:16px}.explore-qr img{width:210px;height:210px;object-fit:contain}.explore-qr strong{display:block;font-size:21px}.explore-qr p{font-size:15px;word-break:break-all;line-height:1.4}.cinema-film{padding:12px 20px;margin-bottom:10px;background:#f3f1e8;border-radius:12px}.cinema-film h3{margin:0;font-size:25px}.showtimes{color:#165d42;font-weight:bold;margin:8px 0 0}.explore-tabs .chosen{background:#165d42;color:#fff}

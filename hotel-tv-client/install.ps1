@@ -5,7 +5,7 @@ if (!(Test-Path $configPath)) { throw "No Tizen project found at $Project. Pass 
 [xml]$config = Get-Content $configPath -Raw
 $application = $config.GetElementsByTagName('application', 'http://tizen.org/ns/widgets')
 if ($application.Count -ne 1) { throw 'The existing Tizen application ID could not be verified.' }
-$source = 'https://raw.githubusercontent.com/Leighk50/VL-WEB-PLATFORM/tv-release-100/hotel-tv-client'
+$source = 'https://raw.githubusercontent.com/Leighk50/VL-WEB-PLATFORM/tv-explore-110/hotel-tv-client'
 $staging = Join-Path $env:TEMP ('VL-TV-download-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
@@ -28,10 +28,10 @@ try {
             $config.DocumentElement.AppendChild($element) | Out-Null
         }
     }
-    $config.DocumentElement.SetAttribute('version', '1.0.0')
+    $config.DocumentElement.SetAttribute('version', '1.1.0')
     $config.Save($configPath)
     foreach ($file in $files) { Copy-Item (Join-Path $staging $file) (Join-Path $Project $file) -Force }
-    Write-Host "All-room TV source upgraded to 1.0.0. Backup: $backup"
+    Write-Host "All-room TV source upgraded to 1.1.0. Backup: $backup"
     Write-Host 'Existing application IDs and signing settings preserved. Refresh the project in Tizen Studio, then Build Signed Package and upload the new .wgt for the all-room release candidate.'
 } finally {
     Remove-Item $staging -Recurse -Force

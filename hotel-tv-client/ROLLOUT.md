@@ -1,4 +1,4 @@
-# Village Limits TV 1.0.0 release candidate
+# Village Limits TV 1.1.0 release candidate
 
 One signed widget serves all six rooms. The application identity remains VLRoomTest.RoomTest so existing installations can update. Room numbering is no longer embedded in settings.js.
 
@@ -8,7 +8,7 @@ One signed widget serves all six rooms. The application identity remains VLRoomT
 2. Run install.ps1 on the existing VillageLimits Tizen project and refresh it.
 3. Keep the existing author certificate. Include the target TVs' DUIDs in the Samsung distributor certificate used for signing. Check this in Certificate Manager; do not assume the Room 3 certificate covers the other TVs.
 4. Build Signed Package and supply the .wgt for version/source verification.
-5. After the signed shared package is published, use https://www.villagelimits.co.uk/tv/install/ on each TV. This address returns an unavailable response until the signed 1.0.0 package exists; it never serves the Room 3-only 0.4.8 package.
+5. After the signed shared package is published, use https://www.villagelimits.co.uk/tv/install/ on each TV. The shared address currently serves the working 1.0.0 package. It will be switched to 1.1.0 only after the newly signed package is verified and published.
 
 ## Assign and enable
 
@@ -18,10 +18,14 @@ If app storage is cleared, the TV asks for its room again. Diagnostics has a cha
 
 ## Test before rollout
 
-Update Room 3, select Room 3, and check version 1.0.0. Then install the same package on a second room and select that room. Check welcome text and correct room label, automatic launch after power on, embedded TV, channel up/down, GUIDE before and after channel selection, Return/Home behaviour, Airtime launch/return, portrait video, menus, event posters, and all guest information sections. Disconnect internet temporarily and verify saved guest content still displays; cloud video requires network access.
+Update Room 3, select Room 3, and check version 1.1.0. Then install the same package on a second room and select that room. Check welcome text and correct room label, automatic launch after power on, embedded TV, channel up/down, GUIDE before and after channel selection, Return/Home behaviour, Airtime launch/return, portrait video, menus, event posters, and all guest information sections. Disconnect internet temporarily and verify saved guest content still displays; cloud video requires network access.
 
 Check reported version and last feed request in the back office. Reporting is not proof of what the screen shows and resets on server restart. Verify the picture and remote behaviour physically on both TVs before installing on the remaining rooms.
 
 ## Recovery
 
 The original https://www.villagelimits.co.uk/tv/install/room3/ installer remains 0.4.8 for the existing Room 3 installation. Keep its signed package and certificate backup. Other TVs may need a recovery package signed for their DUIDs; do not assume the pilot package will install on every TV.
+
+## Explore Woodhall Spa
+
+Version 1.1.0 adds 17 local attractions, aviation and museum visits, and nearby days out. QR codes link to official visitor information. The website imports the Kinema’s published film/performance entries centrally and caches them for one hour. Today and tomorrow use Europe/London dates. Refresh happens in the background and fails closed: stale listings are hidden and the official booking QR remains available. Test both date buttons, category navigation and QR scanning on a physical TV.
