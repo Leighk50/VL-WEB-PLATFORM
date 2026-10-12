@@ -89,7 +89,7 @@ function renderExplore(){
   var cinema=info.cinema,days=cinema.days||[],controls=node('div','','event-controls');
   ['Today','Tomorrow'].forEach(function(label,index){var button=action(label,function(){cinemaDay=index;panel.scrollTop=0;render();});if(index===cinemaDay)button.className+=' chosen';controls.appendChild(button);});panel.appendChild(controls);
   var day=days[cinemaDay];panel.appendChild(node('h2',(cinemaDay?'Tomorrow':'Today')+' at the Kinema'));if(day)panel.appendChild(node('p',day.date,'date'));
-  var layout=node('div','','explore-layout'),list=node('div','','cinema-list');
+  var layout=node('div','','explore-layout'),list=node('div','','cinema-list');if(kinema){var kinemaPhoto=explorePhoto(kinema);if(kinemaPhoto)list.appendChild(kinemaPhoto);}
   if(cinema.status!=='available'||!cinema.updatedAt||Date.now()-Date.parse(cinema.updatedAt)>=3600000)list.appendChild(node('p','Screening times are temporarily unavailable. Scan the QR code for the latest listings and tickets.'));
   else if(!day||!day.films.length)list.appendChild(node('p','No screenings are currently listed for this day. Check the Kinema website for updates.'));
   else day.films.forEach(function(film){var card=node('article','','cinema-film');card.appendChild(node('h3',film.title));card.appendChild(node('p',film.times.join(' · '),'showtimes'));list.appendChild(card);});
@@ -98,9 +98,10 @@ function renderExplore(){
  }else{
   var places=info.attractions.filter(function(p){return p.category===localSection;});if(!places.length)return;localIndex=Math.max(0,Math.min(localIndex,places.length-1));
   var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
-  var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
+  var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');var photo=explorePhoto(place);if(photo)copy.appendChild(photo);copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
  }
 }
+function explorePhoto(place){if(!place.image||!/^https:\/\//i.test(place.image))return null;var figure=node('figure','','explore-photo'),img=document.createElement('img');img.src=place.image;img.alt=place.imageAlt||place.title;if(place.imageFit==='contain')img.className='photo-contain';img.onerror=function(){figure.style.display='none';};figure.appendChild(img);figure.appendChild(node('figcaption',place.imageCredit||place.title));return figure;}
 function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',label));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
 function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
 function moveStayFocus(k,active){
