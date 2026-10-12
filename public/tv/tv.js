@@ -3,7 +3,7 @@
 var room=null,setupIndex=0,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=match?Number(match[1]):3;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
 var url=room?origin+'/api/tv/rooms/'+room+'/content':'',cacheKey=room?'vl-cloud-room-'+room:'',data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
-var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0,airtimeIndex=0;
+var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0,airtimeIndex=0,promoType="",promoTimer=null;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -28,7 +28,24 @@ function renderAirtimeSelection(target){
  var catalogue=data&&data.airtime;if(!catalogue||!catalogue.updatedAt||Date.now()-Date.parse(catalogue.updatedAt)>=21600000||!catalogue.posters||!catalogue.posters.length)return;
  var section=node('section','','welcome-films');section.appendChild(node('h2','Free movies during your stay'));var row=node('div','','film-posters'),posters=catalogue.posters;
  for(var i=0;i<Math.min(3,posters.length);i++){var item=posters[(airtimeIndex+i)%posters.length];if(!/^https:\/\/airtime\.cloud\/cache\/img\//.test(item.image))continue;var button=action('',launchMovies,'film-poster');button.setAttribute('aria-label','Open Airtime to browse this featured film');var img=document.createElement('img');img.src=item.image;img.alt=item.alt||'Airtime film poster';img.onerror=function(){this.style.display='none';};button.appendChild(img);button.appendChild(node('span','OK · Open Airtime'));row.appendChild(button);}
- section.appendChild(row);if(posters.length>3)section.appendChild(action('More films ▶',function(){airtimeIndex=(airtimeIndex+3)%posters.length;render();},'film-more'));section.appendChild(node('p','Complimentary for our guests · Open Airtime to choose your film.','film-note'));target.appendChild(section);
+ section.appendChild(row);if(posters.length>3)section.appendChild(action('More films ▶',function(){airtimeIndex=(airtimeIndex+3)%posters.length;renderWelcomePromo(true);},'film-more'));section.appendChild(node('p','Complimentary for our guests · Open Airtime to choose your film.','film-note'));target.appendChild(section);
+}
+function welcomePromoTypes(){var types=[];if(!data)return types;var a=data.airtime;if(a&&a.updatedAt&&Date.now()-Date.parse(a.updatedAt)<21600000&&a.posters&&a.posters.some(function(p){return /^https:\/\/airtime\.cloud\/cache\/img\//.test(p.image);}))types.push('movies');if(data.events&&data.events.length)types.push('events');if(data.explore&&data.explore.attractions&&data.explore.attractions.length)types.push('local');return types;}
+function nextPromoType(types,current){var options=types.filter(function(t){return t!==current;});if(!options.length)options=types;return options.length?options[Math.floor(Math.random()*options.length)]:'';}
+function rotateWelcomePromo(){var host=document.getElementById('welcome-promo');if(view!=='welcome'||mode!=='menu'||document.hidden||!host||host.contains(document.activeElement))return;promoType=nextPromoType(welcomePromoTypes(),promoType);airtimeIndex+=3;renderWelcomePromo(false);}
+function renderWelcomePromo(keepFocus){
+ var host=document.getElementById('welcome-promo');if(!host)return;var old=host.querySelectorAll('[data-action]'),focused=-1;if(keepFocus)for(var i=0;i<old.length;i++)if(old[i]===document.activeElement)focused=i;
+ while(host.firstChild)host.removeChild(host.firstChild);var types=welcomePromoTypes();if(types.indexOf(promoType)<0)promoType=nextPromoType(types,'');if(!promoType)return;
+ if(promoType==='movies')renderAirtimeSelection(host);
+ else{
+  var section=node('section','','welcome-films'),events=promoType==='events',items=events?data.events:data.explore.attractions,visual=items.filter(function(item){return !!item.image;}),pool=visual.length?visual:items,item=pool[Math.floor(Math.random()*pool.length)];
+  section.appendChild(node('h2',events?'What’s On at The Village Limits':'Explore Woodhall Spa'));
+  var button=action('',function(){if(events){eventIndex=items.indexOf(item);open(navFor('events'));}else{localSection=item.category;localIndex=data.explore.attractions.filter(function(p){return p.category===item.category;}).indexOf(item);open(navFor('local'));}},'welcome-spotlight');
+  if(item.image){var source=events&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(item.image)?origin+item.image:!events&&/^https:\/\//.test(item.image)?item.image:'';if(source){var img=document.createElement('img');img.src=source;img.alt=item.title;img.className=events?'spotlight-poster':'spotlight-photo';img.onerror=function(){this.style.display='none';};button.appendChild(img);}}
+  var copy=node('span','','spotlight-copy');copy.appendChild(node('strong',item.title));copy.appendChild(node('small',events?(item.date||item.startDate||''):(item.area||'')));copy.appendChild(node('span',(item.description||'').slice(0,150)));copy.appendChild(node('b',events?'OK · View event':'OK · Explore'));button.appendChild(copy);section.appendChild(button);host.appendChild(section);
+ }
+ host.appendChild(action('Discover more ▶',function(){promoType=nextPromoType(welcomePromoTypes(),promoType);renderWelcomePromo(true);},'film-more'));
+ if(focused>=0){var actions=host.querySelectorAll('[data-action]');if(actions.length)actions[Math.min(focused,actions.length-1)].focus();}
 }
 function renderRoomSetup(){
  view='setup';document.getElementById('room').textContent='TV SETUP';heading('ONE APP, EVERY ROOM','Assign this television','Select the room this TV is installed in. This is saved on the TV and does not change Airtime verification.');
@@ -51,7 +68,7 @@ function render(){
  if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',data?data.pages[0].title:'Make yourself at home','A little comfort. A good meal. Something to look forward to.');
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);renderAirtimeSelection(welcomeText);renderWelcomeVideo();
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Use GUIDE for channel selection and Return for the hotel menu.');
   panel.appendChild(action('Watch TV',startEmbeddedTV));
@@ -370,7 +387,7 @@ try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause',
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
 registerGuide();registerChannelKeys();
 function clock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
-focus(0);render();poll();setInterval(poll,30000);
+focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
 function scheduleEmbeddedResume(){
  clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;
@@ -384,7 +401,7 @@ function onWidgetVisibility(){
  else{if(embeddedGuideResume){scheduleEmbeddedResume();poll();return;}if(diagResume){diagResume=false;open(navFor('diagnostics'));diagRecord('Returned to diagnostic widget.');}else open(0);poll();}
 }
 document.addEventListener('visibilitychange',onWidgetVisibility);
-window.addEventListener('pagehide',function(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
+window.addEventListener('pagehide',function(){clearInterval(promoTimer);clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
 })();
 
 
