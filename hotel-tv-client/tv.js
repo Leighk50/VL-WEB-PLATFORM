@@ -3,7 +3,7 @@
 var room=null,setupIndex=0,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=match?Number(match[1]):3;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
 var url=room?origin+'/api/tv/rooms/'+room+'/content':'',cacheKey=room?'vl-cloud-room-'+room:'',data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
-var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0;
+var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0,airtimeIndex=0;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -23,6 +23,12 @@ function renderWelcomeVideo(){
  function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=true;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
  video.onended=function(){welcomeVideoIndex++;next();};video.onerror=function(){state.textContent='Video is temporarily unavailable.';};
  if(welcomeVideoSources.length){state.textContent='A taste of life at The Village Limits';next();}else state.textContent='Our hotel video will appear here when added.';
+}
+function renderAirtimeSelection(target){
+ var catalogue=data&&data.airtime;if(!catalogue||!catalogue.updatedAt||Date.now()-Date.parse(catalogue.updatedAt)>=21600000||!catalogue.posters||!catalogue.posters.length)return;
+ var section=node('section','','welcome-films');section.appendChild(node('h2','Free movies during your stay'));var row=node('div','','film-posters'),posters=catalogue.posters;
+ for(var i=0;i<Math.min(3,posters.length);i++){var item=posters[(airtimeIndex+i)%posters.length];if(!/^https:\/\/airtime\.cloud\/cache\/img\//.test(item.image))continue;var button=action('',launchMovies,'film-poster');button.setAttribute('aria-label','Open Airtime to browse this featured film');var img=document.createElement('img');img.src=item.image;img.alt=item.alt||'Airtime film poster';img.onerror=function(){this.style.display='none';};button.appendChild(img);button.appendChild(node('span','OK · Open Airtime'));row.appendChild(button);}
+ section.appendChild(row);if(posters.length>3)section.appendChild(action('More films ▶',function(){airtimeIndex=(airtimeIndex+3)%posters.length;render();},'film-more'));section.appendChild(node('p','Complimentary for our guests · Open Airtime to choose your film.','film-note'));target.appendChild(section);
 }
 function renderRoomSetup(){
  view='setup';document.getElementById('room').textContent='TV SETUP';heading('ONE APP, EVERY ROOM','Assign this television','Select the room this TV is installed in. This is saved on the TV and does not change Airtime verification.');
@@ -45,14 +51,14 @@ function render(){
  if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',data?data.pages[0].title:'Make yourself at home','A little comfort. A good meal. Something to look forward to.');
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);renderWelcomeVideo();
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);renderAirtimeSelection(welcomeText);renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Use GUIDE for channel selection and Return for the hotel menu.');
   panel.appendChild(action('Watch TV',startEmbeddedTV));
   panel.appendChild(action('Watch TV — native screen',startLive));
   panel.appendChild(action('TV Guide',launchGuide));
  }else if(view==='movies'){
-  heading('A NIGHT IN','Movies / Airtime','Choose a film in your room’s installed Airtime app.');
+  heading('A NIGHT IN','Movies / Airtime','Enjoy complimentary movies during your stay. Choose your film in Airtime.');
   panel.appendChild(action('Open Airtime',launchMovies));
  }else if(view==='videos'){
   heading('DISCOVER THE VILLAGE LIMITS','Video clips','A closer look at what’s happening here.');

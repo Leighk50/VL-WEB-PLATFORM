@@ -1,0 +1,4 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),{parsePosters}=require('./hotel-tv-airtime');
+test('Only import Airtime now-available poster images, deduplicating and excluding other sections',()=>{const p="/cache/img/380/pg|1&sz440x628&film.jpg",html='<img src="/cache/img/380/pg|2&coming.jpg"><h2>Now Available on Airtime</h2><img src="'+p+'"><img src="'+p+'"><img src="https://other.example/poster.jpg"><a>View Our Full Movie Catalogue</a><img src="/cache/img/380/pg|3&future.jpg">';assert.deepEqual(parsePosters(html).map(p=>p.image),['https://airtime.cloud'+p]);});
+test('Unrecognised catalogue layout fails closed',()=>{assert.throws(()=>parsePosters('<html>Changed page</html>'));assert.throws(()=>parsePosters('Now Available on Airtime <img src="/logo.png"> View Our Full Movie Catalogue'));});
