@@ -1,7 +1,9 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vl-tv-test-'));process.env.CONTENT_DATA_DIR=dir;
-const {defaults,clean,revision,publicFeed,handleHotelTv}=require('./hotel-tv');
+const {defaults:baseDefaults,clean,revision,publicFeed,handleHotelTv}=require('./hotel-tv');
+function defaults(){const value=baseDefaults();value.rooms[2].enabled=true;return value;}
+fs.writeFileSync(path.join(dir,'hotel-tv.json'),JSON.stringify(defaults()));
 const content={settings:{telephone:'01526 123456',openingHours:'Wednesday–Saturday from 6pm',keySafe:'secret'},menus:[{id:'main',name:'Main',visible:true,sections:[{name:'Starters',items:[{name:'Camembert',price:'£12',visible:true},{name:'Hidden dish',visible:false}]}]},{id:'hidden',visible:false}],events:[{id:'future',visible:true,title:'Future',startDate:'2026-11-27T18:30:00Z'},{id:'past',visible:true,title:'Past',startDate:'2026-09-01'},{id:'hidden',visible:false,startDate:'2026-12-01'}],reservations:[{name:'Private guest'}]};
 fs.writeFileSync(path.join(dir,'content.json'),JSON.stringify(content));
 test('Feed uses current website menus; filters hidden items and dated past events; excludes private data',()=>{const feed=publicFeed(content,defaults(),3,new Date('2026-10-10'));assert.equal(feed.menus[0].sections[0].items[0].price,'£12');assert.equal(feed.menus.length,1);assert.equal(feed.menus[0].sections[0].items.length,1);assert.deepEqual(feed.events.map(e=>e.id),['future']);assert.equal(feed.pages.length,3);assert.ok(feed.pages.every(p=>typeof p.text==='string'));assert.doesNotMatch(JSON.stringify(feed),/secret|Private guest|Hidden dish/);assert.equal(publicFeed(content,defaults(),1),null);const updated=structuredClone(content);updated.menus[0].sections[0].items[0].price='£13';assert.equal(publicFeed(updated,defaults(),3).menus[0].sections[0].items[0].price,'£13');});
@@ -30,3 +32,4 @@ test('Video settings migrate older saved configurations and only publish validat
  const eventContent=structuredClone(content);eventContent.events[0].image='/uploads/event-123.jpg';assert.equal(publicFeed(eventContent,valid,3).events[0].image,'/uploads/event-123.jpg');
  eventContent.events[0].image='https://private.example/secret';assert.equal(publicFeed(eventContent,valid,3).events[0].image,'');
 });
+
