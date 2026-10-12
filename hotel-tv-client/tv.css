@@ -53,3 +53,6 @@ html.live,body.live{background:transparent}
 
 /* Portrait welcome video; vh-derived width supports the Room 3 browser. */
 #content.welcome-layout{display:flex;align-items:center;overflow:hidden;padding:3vh 0;height:74vh}.welcome-text{flex:1;min-width:0;padding-right:2vw;max-height:68vh;overflow-y:auto}.welcome-text h1{font-size:2.7vw}.welcome-text .lead{font-size:1.12vw}.welcome-layout .welcome-copy{margin-top:3vh}.welcome-layout .welcome-copy p{max-height:none;font-size:1.05vw}.welcome-layout .welcome-media{flex:none;width:38.25vh;height:68vh;margin:0;border-radius:1vw;background:#163d30}.welcome-media video{object-fit:contain}.welcome-layout .media-caption{pointer-events:none;padding:4vh 1vw 1.5vh}.welcome-layout .media-caption h2{font-size:1.2vw}.welcome-layout .media-caption p{font-size:.85vw}.welcome-layout .media-caption .eyebrow{font-size:.65vw}
+
+
+.room-choices{display:flex;flex-wrap:wrap;margin-top:4vh}.room-choices button{width:30%;min-height:12vh;margin:1vh 1%;font-size:1.8vw;background:#f1f6ee;border:1px solid #b7cabb;border-radius:1vw;color:#235744}

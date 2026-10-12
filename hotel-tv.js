@@ -4,7 +4,7 @@ const dir=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.
 const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
 const mediaDir=path.join(dir,'tv-media'),MAX_VIDEO_BYTES=100*1024*1024;
-function defaults(){return {version:1,notice:'',welcomeTitle:'Make yourself at home',welcomeText:'Welcome to The Village Limits. We hope you enjoy your stay.',videos:[],welcomeVideo:null,rooms:Array.from({length:6},(_,i)=>({id:i+1,label:'Room '+(i+1),enabled:i===2,message:''}))};}
+function defaults(){return {version:1,notice:'',welcomeTitle:'Make yourself at home',welcomeText:'Welcome to The Village Limits. We hope you enjoy your stay.',videos:[],welcomeVideo:null,rooms:Array.from({length:6},(_,i)=>({id:i+1,label:'Room '+(i+1),enabled:false,message:''}))};}
 function readConfig(){try{return JSON.parse(fs.readFileSync(filename,'utf8'));}catch(e){if(e.code==='ENOENT')return defaults();throw e;}}
 function revision(value){return '"'+crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex')+'"';}
 function clean(value){if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid TV settings.');const out=defaults();for(const [key,max] of [['notice',1000],['welcomeTitle',120],['welcomeText',2000]]){if(typeof value[key]!=='string'||value[key].length>max)throw Error('Invalid '+key);out[key]=value[key].trim();}if(!out.welcomeTitle)throw Error('Enter a welcome title.');if(!Array.isArray(value.rooms)||value.rooms.length!==6)throw Error('Expected six rooms.');out.videos=cleanVideos(value.videos);out.welcomeVideo=value.welcomeVideo==null?null:cleanVideos([value.welcomeVideo])[0];out.rooms=value.rooms.map((r,i)=>{if(!r||r.id!==i+1||typeof r.enabled!=='boolean'||typeof r.label!=='string'||!r.label.trim()||r.label.length>80||typeof r.message!=='string'||r.message.length>1500)throw Error('Invalid room '+(i+1));return {id:i+1,label:r.label.trim(),enabled:r.enabled,message:r.message.trim()};});return out;}
@@ -60,6 +60,11 @@ async function handleHotelTv(req,res,pathname,identity){
   if(!sameOrigin(req))return json(res,403,{error:'Invalid request origin.'}),true;
   await uploadVideo(req,res);return true;
  }
+ if(pathname==='/tv/install/sssp_config.xml'||pathname==='/tv/install/VillageLimits.wgt'){
+  if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'});res.end();return true;}
+  const releaseFile=path.join(__dirname,'hotel-tv-install','VillageLimits-1.0.0.wgt.base64');if(!fs.existsSync(releaseFile)){res.writeHead(503,{'Cache-Control':'no-store'});res.end('The all-room release is awaiting its signed package.');return true;}
+  const pkg=Buffer.from(fs.readFileSync(releaseFile,'utf8'),'base64'),manifest=pathname.endsWith('sssp_config.xml');const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>1.0.0</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;res.writeHead(200,{'Content-Type':manifest?'application/xml; charset=utf-8':'application/widget','Content-Length':data.length,'Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:data);return true;
+ }
  const installerFiles={'/tv/install/room3/sssp_config.xml':'manifest','/tv/install/room3/VillageLimits.wgt':'package'};
  if(Object.hasOwn(installerFiles,pathname)){
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'});res.end();return true;}
@@ -75,7 +80,7 @@ async function handleHotelTv(req,res,pathname,identity){
   if(!identity)return json(res,401,{error:'Please sign in.'}),true;
   if(!identity.isOwner&&!identity.permissions.includes('settings'))return json(res,403,{error:'Website Details permission is required.'}),true;
   const config=readConfig();
-  if(req.method==='GET')return json(res,200,{config,activity:config.rooms.map(r=>({room:r.id,lastRequest:activity.get(r.id)||null}))},{ETag:revision(config)}),true;
+  if(req.method==='GET')return json(res,200,{config,activity:config.rooms.map(r=>({room:r.id,...(typeof activity.get(r.id)==='object'?activity.get(r.id):{lastRequest:activity.get(r.id)||null}),appVersion:typeof activity.get(r.id)==='object'?activity.get(r.id).appVersion:null}))},{ETag:revision(config)}),true;
   if(req.method==='PUT'){
    if(!String(req.headers['content-type']||'').startsWith('application/json'))return json(res,415,{error:'JSON required.'}),true;
    if(req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Invalid request origin.'}),true;}catch{return json(res,403,{error:'Invalid request origin.'}),true;}}
@@ -88,10 +93,11 @@ async function handleHotelTv(req,res,pathname,identity){
  if(match){if(req.method!=='GET')return json(res,405,{error:'Method not allowed.'},{Allow:'GET'}),true;
   const content=JSON.parse(fs.readFileSync(path.join(dir,'content.json'),'utf8').replace(/^\uFEFF/,''));
   const room=Number(match[1]),feed=publicFeed(content,readConfig(),room);if(!feed)return json(res,404,{error:'This room is not enabled.'},{'Access-Control-Allow-Origin':'*'}),true;
-  if(new URL(req.url,'http://localhost').searchParams.get('preview')!=='1')activity.set(room,new Date().toISOString());
+  if(new URL(req.url,'http://localhost').searchParams.get('preview')!=='1'){const reported=new URL(req.url,'http://localhost').searchParams.get('appVersion');activity.set(room,{lastRequest:new Date().toISOString(),appVersion:/^\d+\.\d+\.\d+$/.test(reported||'')?reported:null});}
   json(res,200,feed,{'Access-Control-Allow-Origin':'*'});return true;
  }
  return false;
 }
 module.exports={handleHotelTv,defaults,clean,revision,publicFeed};
+
 
