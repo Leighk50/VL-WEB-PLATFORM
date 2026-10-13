@@ -1,4 +1,4 @@
-# Village Limits TV 1.1.0 release candidate
+# Village Limits TV 1.1.1 release candidate
 
 One signed widget serves all six rooms. The application identity remains VLRoomTest.RoomTest so existing installations can update. Room numbering is no longer embedded in settings.js.
 
@@ -29,3 +29,9 @@ The original https://www.villagelimits.co.uk/tv/install/room3/ installer remains
 ## Explore Woodhall Spa
 
 Version 1.1.0 adds 17 local attractions, aviation and museum visits, and nearby days out. QR codes link to official visitor information. The website imports the Kinema’s published film/performance entries centrally and caches them for one hour. Today and tomorrow use Europe/London dates. Refresh happens in the background and fails closed: stale listings are hidden and the official booking QR remains available. Test both date buttons, category navigation and QR scanning on a physical TV.
+
+## Staff access in 1.1.1
+
+Diagnostics is hidden from the guest navigation. On Welcome, press 0 four times, then enter the staff PIN with the remote number buttons or the on-screen keypad. Return cancels. Access locks again on leaving Diagnostics or when the app is hidden. Room reassignment is available only after unlocking staff access. Test the shortcut and both keypad input methods on a physical TV.
+
+The Kinema day switch sits directly beside its tab and offers Tomorrow while viewing Today, or Today while viewing Tomorrow. The signed shared installer remains 1.1.0 until a verified 1.1.1 package is published.
