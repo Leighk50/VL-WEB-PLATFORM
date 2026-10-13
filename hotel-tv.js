@@ -64,8 +64,8 @@ async function handleHotelTv(req,res,pathname,identity){
  }
  if(pathname==='/tv/install/sssp_config.xml'||pathname==='/tv/install/VillageLimits.wgt'){
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'});res.end();return true;}
-  const releaseFile=path.join(__dirname,'hotel-tv-install','VillageLimits-1.0.0.wgt.base64');if(!fs.existsSync(releaseFile)){res.writeHead(503,{'Cache-Control':'no-store'});res.end('The all-room release is awaiting its signed package.');return true;}
-  const pkg=Buffer.from(fs.readFileSync(releaseFile,'utf8'),'base64'),manifest=pathname.endsWith('sssp_config.xml');const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>1.0.0</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;res.writeHead(200,{'Content-Type':manifest?'application/xml; charset=utf-8':'application/widget','Content-Length':data.length,'Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:data);return true;
+  const releaseFile=path.join(__dirname,'hotel-tv-install','VillageLimits-1.1.0.wgt.base64');if(!fs.existsSync(releaseFile)){res.writeHead(503,{'Cache-Control':'no-store'});res.end('The all-room release is awaiting its signed package.');return true;}
+  const pkg=Buffer.from(fs.readFileSync(releaseFile,'utf8'),'base64'),manifest=pathname.endsWith('sssp_config.xml');const data=manifest?Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<widget><ver>1.1.0</ver><size>'+pkg.length+'</size><widgetname>VillageLimits</widgetname><webtype>tizen</webtype></widget>\n'):pkg;res.writeHead(200,{'Content-Type':manifest?'application/xml; charset=utf-8':'application/widget','Content-Length':data.length,'Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:data);return true;
  }
  const installerFiles={'/tv/install/room3/sssp_config.xml':'manifest','/tv/install/room3/VillageLimits.wgt':'package'};
  if(Object.hasOwn(installerFiles,pathname)){
