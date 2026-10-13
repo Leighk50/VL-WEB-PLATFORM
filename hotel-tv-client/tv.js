@@ -66,13 +66,18 @@ function staffPinKey(k){
  if(k===37||k===39)staffPinIndex=(staffPinIndex+(k===37?-1:1)+12)%12;else if(k===38||k===40)staffPinIndex=(staffPinIndex+(k===38?-3:3)+12)%12;else if(k===13){var choice=panel.querySelectorAll('.staff-pin-pad [data-action]')[staffPinIndex];if(choice)choice.click();return true;}else return true;
  var choices=panel.querySelectorAll('.staff-pin-pad [data-action]');if(choices[staffPinIndex])choices[staffPinIndex].focus();return true;
 }
+var guestWelcome=null,guestToken='',guestPairCode='',guestRegisteredRoom=0,guestWelcomeBusy=false,guestRegisterAt=0;
+function guestDeviceToken(){try{var stored=localStorage.getItem('vl-private-tv-token');if(/^[a-f0-9]{64}$/.test(stored||''))return stored;var bytes=new Uint8Array(32);if(!window.crypto||!window.crypto.getRandomValues)return '';window.crypto.getRandomValues(bytes);var token='';for(var i=0;i<bytes.length;i++)token+=('0'+bytes[i].toString(16)).slice(-2);localStorage.setItem('vl-private-tv-token',token);return localStorage.getItem('vl-private-tv-token')===token?token:'';}catch(e){return '';}}
+function applyGuestWelcome(value){if(value&&(!value.name||typeof value.name!=='string'||value.name.length>181||!value.expiresAt||!isFinite(Date.parse(value.expiresAt))||Date.parse(value.expiresAt)<=Date.now()))value=null;var changed=JSON.stringify(guestWelcome)!==JSON.stringify(value);guestWelcome=value;if(changed&&mode==='menu'&&view==='welcome')render();}
+function readGuestWelcome(requestRoom){var xhr=new XMLHttpRequest();xhr.open('GET',origin+'/api/tv/rooms/'+requestRoom+'/welcome',true);xhr.timeout=10000;xhr.setRequestHeader('X-TV-Token',guestToken);function finish(value){guestWelcomeBusy=false;if(requestRoom===room)applyGuestWelcome(value);}xhr.onerror=xhr.ontimeout=function(){finish(null);};xhr.onload=function(){try{finish(xhr.status===200?JSON.parse(xhr.responseText).welcome:null);}catch(e){finish(null);}};try{xhr.send();}catch(e){finish(null);}}
+function pollGuestWelcome(){if(preview||!room||guestWelcomeBusy)return;if(!guestToken)guestToken=guestDeviceToken();if(!guestToken)return;guestWelcomeBusy=true;var requestRoom=room;if(guestRegisteredRoom===room&&Date.now()-guestRegisterAt<300000){readGuestWelcome(requestRoom);return;}guestRegisterAt=Date.now();var xhr=new XMLHttpRequest();xhr.open('POST',origin+'/api/tv/device-register',true);xhr.timeout=10000;xhr.setRequestHeader('Content-Type','application/json');xhr.onerror=xhr.ontimeout=function(){guestWelcomeBusy=false;applyGuestWelcome(null);};xhr.onload=function(){if(requestRoom!==room){guestWelcomeBusy=false;return;}try{if(xhr.status!==200)throw Error();var result=JSON.parse(xhr.responseText);guestPairCode=result.code||'';guestRegisteredRoom=requestRoom;readGuestWelcome(requestRoom);}catch(e){guestWelcomeBusy=false;applyGuestWelcome(null);}};try{xhr.send(JSON.stringify({token:guestToken,room:requestRoom}));}catch(e){guestWelcomeBusy=false;}}
 function renderRoomSetup(){
  view='setup';document.getElementById('room').textContent='TV SETUP';heading('ONE APP, EVERY ROOM','Assign this television','Select the room this TV is installed in. This is saved on the TV and does not change Airtime verification.');
  var choices=node('div','','room-choices');for(var i=1;i<=6;i++)(function(id){choices.appendChild(action('Room '+id,function(){assignRoom(id);}));})(i);panel.appendChild(choices);status.textContent='Staff setup · Select a room and press OK';var list=choices.querySelectorAll('[data-action]');if(list[setupIndex])list[setupIndex].focus();
 }
 function assignRoom(id){
  try{localStorage.setItem('vl-assigned-room',String(id));if(localStorage.getItem('vl-assigned-room')!==String(id))throw Error('Room could not be saved');}catch(e){say('Room assignment could not be saved. Please contact the team.');return;}
- room=id;url=origin+'/api/tv/rooms/'+room+'/content';cacheKey='vl-cloud-room-'+room;data=null;view='welcome';panel.className='';document.getElementById('room').textContent='ROOM '+room;try{var stored=JSON.parse(localStorage.getItem(cacheKey));if(valid(stored))data=stored;}catch(ignore){}focus(0);render();poll();
+ guestWelcome=null;guestRegisteredRoom=0;guestRegisterAt=0;room=id;url=origin+'/api/tv/rooms/'+room+'/content';cacheKey='vl-cloud-room-'+room;data=null;view='welcome';panel.className='';document.getElementById('room').textContent='ROOM '+room;try{var stored=JSON.parse(localStorage.getItem(cacheKey));if(valid(stored))data=stored;}catch(ignore){}focus(0);render();poll();
 }
 function changeRoomAssignment(){stopLive();if(mode==='video')stopVideo();try{localStorage.removeItem('vl-assigned-room');}catch(ignore){}room=null;data=null;url='';cacheKey='';setupIndex=0;render();}
 function render(){
@@ -86,7 +91,7 @@ function render(){
  panel.className=view==='welcome'?'welcome-layout':'';
  if(view==='staff-pin'){renderStaffPIN();
  }else if(view==='welcome'){
-  heading('YOUR STAY, YOUR WAY',data?data.pages[0].title:'Make yourself at home','A little comfort. A good meal. Something to look forward to.');
+  heading('YOUR STAY, YOUR WAY',guestWelcome&&Date.parse(guestWelcome.expiresAt)>Date.now()?'Welcome, '+guestWelcome.name:(data?data.pages[0].title:'Make yourself at home'),'A little comfort. A good meal. Something to look forward to.');
   var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
   var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);renderWelcomeVideo();
  }else if(view==='live'){
@@ -334,7 +339,8 @@ function renderDiagnostics(){
  panel.appendChild(action('Scan installed apps',scanDiagnosticApps));
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Version 1.1.1. Programme details and schedule diagnostics available. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Private guest welcome TV code: '+(guestPairCode||'Waiting for connection')+'. Approve this code for Room '+room+' in the TV back office.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Version 1.2.0. Programme details and schedule diagnostics available. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -398,14 +404,14 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.1.1'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.0'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
 try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause','MediaStop','0','1','2','3','4','5','6','7','8','9'].forEach(function(key){try{tizen.tvinputdevice.registerKey(key);}catch(ignore){}});}catch(ignore){}
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
 registerGuide();registerChannelKeys();
-function clock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
+function clock(){if(guestWelcome&&Date.parse(guestWelcome.expiresAt)<=Date.now())applyGuestWelcome(null);document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
 focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
 function scheduleEmbeddedResume(){

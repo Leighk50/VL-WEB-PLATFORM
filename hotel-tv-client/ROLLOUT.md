@@ -1,4 +1,4 @@
-# Village Limits TV 1.1.1 release candidate
+# Village Limits TV 1.2.0 release candidate
 
 One signed widget serves all six rooms. The application identity remains VLRoomTest.RoomTest so existing installations can update. Room numbering is no longer embedded in settings.js.
 
@@ -35,3 +35,11 @@ Version 1.1.0 adds 17 local attractions, aviation and museum visits, and nearby 
 Diagnostics is hidden from the guest navigation. On Welcome, press 0 four times, then enter the staff PIN with the remote number buttons or the on-screen keypad. Return cancels. Access locks again on leaving Diagnostics or when the app is hidden. Room reassignment is available only after unlocking staff access. Test the shortcut and both keypad input methods on a physical TV.
 
 The Kinema day switch sits directly beside its tab and offers Tomorrow while viewing Today, or Today while viewing Tomorrow. The signed shared installer remains 1.1.0 until a verified 1.1.1 package is published.
+
+## Personal guest welcomes in 1.2.0
+
+Import the existing booking report through Guest SMS as usual. The import saves only the name, room and stay dates for TV welcomes; it does not send messages. Full names need either separate first/last name columns or a full guest-name column. Check-in and checkout columns are required. Incomplete/ambiguous entries are reported and skipped. Existing stays are retained until checkout; matching cancellations remove their welcomes.
+
+Start the new client on each physical TV. Open staff Diagnostics and note its private guest welcome code. Match that code and room in /admin/tv under Private guest welcomes and approve the TV once. Revoke access if a TV is removed; a change of room assignment requires approval again. Browser previews never retrieve guest names.
+
+Guest names are fetched separately using the TV’s private random token and are not stored in the public feed or TV offline cache. They expire at 10am on weekday departure dates, 11am at weekends, in Europe/London time. The generic welcome is used for missing, expired, conflicting or inaccessible bookings. Test with a booking before rollout. The signed shared installer stays at 1.1.0 until the 1.2.0 package is verified and published.
