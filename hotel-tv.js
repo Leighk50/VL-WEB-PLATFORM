@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const dir=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,'site','data'):path.join(__dirname,'data'));
 const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
+const {handleGuestTv}=require('./hotel-tv-guests');
 const {explore}=require('./hotel-tv-explore');
 const {airtime}=require('./hotel-tv-airtime');
 const mediaDir=path.join(dir,'tv-media'),MAX_VIDEO_BYTES=100*1024*1024;
@@ -54,6 +55,7 @@ function serveVideo(req,res,pathname){
  headers['Content-Length']=end-start+1;res.writeHead(code,headers);if(req.method==='HEAD'){res.end();return;}const stream=fs.createReadStream(file,{start,end});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);
 }
 async function handleHotelTv(req,res,pathname,identity){
+ if(await handleGuestTv(req,res,pathname,identity,id=>readConfig().rooms.some(r=>r.id===id&&r.enabled)))return true;
  if(pathname.startsWith('/tv/media/')){serveVideo(req,res,pathname);return true;}
  if(pathname==='/api/admin/tv/video'){
   if(!identity)return json(res,401,{error:'Please sign in.'}),true;
