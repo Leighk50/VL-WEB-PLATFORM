@@ -1,0 +1,23 @@
+name: Verify durable TV storage
+on:
+  push:
+    branches: [tv-storage-verify-20261014]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read saved TV counts without private details
+        env:
+          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import os,xml.etree.ElementTree as E,urllib.request,json,base64
+          p=next(p for p in E.fromstring(os.environ['PROFILE']) if p.get('publishMethod')=='MSDeploy')
+          host=p.get('publishUrl').split(':')[0]
+          auth=base64.b64encode((p.get('userName')+':'+p.get('userPWD')).encode()).decode()
+          command="ls -l /home/site/wwwroot/hotel-tv-storage.js; python3 - <<'CHECK'\nimport json,pathlib\np=pathlib.Path('/home/site/vl-tv-state')\nfor name in ['hotel-tv.json','tv-devices.json','tv-arrivals.json']:\n f=p/name\n if not f.exists(): print(name,'absent');continue\n v=json.loads(f.read_text())\n if name=='tv-devices.json': print('Device records:',len(v),'Approved:',sum(d.get('approved') is True for d in v))\n elif name=='hotel-tv.json': print('Enabled rooms:',sum(x.get('enabled') is True for x in v.get('rooms',[])),'Welcome video configured:',bool(v.get('welcomeVideo')))\n else: print('Stored guest bookings:',len(v.get('items',[])))\nprint('Recovery copies:',sorted(f.name for f in pathlib.Path('/home/site/vl-tv-state-backups').glob('*.json')))\nCHECK"
+          cmd='bash -c "echo '+base64.b64encode(command.encode()).decode()+' | base64 -d | bash"'
+          req=urllib.request.Request('https://'+host+'/api/command',data=json.dumps({'command':cmd,'dir':'/home'}).encode(),headers={'Authorization':'Basic '+auth,'Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=90) as r: result=json.load(r)
+          print(result.get('Output',''));print('ExitCode:',result.get('ExitCode'));print(result.get('Error',''))
+          PY
