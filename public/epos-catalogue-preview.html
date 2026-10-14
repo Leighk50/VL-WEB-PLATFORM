@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Village Limits | EPOS Catalogue Preview</title>
+<style>
+:root{font-family:system-ui,Arial,sans-serif;color:#25241f;background:#f6f3ec}body{max-width:1150px;margin:0 auto;padding:24px}h1{margin:0 0 8px}.muted{color:#625e56}.layout{display:grid;grid-template-columns:240px 1fr;gap:20px}.panel{background:white;border:1px solid #ddd5c7;border-radius:12px;padding:20px}button,input,select,textarea{font:inherit}button{padding:10px 14px;border:1px solid #c5bba9;border-radius:7px;background:#fff;cursor:pointer}button.primary{background:#33312b;color:white}.tabs button{display:block;width:100%;text-align:left;margin-bottom:7px}.tabs button.active{background:#e9dfc9}label{display:block;margin:12px 0 5px;font-weight:600}input:not([type=checkbox]),select,textarea{box-sizing:border-box;width:100%;padding:9px;border:1px solid #c9c3b8;border-radius:6px}textarea{min-height:80px}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.checks{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:16px 0}.checks label{margin:0;font-weight:400}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.menu-preview{margin-top:18px;border-top:1px solid #ddd;padding-top:12px}.menu-item{display:flex;justify-content:space-between;gap:20px;padding:12px 0;border-bottom:1px solid #eee}.menu-item small{display:block;color:#777;margin-top:4px}#status{min-height:24px}@media(max-width:720px){.layout{grid-template-columns:1fr}.row{grid-template-columns:1fr}}@media print{.tabs,.editor,.actions,#status,header .muted{display:none!important}.layout{display:block}.panel{border:0}.menu-preview{border:0}}
+</style></head><body><header><h1>Village Limits — Catalogue</h1><p class="muted">EPOS v0.1 development preview. Changes are saved in this browser only, not to the live website.</p></header>
+<div class="layout"><aside class="panel tabs" id="tabs"></aside><main class="panel"><div class="editor">
+<h2 id="heading">Product editor</h2><label for="product">Product</label><select id="product"></select>
+<label for="name">Name</label><input id="name" maxlength="150">
+<label for="description">Menu description / wine tasting notes</label><textarea id="description"></textarea>
+<div class="row"><div><label for="price">Price (£)</label><input id="price" inputmode="decimal" placeholder="12.00"></div><div><label for="category">Category</label><input id="category" maxlength="100"></div></div>
+<div class="row"><div><label for="sizes">Serving sizes (comma-separated)</label><input id="sizes" placeholder="125ml, 175ml, Bottle"></div><div><label for="allergens">Allergens</label><input id="allergens"></div></div>
+<h3>Visibility</h3><div class="checks" id="checks"></div>
+<div class="actions"><button class="primary" id="save">Save locally</button><button id="add">Add product</button><button id="export">Export JSON</button><button id="reset">Reset preview</button></div><p id="status" role="status"></p></div>
+<div class="menu-preview"><h2 id="previewTitle"></h2><div id="preview"></div><div class="actions"><button id="print">Print this menu</button></div></div></main></div>
+<script>
+"use strict";
+const channels=[["main","Main Menu"],["sunday","Sunday Menu"],["specials","Specials"],["desserts","Desserts"],["drinks","Drinks Menu"],["wine","Wine List"],["epos","EPOS"],["website","Website"]];
+const initial=[{id:"main-camembert",name:"Whole Baked Camembert Wrapped in Filo Pastry",description:"Hot honey, candied cashews and toasted sourdough.",price:"12.00",category:"Starters",sizes:"",allergens:"Dairy, Gluten, Milk, Nuts",visibility:{main:true,sunday:false,epos:true,website:true}}];
+const key="vl-epos-catalogue-preview-v01";let products;try{const saved=JSON.parse(localStorage.getItem(key));products=Array.isArray(saved)?saved:structuredClone(initial)}catch{products=structuredClone(initial)}
+let tab="main",selected=products[0]?.id;const $=id=>document.getElementById(id);
+function node(tag,txt){const el=document.createElement(tag);el.textContent=txt;return el}
+function render(){const tabs=$("tabs");tabs.replaceChildren(node("h3","Menus"));for(const [id,label] of channels){const b=node("button",label);b.className=id===tab?"active":"";b.onclick=()=>{tab=id;render()};tabs.append(b)}
+const sel=$("product");sel.replaceChildren();for(const p of products){const o=node("option",p.name);o.value=p.id;sel.append(o)}if(!products.some(p=>p.id===selected))selected=products[0]?.id;sel.value=selected||"";const p=products.find(x=>x.id===selected);for(const f of ["name","description","price","category","sizes","allergens"])$(f).value=p?.[f]||"";
+const checks=$("checks");checks.replaceChildren();for(const [id,label] of channels){const l=document.createElement("label"),c=document.createElement("input");c.type="checkbox";c.dataset.channel=id;c.checked=!!p?.visibility?.[id];l.append(c," "+label);checks.append(l)}
+$("previewTitle").textContent=channels.find(c=>c[0]===tab)[1];const out=$("preview");out.replaceChildren();const shown=products.filter(p=>p.visibility?.[tab]);if(!shown.length)out.append(node("p","No products selected for this menu."));for(const p of shown){const d=document.createElement("div");d.className="menu-item";const left=document.createElement("div");left.append(node("strong",p.name));if(p.description)left.append(node("small",p.description));d.append(left,node("strong","£"+p.price));out.append(d)}}
+$("product").onchange=e=>{selected=e.target.value;render()};
+$("save").onclick=()=>{const p=products.find(x=>x.id===selected);if(!p)return;const amount=$("price").value.trim();if(!/^\d+(?:\.\d{1,2})?$/.test(amount)){ $("status").textContent="Enter a valid price (e.g. 12.00).";return}
+for(const f of ["name","description","category","sizes","allergens"])p[f]=$(f).value.trim();if(!p.name){$("status").textContent="Product name is required.";return}p.price=Number(amount).toFixed(2);p.visibility=Object.fromEntries([...document.querySelectorAll("[data-channel]")].map(c=>[c.dataset.channel,c.checked]));localStorage.setItem(key,JSON.stringify(products));$("status").textContent="Saved to this browser only — not the live site.";render()};
+$("add").onclick=()=>{const id="draft-"+Date.now();products.push({id,name:"New product",description:"",price:"0.00",category:"",sizes:"",allergens:"",visibility:{}});selected=id;render()};
+$("reset").onclick=()=>{if(!confirm("Reset locally saved preview products?"))return;products=structuredClone(initial);localStorage.removeItem(key);selected=initial[0].id;render()};
+$("export").onclick=()=>{const blob=new Blob([JSON.stringify(products,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="village-limits-epos-catalogue.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+$("print").onclick=()=>window.print();render();
+</script></body></html>
