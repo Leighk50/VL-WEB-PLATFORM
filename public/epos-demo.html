@@ -89,7 +89,7 @@ main aside.panel{position:sticky;top:12px;min-height:calc(100vh - 139px);border-
 .department-tabs button.active{background:#2d7767;color:#fff;border-color:#2d7767}
 .category-tabs{gap:6px}
 .category-tabs button{font-size:13px}
-.modifier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.modifier-grid button{margin:0;min-height:55px;padding:9px;font-size:13px;text-align:center}.modifier-grid button.active{background:#2d7767;color:white;border-color:#2d7767}.modifier-grid button:disabled{background:#e8ebea;color:#84918b}#modifierHint{font-size:12px;margin:8px 0}@media(max-width:460px){.modifier-grid{grid-template-columns:1fr 1fr}}</style>
+.modifier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.modifier-grid button{margin:0;min-height:55px;padding:9px;font-size:13px;text-align:center}.modifier-grid button.selected-modifier{background:#16755d!important;color:#fff!important;border:2px solid #0b493a!important;box-shadow:inset 0 0 0 2px #ffffff60,0 3px 10px #0d48382a;font-weight:800}.modifier-grid button.selected-modifier:focus-visible{outline:3px solid #d2b079;outline-offset:2px}.modifier-grid button:disabled{background:#e8ebea;color:#84918b}#modifierHint{font-size:12px;margin:8px 0}@media(max-width:460px){.modifier-grid{grid-template-columns:1fr 1fr}}</style>
 <header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label>Seat<select id="seat"></select></label><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog>
 <script>
@@ -127,12 +127,12 @@ function renderModifierButtons(){
  $("modifierHint").textContent=spirit?"Mixer prices must come from the imported EPOS products. Unpriced mixers cannot be added.":draught?"Lager additions are free.":"";
  if(!spirit&&!draught)return;
  const options=spirit?mixerCatalog:lager.map((name,index)=>({id:"lager-"+index,name,pricePence:0}));
- const none=button("No addition",()=>{selectedModifier="";renderModifierButtons()},selectedModifier===""?"active":"");box.append(none);
+ const none=button((selectedModifier===""?"✓  ":"")+"No addition",()=>{selectedModifier="";renderModifierButtons()},selectedModifier===""?"selected-modifier":"");none.setAttribute("aria-pressed",String(selectedModifier===""));box.append(none);
  for(const option of options){
    const priced=Number.isInteger(option.pricePence)&&option.pricePence>0;
    const valid=!spirit||priced;
    const label=option.name+(spirit?(priced?" · "+money(option.pricePence):" · Price pending"):" · Free");
-   const b=button(label,()=>{selectedModifier=option.id;renderModifierButtons()},selectedModifier===option.id?"active":"");
+   const b=button((selectedModifier===option.id?"✓  ":"")+label,()=>{selectedModifier=option.id;renderModifierButtons()},selectedModifier===option.id?"selected-modifier":"");b.setAttribute("aria-pressed",String(selectedModifier===option.id));
    b.disabled=!valid;
    if(!valid)b.title="Awaiting price from the ICR Touch product import";
    box.append(b);
