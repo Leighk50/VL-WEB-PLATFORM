@@ -115,7 +115,18 @@ if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kit
 $("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(!i.sent)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total)}
 let selectedModifier="";
 /* Product-linked mixer pricing: null means not imported/verified, never free. */
-const mixerCatalog=mixers.map((name,index)=>({id:"mixer-"+index,name,pricePence:null}));
+const mixerCatalog=[
+ {id:"mixer-tonic",name:"Tonic",plu:"900",sourceName:"FEVER TREE - STANDARD",pricePence:275},
+ {id:"mixer-light",name:"Light Tonic",plu:"906",sourceName:"FEVER TREE - LIGHT",pricePence:275},
+ {id:"mixer-elderflower",name:"Elderflower Tonic",plu:"909",sourceName:"FEVERTREE - ELDERFLOWER",pricePence:275},
+ {id:"mixer-mediterranean",name:"Mediterranean Tonic",plu:"907",sourceName:"FEVER TREE - MEDITERANEA",pricePence:275},
+ {id:"mixer-ginger",name:"Ginger Ale",plu:"916",sourceName:"GINGER ALE",pricePence:275},
+ {id:"mixer-dash-coke",name:"Dash Coke",plu:"805",sourceName:"DASH COKE",pricePence:70},
+ {id:"mixer-dash-diet",name:"Dash Diet Coke",plu:"836",sourceName:"Dash Diet Coke",pricePence:50},
+ {id:"mixer-dash-lemonade",name:"Dash Lemonade",plu:null,sourceName:"Conflicting PLUs",pricePence:null}
+];
+// Mixers are saleable products; use the same PLU/price when sold alone or attached to a spirit.
+for(const m of mixerCatalog)if(Number.isInteger(m.pricePence))items.push([m.name,"Soft Drinks",m.pricePence,"bar",null,m.plu]);
 function renderModifierButtons(){
  const p=product,box=$("modifierButtons");box.replaceChildren();
  const spirit=p[1]==="Spirits",draught=p[1]==="Draught";
@@ -149,7 +160,7 @@ $("add").onclick=()=>{
  if(selectedModifier&&!option)return alert("Modifier not found.");
  if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
  const extra=option?.pricePence||0;
- current().push({name:p[0],route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
+ current().push({name:p[0],route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
  save();$("dialog").close();render();
 };
 $("send").onclick=()=>{const pending=current().filter(x=>!x.sent);for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();render();alert("Sent to DEMO queues only — no real printers")};
