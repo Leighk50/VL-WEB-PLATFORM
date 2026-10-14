@@ -406,6 +406,25 @@
     renderStats();
   };
 
+  function ensureSpecialMenu(id, name, categories) {
+    const existing = content.menus.find(menu => menu.id === id);
+    if (existing) { activeMenuId = id; renderMenus(); return; }
+    content.menus.push({
+      id, name, description:"", visible:false,
+      sections:categories.map(category => ({name:category, items:[]}))
+    });
+    activeMenuId = id;
+    renderMenus();
+    renderStats();
+    $("#menuSaveStatus").textContent = name + " created as a hidden draft. Click Save Menu Changes to retain it.";
+  }
+  $("#addDrinksMenu").onclick = () => ensureSpecialMenu("drinks", "Drinks Menu", [
+    "Draught Beer & Cider", "Bottled Beer & Cider", "Spirits", "Cocktails", "Soft Drinks", "Hot Drinks"
+  ]);
+  $("#addWineMenu").onclick = () => ensureSpecialMenu("wine", "Wine List", [
+    "White Wines", "Red Wines", "Rosé Wines", "Sparkling Wines & Champagne"
+  ]);
+
   $("#addEvent").onclick = () => {
     content.events.unshift({
       id:uid(), title:"New Event", date:"", startDate:"", endDate:"", price:"", currency:"GBP", performer:"", description:"", image:"/assets/images/event.webp", eventStatus:"EventScheduled",
