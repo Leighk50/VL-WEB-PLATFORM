@@ -37,6 +37,7 @@ jobs:
           cp public/epos-demo.html epos-staging/index.html
           cp public/kitchen-display-preview.html epos-staging/kitchen.html
           cp public/epos-catalogue-preview.html epos-staging/catalogue.html
+          cp epos/catalogue-import.json epos-staging/catalogue-data.json
           cp epos/staging-server.js epos-staging/server.js
           cp epos/staging-package.json epos-staging/package.json
       - uses: actions/upload-artifact@v4
