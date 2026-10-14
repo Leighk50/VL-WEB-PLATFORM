@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: vl-epos-staging
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -40,7 +44,6 @@ jobs:
           name: epos-staging-package
           path: epos-staging/
   deploy:
-    if: github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
     environment: epos-staging
@@ -56,7 +59,7 @@ jobs:
         run: |
           test -n "$TARGET" || { echo "Set EPOS_STAGING_APP_NAME"; exit 1; }
           test -n "$PROFILE" || { echo "Set EPOS_STAGING_PUBLISH_PROFILE"; exit 1; }
-          test "$TARGET" != "VLWEB2026" || { echo "Production app is forbidden"; exit 1; }
+          test "$TARGET" = "VL-EPOS-STAGING" || { echo "Unexpected deployment target; refusing to deploy"; exit 1; }
       - uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.EPOS_STAGING_APP_NAME }}
