@@ -160,7 +160,7 @@ function openItem(p){
  const measure=$("measure");measure.replaceChildren();
  for(const m of Object.keys(p[4]||{"Standard":p[2]}))measure.append(new Option(m,m));
  if(p[4]&&Object.hasOwn(p[4],preferredMeasures[p[1]]))measure.value=preferredMeasures[p[1]];
- renderModifierButtons();renderGarnishButtons();renderTabAssignment();$("note").value="";$("seat").value="";$("dialog").showModal();
+ renderModifierButtons();renderGarnishButtons();renderTabAssignment();$("note").value="";$("dialog").showModal();
 }
 $("cancel").onclick=()=>$("dialog").close();
 $("add").onclick=()=>{
@@ -170,7 +170,7 @@ $("add").onclick=()=>{
  if(selectedModifier&&!option)return alert("Modifier not found.");
  if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
  const extra=option?.pricePence||0;
- current().push({name:p[0],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],tab:view==="quick"?"Quick Sale":selectedTab,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
+ current().push({name:p[0],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],tab:view==="quick"?"Quick Sale":selectedTab,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),sent:false});
  save();$("dialog").close();render();
 };
 function printTableBills(){
