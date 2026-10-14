@@ -123,7 +123,7 @@ const mixerCatalog=[
  {id:"mixer-ginger",name:"Ginger Ale",plu:"916",sourceName:"GINGER ALE",pricePence:275},
  {id:"mixer-dash-coke",name:"Dash Coke",plu:"805",sourceName:"DASH COKE",pricePence:70},
  {id:"mixer-dash-diet",name:"Dash Diet Coke",plu:"836",sourceName:"Dash Diet Coke",pricePence:50},
- {id:"mixer-dash-lemonade",name:"Dash Lemonade",plu:null,sourceName:"Conflicting PLUs",pricePence:null}
+ {id:"mixer-dash-lemonade",name:"Dash Lemonade",plu:null,sourceName:"ICR Touch export — £1.00 variant (PLU pending confirmation)",pricePence:100}
 ];
 // Mixers are saleable products; use the same PLU/price when sold alone or attached to a spirit.
 for(const m of mixerCatalog)if(Number.isInteger(m.pricePence))items.push([m.name,"Soft Drinks",m.pricePence,"bar",null,m.plu]);
