@@ -23,6 +23,6 @@ test("camembert maps to the agreed initial channels", () => {
   assert.equal(item.visibility.sunday,false);
 });
 test("existing items are not enabled for EPOS implicitly",()=>{
-  const [item] = catalogueFromMenus([{id:"main",sections:[{name:"Mains",items:[{id:"a",name:"Dish",price:"£10"}]}]}]}]);
+  const [item] = catalogueFromMenus([{id:"main",sections:[{name:"Mains",items:[{id:"a",name:"Dish",price:"£10"}]}]}]);
   assert.equal(item.visibility.epos,false);
 });
