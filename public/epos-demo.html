@@ -122,7 +122,7 @@ const mixerDefinitions=[
 ];
 function renderModifierButtons(){
  const p=product,box=$("modifierButtons");box.replaceChildren();
- const spirit=p[1]==="Spirits",draught=p[1]==="Draught";
+ const spirit=["Gin","Vodka","Whisky","Brandy","Other Spirits","Spirits"].includes(p[1]),draught=p[1]==="Draught";
  $("modifierHeading").hidden=!(spirit||draught);
  $("modifierHint").textContent=spirit?"Mixer prices must come from the imported EPOS products. Unpriced mixers cannot be added.":draught?"Lager additions are free.":"";
  if(!spirit&&!draught)return;
@@ -148,7 +148,7 @@ function openItem(p){
 $("cancel").onclick=()=>$("dialog").close();
 $("add").onclick=()=>{
  const p=product,m=$("measure").value;
- const spirit=p[1]==="Spirits",draught=p[1]==="Draught";
+ const spirit=["Gin","Vodka","Whisky","Brandy","Other Spirits","Spirits"].includes(p[1]),draught=p[1]==="Draught";
  const option=selectedModifier?(spirit?mixerCatalog:lager.map((name,index)=>({id:"lager-"+index,name,pricePence:0}))).find(x=>x.id===selectedModifier):null;
  if(selectedModifier&&!option)return alert("Modifier not found.");
  if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
