@@ -1,0 +1,64 @@
+name: EPOS staging deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/epos-catalogue-v01
+    paths:
+      - "public/epos-demo.html"
+      - "public/kitchen-display-preview.html"
+      - "public/epos-catalogue-preview.html"
+      - "epos/**"
+      - ".github/workflows/epos-staging.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate EPOS source and tests
+        run: |
+          node --check epos/catalogue.js
+          node --test epos/catalogue.test.js epos/admin-integration.test.js
+      - name: Build isolated EPOS staging package
+        run: |
+          mkdir -p epos-staging
+          cp public/epos-demo.html epos-staging/index.html
+          cp public/kitchen-display-preview.html epos-staging/kitchen.html
+          cp public/epos-catalogue-preview.html epos-staging/catalogue.html
+          cp epos/staging-server.js epos-staging/server.js
+          cp epos/staging-package.json epos-staging/package.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: epos-staging-package
+          path: epos-staging/
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: epos-staging
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: epos-staging-package
+          path: epos-staging
+      - name: Check staging deployment configuration
+        env:
+          TARGET: ${{ vars.EPOS_STAGING_APP_NAME }}
+          PROFILE: ${{ secrets.EPOS_STAGING_PUBLISH_PROFILE }}
+        run: |
+          test -n "$TARGET" || { echo "Set EPOS_STAGING_APP_NAME"; exit 1; }
+          test -n "$PROFILE" || { echo "Set EPOS_STAGING_PUBLISH_PROFILE"; exit 1; }
+          test "$TARGET" != "VLWEB2026" || { echo "Production app is forbidden"; exit 1; }
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.EPOS_STAGING_APP_NAME }}
+          publish-profile: ${{ secrets.EPOS_STAGING_PUBLISH_PROFILE }}
+          package: epos-staging
