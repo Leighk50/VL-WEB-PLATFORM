@@ -1,0 +1,26 @@
+name: Audit TV storage without deploying
+on:
+  push:
+    branches: [tv-storage-audit-20261014c]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read storage metadata only
+        env:
+          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import os,xml.etree.ElementTree as E,urllib.request,json,base64,shlex
+          profiles=E.fromstring(os.environ['PROFILE'])
+          p=next(p for p in profiles if p.get('publishMethod')=='MSDeploy')
+          host=p.get('publishUrl').split(':')[0]
+          auth=base64.b64encode((p.get('userName')+':'+p.get('userPWD')).encode()).decode()
+          command="printf 'Storage directories\\n'; ls -ld /home/site/data /root/site/data /home/site/wwwroot/data 2>/dev/null; printf 'TV file metadata\\n'; find /home/site /root/site -maxdepth 4 -type f \\( -name 'tv-devices.json*' -o -name 'tv-arrivals.json*' -o -name 'hotel-tv.json*' -o -path '*/tv-media/*.mp4' \\) -printf '%p %s bytes %TY-%Tm-%Td %TH:%TM\\n' 2>/dev/null | head -60"
+          req=urllib.request.Request('https://'+host+'/api/command',data=json.dumps({'command':'bash -c "echo '+base64.b64encode(command.encode()).decode()+' | base64 -d | bash"','dir':'/home'}).encode(),headers={'Authorization':'Basic '+auth,'Content-Type':'application/json'})
+          try:
+            with urllib.request.urlopen(req,timeout=90) as r: result=json.load(r)
+            print(result.get('Output',''));print('ExitCode:',result.get('ExitCode'));print(result.get('Error',''))
+          except urllib.error.HTTPError as e:
+            print('Storage audit HTTP status:',e.code);raise SystemExit(1)
+          PY
