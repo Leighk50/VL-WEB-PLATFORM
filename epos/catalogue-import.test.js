@@ -13,7 +13,7 @@ test("draught measures and mixer prices match ICR Touch export",()=>{
    assert.equal(byPLU.get(plu).priceLevelsPence[0],price,plu);
 });
 test("175ml wines are not available and bottle-only wines remain bottle products",()=>{
- for(const p of catalogue.wet.filter(p=>/175\\s*ML/i.test(p.name)))assert.equal(p.available,false);
+ for(const p of catalogue.wet.filter(p=>/175\s*ML/i.test(p.name)))assert.equal(p.available,false);
  assert.equal(catalogue.wet.find(p=>p.plu==="1004").measures.Bottle,2600);
 });
 test("zero and suspicious prices are flagged rather than sold as free",()=>{
