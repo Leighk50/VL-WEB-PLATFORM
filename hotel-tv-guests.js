@@ -1,8 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const dir=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,'site','data'):path.join(__dirname,'data'));
+const {dir,write}=require('./hotel-tv-storage');
 function read(file,fallback){try{return JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'));}catch(e){if(e.code==='ENOENT')return fallback;throw e;}}
-function write(file,value){fs.mkdirSync(dir,{recursive:true});const temp=path.join(dir,file+'.tmp');fs.writeFileSync(temp,JSON.stringify(value));fs.renameSync(temp,path.join(dir,file));}
 function ukParts(date){return Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));}
 function today(now){const p=ukParts(now);return p.year+'-'+p.month+'-'+p.day;}
 function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!isNaN(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s;}

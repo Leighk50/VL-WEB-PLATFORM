@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const dir=process.env.CONTENT_DATA_DIR||(process.env.HOME?path.join(process.env.HOME,'site','data'):path.join(__dirname,'data'));
+const {dir,contentDir,write:writeTvState}=require('./hotel-tv-storage');
 const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
 const {handleGuestTv}=require('./hotel-tv-guests');
@@ -16,7 +16,7 @@ function cleanVideos(value){
  if(!Array.isArray(value)||value.length>6)throw Error('Add up to six video clips.');
  return value.map(v=>{if(!v||typeof v.title!=='string'||!v.title.trim()||v.title.length>120||typeof v.url!=='string'||v.url.length>2000)throw Error('Each clip needs a title and an HTTPS video address.');let address;try{address=new URL(v.url.trim());}catch{throw Error('Invalid video address.');}if(address.protocol!=='https:'||address.username||address.password)throw Error('Video addresses must use HTTPS without login details.');return {title:v.title.trim(),url:address.href};});
 }
-function saveConfig(value){fs.mkdirSync(dir,{recursive:true});if(fs.existsSync(filename))fs.copyFileSync(filename,filename+'.previous');const temp=filename+'.tmp';fs.writeFileSync(temp,JSON.stringify(value,null,2),'utf8');fs.renameSync(temp,filename);}
+function saveConfig(value){writeTvState('hotel-tv.json',value);}
 function publicFeed(content,config,roomId,now=new Date()){
  const room=config.rooms.find(r=>r.id===roomId&&r.enabled);if(!room)return null;
  const text=v=>typeof v==='string'?v:'';
@@ -95,7 +95,7 @@ async function handleHotelTv(req,res,pathname,identity){
  }
  const match=pathname.match(/^\/api\/tv\/rooms\/([1-6])\/content$/);
  if(match){if(req.method!=='GET')return json(res,405,{error:'Method not allowed.'},{Allow:'GET'}),true;
-  const content=JSON.parse(fs.readFileSync(path.join(dir,'content.json'),'utf8').replace(/^\uFEFF/,''));
+  const content=JSON.parse(fs.readFileSync(path.join(contentDir,'content.json'),'utf8').replace(/^\uFEFF/,''));
   const room=Number(match[1]),feed=publicFeed(content,readConfig(),room);if(!feed)return json(res,404,{error:'This room is not enabled.'},{'Access-Control-Allow-Origin':'*'}),true;
   if(new URL(req.url,'http://localhost').searchParams.get('preview')!=='1'){const reported=new URL(req.url,'http://localhost').searchParams.get('appVersion');activity.set(room,{lastRequest:new Date().toISOString(),appVersion:/^\d+\.\d+\.\d+$/.test(reported||'')?reported:null});}
   feed.explore=await explore();feed.airtime=airtime();feed.revision=revision(feed).slice(1,-1);

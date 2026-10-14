@@ -66,3 +66,6 @@ Room 3 confirmed native TV, Home return and power-on startup. Guide and Channel 
 ## Signed diagnostic installer 0.3.3
 
 Published unchanged signed package supplied by Leigh: 103612 bytes, SHA-256 `d46db0932f94f59bdd31531cba71ad63753894e3803e0ec3d7058c56721abc7e`. Room 3 install directory serves matching 0.3.3 manifest. Open Diagnostics, scan installed apps, photograph candidates and supported-key line. Test a Guide/Channel List candidate explicitly; report launch result and whether Home restores menu. No native-guide fix is claimed yet.
+
+## TV state durability
+On Azure App Service, TV settings, approvals, arrivals and uploaded MP4 files use `/home/site/vl-tv-state`, independent of the application container HOME and deployment files. Existing local files are copied on first use without replacing durable files. JSON writes keep the previous version and a current recovery copy in `/home/site/vl-tv-state-backups`. Private records are never included in public deployment artifacts. Before deploying this change, back up the current running application state: a replacement container cannot recover files that existed only inside the previous container. Verify the /home persistent mount on the production service.
