@@ -89,9 +89,9 @@ main aside.panel{position:sticky;top:12px;min-height:calc(100vh - 139px);border-
 .department-tabs button.active{background:#2d7767;color:#fff;border-color:#2d7767}
 .category-tabs{gap:6px}
 .category-tabs button{font-size:13px}
-</style>
+.modifier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.modifier-grid button{margin:0;min-height:55px;padding:9px;font-size:13px;text-align:center}.modifier-grid button.active{background:#2d7767;color:white;border-color:#2d7767}.modifier-grid button:disabled{background:#e8ebea;color:#84918b}#modifierHint{font-size:12px;margin:8px 0}@media(max-width:460px){.modifier-grid{grid-template-columns:1fr 1fr}}</style>
 <header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
-<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label>Modifier<select id="modifier"></select></label><label id="mixerLabel">Mixer charge (£)<input id="mixerPrice" type="number" min="0.01" step="0.01" placeholder="Required for mixers"></label><label>Seat<select id="seat"></select></label><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog>
+<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label>Seat<select id="seat"></select></label><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog>
 <script>
 const tables=[2,6,3,2,2,4,8,6,6,2,2],items=[
 ["Baked Camembert","Starters",1200,"kitchen"],["Soup of the Day","Starters",850,"kitchen"],["Beer-Battered Haddock","Mains",1800,"kitchen"],["Limits Burger","Mains",1800,"kitchen"],["Rib Eye Steak","Mains",3000,"kitchen"],["Moretti","Draught",0,"bar",{"Pint":600,"Half":320}],["Gin (sample)","Spirits",0,"bar",{"Single":450,"Double":700}],["House White (sample)","Wine",0,"bar",{"125ml":550,"250ml":950,"Bottle":2400}],["Reserve Red (sample)","Wine",0,"bar",{"Bottle":3600}]];
@@ -113,8 +113,45 @@ const measureBar=node("div");measureBar.className="measure-bar";const spiritCats
 const grid=node("div");grid.className="grid products";const shown=items.filter(x=>x[1]===category||(spiritCats.includes(category)&&x[1]==="Spirits"&&category==="Gin"));for(const p of shown){const size=preferredMeasures[category]||sizes[0];const amount=p[4]?(p[4][size]??Object.values(p[4])[0]):p[2];const b=button(" ",()=>openItem(p),"product-tile");b.replaceChildren();b.append(node("strong",p[0]),node("small",money(amount)));grid.append(b)}if(!shown.length)screen.append(node("p","No products in this category yet. Products will be added from the ICR Touch import and website menus."));screen.append(grid)}
 if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kitchen orders":"Bar orders"));const orders=state.orders.filter(x=>x.route===view&&x.status!=="collected");if(!orders.length)screen.append(node("p","No outstanding orders"));for(const o of orders){const box=node("section","");box.className="panel";box.append(node("h3",o.origin+" — "+o.status));for(const i of o.items){const l=node("div","1 × "+i.name+(i.measure?" ("+i.measure+")":"")+(i.modifier?" + "+i.modifier:"")+(i.note?" — "+i.note:"")+(i.seat?" · Seat "+i.seat:""));l.className="line";box.append(l)}if(view==="kitchen"){const counts={};o.items.forEach(i=>counts[i.name]=(counts[i.name]||0)+1);box.append(node("strong","DISH SUMMARY"));for(const [name,count] of Object.entries(counts))box.append(node("div",count+" × "+name))}const next={new:"preparing",preparing:"ready",ready:"collected"}[o.status];box.append(button(next==="preparing"?"Start preparing":next==="ready"?"Mark ready":"Mark collected",()=>{o.status=next;save();render()}));screen.append(box)}}
 $("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(!i.sent)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total)}
-function openItem(p){product=p;$("itemTitle").textContent=p[0];const measure=$("measure");measure.replaceChildren();for(const m of Object.keys(p[4]||{"Standard":p[2]}))measure.append(new Option(m,m));if(p[4]&&Object.hasOwn(p[4],preferredMeasures[p[1]]))measure.value=preferredMeasures[p[1]];const modifier=$("modifier");modifier.replaceChildren();modifier.append(new Option("None",""));for(const m of p[1]==="Spirits"?mixers:p[1]==="Draught"?lager:[])modifier.append(new Option(m,m));$("mixerLabel").classList.toggle("hidden",p[1]!=="Spirits");$("mixerPrice").value="";$("note").value="";$("seat").value="";$("dialog").showModal()}
-$("cancel").onclick=()=>$("dialog").close();$("add").onclick=()=>{const p=product,m=$("measure").value,mod=$("modifier").value,extra=p[1]==="Spirits"&&mod?Math.round(Number($("mixerPrice").value)*100):0;if(p[1]==="Spirits"&&mod&&(!Number.isFinite(extra)||extra<=0))return alert("Enter a positive mixer price");current().push({name:p[0],route:p[3],measure:p[4]?m:"",modifier:mod,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});save();$("dialog").close();render()};
+let selectedModifier="";
+/* Product-linked mixer pricing: null means not imported/verified, never free. */
+const mixerCatalog=mixers.map((name,index)=>({id:"mixer-"+index,name,pricePence:null}));
+function renderModifierButtons(){
+ const p=product,box=$("modifierButtons");box.replaceChildren();
+ const spirit=p[1]==="Spirits",draught=p[1]==="Draught";
+ $("modifierHeading").hidden=!(spirit||draught);
+ $("modifierHint").textContent=spirit?"Mixer prices must come from the imported EPOS products. Unpriced mixers cannot be added.":draught?"Lager additions are free.":"";
+ if(!spirit&&!draught)return;
+ const options=spirit?mixerCatalog:lager.map((name,index)=>({id:"lager-"+index,name,pricePence:0}));
+ const none=button("No addition",()=>{selectedModifier="";renderModifierButtons()},selectedModifier===""?"active":"");box.append(none);
+ for(const option of options){
+   const priced=Number.isInteger(option.pricePence)&&option.pricePence>0;
+   const valid=!spirit||priced;
+   const label=option.name+(spirit?(priced?" · "+money(option.pricePence):" · Price pending"):" · Free");
+   const b=button(label,()=>{selectedModifier=option.id;renderModifierButtons()},selectedModifier===option.id?"active":"");
+   b.disabled=!valid;
+   if(!valid)b.title="Awaiting price from the ICR Touch product import";
+   box.append(b);
+ }
+}
+function openItem(p){
+ product=p;selectedModifier="";$("itemTitle").textContent=p[0];
+ const measure=$("measure");measure.replaceChildren();
+ for(const m of Object.keys(p[4]||{"Standard":p[2]}))measure.append(new Option(m,m));
+ if(p[4]&&Object.hasOwn(p[4],preferredMeasures[p[1]]))measure.value=preferredMeasures[p[1]];
+ renderModifierButtons();$("note").value="";$("seat").value="";$("dialog").showModal();
+}
+$("cancel").onclick=()=>$("dialog").close();
+$("add").onclick=()=>{
+ const p=product,m=$("measure").value;
+ const spirit=p[1]==="Spirits",draught=p[1]==="Draught";
+ const option=selectedModifier?(spirit?mixerCatalog:lager.map((name,index)=>({id:"lager-"+index,name,pricePence:0}))).find(x=>x.id===selectedModifier):null;
+ if(selectedModifier&&!option)return alert("Modifier not found.");
+ if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
+ const extra=option?.pricePence||0;
+ current().push({name:p[0],route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
+ save();$("dialog").close();render();
+};
 $("send").onclick=()=>{const pending=current().filter(x=>!x.sent);for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();render();alert("Sent to DEMO queues only — no real printers")};
 $("clear").onclick=()=>{if(confirm("Clear current demo draft?")){if(view==="quick")state.quick=[];else state.tabs[table]=[];save();render()}};
 $("hold").onclick=()=>{if(view!=="quick")return alert("Hold Sale is for Quick Sale only.");if(!state.quick.length)return;state.held.push(structuredClone(state.quick));state.quick=[];save();render();alert("Quick sale held. Use Recall Held to restore it.")};
