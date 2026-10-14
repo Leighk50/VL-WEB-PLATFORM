@@ -5,7 +5,7 @@ if (!(Test-Path $configPath)) { throw "No Tizen project found at $Project. Pass 
 [xml]$config = Get-Content $configPath -Raw
 $application = $config.GetElementsByTagName('application', 'http://tizen.org/ns/widgets')
 if ($application.Count -ne 1) { throw 'The existing Tizen application ID could not be verified.' }
-$source = 'https://raw.githubusercontent.com/Leighk50/VL-WEB-PLATFORM/tv-guest-welcome-120/hotel-tv-client'
+$source = 'https://raw.githubusercontent.com/Leighk50/VL-WEB-PLATFORM/tv-central-volume-121/hotel-tv-client'
 $staging = Join-Path $env:TEMP ('VL-TV-download-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
@@ -19,7 +19,7 @@ try {
         $target = Join-Path $Project $file
         if (Test-Path $target) { Copy-Item $target $backup }
     }
-    foreach ($privilege in @('internet','application.launch','tv.window','tv.channel','tv.inputdevice','system')) {
+    foreach ($privilege in @('tv.audio','internet','application.launch','tv.window','tv.channel','tv.inputdevice','system')) {
         $name = 'http://tizen.org/privilege/' + $privilege
         $exists = @($config.GetElementsByTagName('privilege', 'http://tizen.org/ns/widgets') | Where-Object { $_.GetAttribute('name') -eq $name })
         if ($exists.Count -eq 0) {
@@ -28,10 +28,10 @@ try {
             $config.DocumentElement.AppendChild($element) | Out-Null
         }
     }
-    $config.DocumentElement.SetAttribute('version', '1.2.0')
+    $config.DocumentElement.SetAttribute('version', '1.2.1')
     $config.Save($configPath)
     foreach ($file in $files) { Copy-Item (Join-Path $staging $file) (Join-Path $Project $file) -Force }
-    Write-Host "All-room TV source upgraded to 1.2.0. Backup: $backup"
+    Write-Host "All-room TV source upgraded to 1.2.1. Backup: $backup"
     Write-Host 'Existing application IDs and signing settings preserved. Refresh the project in Tizen Studio, then Build Signed Package and upload the new .wgt for the all-room release candidate.'
 } finally {
     Remove-Item $staging -Recurse -Force
