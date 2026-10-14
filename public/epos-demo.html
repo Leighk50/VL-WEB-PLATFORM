@@ -89,14 +89,29 @@ main aside.panel{position:sticky;top:12px;min-height:calc(100vh - 139px);border-
 .department-tabs button.active{background:#2d7767;color:#fff;border-color:#2d7767}
 .category-tabs{gap:6px}
 .category-tabs button{font-size:13px}
-.modifier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.modifier-grid button{margin:0;min-height:55px;padding:9px;font-size:13px;text-align:center}.modifier-grid button.selected-modifier{background:#16755d!important;color:#fff!important;border:2px solid #0b493a!important;box-shadow:inset 0 0 0 2px #ffffff60,0 3px 10px #0d48382a;font-weight:800}.modifier-grid button.selected-modifier:focus-visible{outline:3px solid #d2b079;outline-offset:2px}.modifier-grid button:disabled{background:#e8ebea;color:#84918b}#modifierHint{font-size:12px;margin:8px 0}@media(max-width:460px){.modifier-grid{grid-template-columns:1fr 1fr}}</style>
-<header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
-<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Seat<select id="seat"></select></label><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog>
+.modifier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.modifier-grid button{margin:0;min-height:55px;padding:9px;font-size:13px;text-align:center}.modifier-grid button.selected-modifier{background:#16755d!important;color:#fff!important;border:2px solid #0b493a!important;box-shadow:inset 0 0 0 2px #ffffff60,0 3px 10px #0d48382a;font-weight:800}.modifier-grid button.selected-modifier:focus-visible{outline:3px solid #d2b079;outline-offset:2px}.modifier-grid button:disabled{background:#e8ebea;color:#84918b}#modifierHint{font-size:12px;margin:8px 0}@media(max-width:460px){.modifier-grid{grid-template-columns:1fr 1fr}}
+.tab-assignment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px}
+.tab-assignment button{margin:0;min-height:48px;padding:8px}
+.tab-assignment .selected-modifier{background:#16755d;color:white;border:2px solid #0b493a}
+.print-bills{background:#253d4a;color:#fff;border-color:#253d4a;margin:6px 0}
+#billPreview{display:none}
+@media print{
+ body>*:not(#billPreview){display:none!important}
+ #billPreview{display:block!important}
+ .bill-sheet{page-break-after:always;padding:18mm;color:#000;font:12pt Arial,sans-serif}
+ .bill-sheet:last-child{page-break-after:auto}
+ .bill-sheet h2{text-align:center}
+ .bill-line{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #bbb;padding:8px 0}
+ .bill-sheet small{display:block;margin:4px 0}
+}
+</style>
+<header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
+<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
 <script>
 const tables=[2,6,3,2,2,4,8,6,6,2,2];let items=[];
 const mixers=["Tonic","Light Tonic","Elderflower Tonic","Mediterranean Tonic","Ginger Ale","Dash Coke","Dash Diet Coke","Dash Lemonade"],lager=["Top","Blackcurrant","Lime"];
 const $=id=>document.getElementById(id),money=n=>"£"+(n/100).toFixed(2),key="vl-epos-main-demo-v1";
-let state;try{state=JSON.parse(localStorage.getItem(key))}catch{}if(!state||!Array.isArray(state.tabs)||state.tabs.length!==11)state={tabs:tables.map(()=>[]),orders:[]};state.quick??=[];state.held??=[];state.payments??=[];
+let state;try{state=JSON.parse(localStorage.getItem(key))}catch{}if(!state||!Array.isArray(state.tabs)||state.tabs.length!==11)state={tabs:tables.map(()=>[]),orders:[]};state.quick??=[];state.held??=[];state.payments??=[];state.tableTabs??=tables.map(()=>["Tab 1"]);state.tableTabs=state.tableTabs.map(x=>Array.isArray(x)&&x.length?x:["Tab 1"]);
 let department="Drinks";const categoryGroups={Food:["Starters","Mains","Specials","Desserts","Sunday"],Drinks:["Draught","Bottles","Gin","Vodka","Whisky","Brandy","Other Spirits","Soft Drinks","Wine"]};let table=0,view="quick",category="Draught",product=null,preferredMeasures={Draught:"Pint",Spirits:"Single",Wine:"125ml","Soft Drinks":"Small"};const current=()=>view==="quick"?state.quick:state.tabs[table];const label=()=>view==="quick"?"Quick Sale":"Table "+(table+1);
 const save=()=>localStorage.setItem(key,JSON.stringify(state));
 function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n}
@@ -110,9 +125,9 @@ if(view==="till"||view==="quick"){screen.append(node("h2",view==="quick"?"Quick 
 const tabs=node("div");tabs.className="category-tabs";for(const c of categoryGroups[department]){const b=button(c,()=>{category=c;render()},category===c?"active":"");tabs.append(b)}screen.append(tabs);
 const measureBar=node("div");measureBar.className="measure-bar";const spiritCats=["Gin","Vodka","Whisky","Brandy","Other Spirits","Spirits"];const sizes=category==="Draught"?["Pint","Half"]:spiritCats.includes(category)?["Single","Double"]:category==="Wine"?["125ml","250ml","Bottle"]:category==="Soft Drinks"?["Small","Large"]:[];for(const size of sizes){const b=button(size,()=>{preferredMeasures[category]=size;render()},(preferredMeasures[category]||sizes[0])===size?"active":"");measureBar.append(b)}if(sizes.length)screen.append(measureBar);
 const grid=node("div");grid.className="grid products";const shown=items.filter(x=>x[1]===category);for(const p of shown){const size=preferredMeasures[category]||sizes[0];const amount=p[4]?(p[4][size]??Object.values(p[4])[0]):p[2];const b=button(" ",()=>openItem(p),"product-tile");b.replaceChildren();b.append(node("strong",p[0]),node("small",money(amount)));grid.append(b)}if(!shown.length)screen.append(node("p","No products in this category yet. Products will be added from the ICR Touch import and website menus."));screen.append(grid)}
-if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kitchen orders":"Bar orders"));const orders=state.orders.filter(x=>x.route===view&&x.status!=="collected");if(!orders.length)screen.append(node("p","No outstanding orders"));for(const o of orders){const box=node("section","");box.className="panel";box.append(node("h3",o.origin+" — "+o.status));for(const i of o.items){const l=node("div","1 × "+i.name+(i.measure?" ("+i.measure+")":"")+(i.modifier?" + "+i.modifier:"")+(i.garnishes?.length?" + "+i.garnishes.join(" + "):"")+(i.note?" — "+i.note:"")+(i.seat?" · Seat "+i.seat:""));l.className="line";box.append(l)}if(view==="kitchen"){const counts={};o.items.forEach(i=>counts[i.name]=(counts[i.name]||0)+1);box.append(node("strong","DISH SUMMARY"));for(const [name,count] of Object.entries(counts))box.append(node("div",count+" × "+name))}const next={new:"preparing",preparing:"ready",ready:"collected"}[o.status];box.append(button(next==="preparing"?"Start preparing":next==="ready"?"Mark ready":"Mark collected",()=>{o.status=next;save();render()}));screen.append(box)}}
-$("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(!i.sent)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total)}
-let selectedModifier="";let selectedGarnishes=[];const garnishOptions=["Ice","Lemon","Lime"];
+if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kitchen orders":"Bar orders"));const orders=state.orders.filter(x=>x.route===view&&x.status!=="collected");if(!orders.length)screen.append(node("p","No outstanding orders"));for(const o of orders){const box=node("section","");box.className="panel";box.append(node("h3",o.origin+" — "+o.status));for(const i of o.items){const l=node("div","1 × "+i.name+(i.measure?" ("+i.measure+")":"")+(i.tab?" ["+i.tab+"]":"")+(i.modifier?" + "+i.modifier:"")+(i.garnishes?.length?" + "+i.garnishes.join(" + "):"")+(i.note?" — "+i.note:"")+(i.seat?" · Seat "+i.seat:""));l.className="line";box.append(l)}if(view==="kitchen"){const counts={};o.items.forEach(i=>counts[i.name]=(counts[i.name]||0)+1);box.append(node("strong","DISH SUMMARY"));for(const [name,count] of Object.entries(counts))box.append(node("div",count+" × "+name))}const next={new:"preparing",preparing:"ready",ready:"collected"}[o.status];box.append(button(next==="preparing"?"Start preparing":next==="ready"?"Mark ready":"Mark collected",()=>{o.status=next;save();render()}));screen.append(box)}}
+$("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",(view==="quick"?"":(i.tab||"Tab 1")+" · ")+i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(!i.sent)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total);$("printBills").hidden=view!=="till";}
+let selectedModifier="";let selectedTab="Tab 1";let selectedGarnishes=[];const garnishOptions=["Ice","Lemon","Lime"];
 /* Product-linked mixer pricing: null means not imported/verified, never free. */
 let mixerCatalog=[];
 const mixerDefinitions=[
@@ -139,12 +154,13 @@ function renderModifierButtons(){
    box.append(b);
  }
 }
+function renderTabAssignment(){const box=$("tabAssignment");box.replaceChildren();const options=view==="quick"?["Quick Sale"]:state.tableTabs[table];for(const name of options){const active=selectedTab===name;const b=button((active?"✓  ":"")+name,()=>{selectedTab=name;renderTabAssignment()},active?"selected-modifier":"");b.setAttribute("aria-pressed",String(active));box.append(b)}if(view!=="quick")box.append(button("+ New Tab",()=>{const tabs=state.tableTabs[table];let n=1;while(tabs.includes("Tab "+n))n++;selectedTab="Tab "+n;tabs.push(selectedTab);save();renderTabAssignment()}));}
 function openItem(p){
- product=p;selectedModifier="";selectedGarnishes=[];$("itemTitle").textContent=p[0];
+ product=p;selectedModifier="";selectedGarnishes=[];selectedTab=view==="quick"?"Quick Sale":state.tableTabs[table][0];$("itemTitle").textContent=p[0];
  const measure=$("measure");measure.replaceChildren();
  for(const m of Object.keys(p[4]||{"Standard":p[2]}))measure.append(new Option(m,m));
  if(p[4]&&Object.hasOwn(p[4],preferredMeasures[p[1]]))measure.value=preferredMeasures[p[1]];
- renderModifierButtons();renderGarnishButtons();$("note").value="";$("seat").value="";$("dialog").showModal();
+ renderModifierButtons();renderGarnishButtons();renderTabAssignment();$("note").value="";$("seat").value="";$("dialog").showModal();
 }
 $("cancel").onclick=()=>$("dialog").close();
 $("add").onclick=()=>{
@@ -154,9 +170,33 @@ $("add").onclick=()=>{
  if(selectedModifier&&!option)return alert("Modifier not found.");
  if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
  const extra=option?.pricePence||0;
- current().push({name:p[0],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
+ current().push({name:p[0],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],tab:view==="quick"?"Quick Sale":selectedTab,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),seat:$("seat").value,sent:false});
  save();$("dialog").close();render();
 };
+function printTableBills(){
+ if(view!=="till"){alert("Select a table first to print its split bills.");return}
+ const lines=state.tabs[table];if(!lines.length){alert("This table has no items.");return}
+ const target=$("billPreview");target.replaceChildren();
+ const tabs=state.tableTabs[table].filter(name=>lines.some(x=>(x.tab||"Tab 1")===name));
+ const extras=[...new Set(lines.map(x=>x.tab||"Tab 1"))].filter(name=>!tabs.includes(name));
+ for(const tabName of [...tabs,...extras]){
+   const billLines=lines.filter(x=>(x.tab||"Tab 1")===tabName);
+   const bill=node("section");bill.className="bill-sheet";
+   bill.append(node("h2","The Village Limits"),node("h3","Table "+(table+1)+" — "+tabName));
+   let sum=0;
+   for(const line of billLines){
+     sum+=line.price;
+     const item=node("div");item.className="bill-line";
+     item.append(node("span",line.name+(line.measure?" · "+line.measure:"")),node("strong",money(line.price)));
+     bill.append(item);
+     if(line.modifier)bill.append(node("small","↳ "+line.modifier));
+     if(line.garnishes?.length)bill.append(node("small","↳ "+line.garnishes.join(", ")));
+   }
+   bill.append(node("h3","Total "+money(sum)));target.append(bill);
+ }
+ window.print();
+}
+$("printBills").onclick=printTableBills;
 $("send").onclick=()=>{const pending=current().filter(x=>!x.sent);for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();render();alert("Sent to DEMO queues only — no real printers")};
 $("clear").onclick=()=>{if(confirm("Clear current demo draft?")){if(view==="quick")state.quick=[];else state.tabs[table]=[];save();render()}};
 $("hold").onclick=()=>{if(view!=="quick")return alert("Hold Sale is for Quick Sale only.");if(!state.quick.length)return;state.held.push(structuredClone(state.quick));state.quick=[];save();render();alert("Quick sale held. Use Recall Held to restore it.")};
@@ -185,5 +225,5 @@ async function loadCatalogue(){
    msg.className="muted";box.prepend(msg);
  }
 }
-for(let i=1;i<=12;i++)$("seat").append(new Option(String(i),String(i)));$("seat").prepend(new Option("Unassigned",""));render();loadCatalogue();
+render();loadCatalogue();
 </script></html>
