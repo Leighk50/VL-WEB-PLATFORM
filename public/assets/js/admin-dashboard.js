@@ -118,6 +118,12 @@
       ${sundayOption ? `<label class="switchline"><input type="checkbox" data-dish="includeOnSunday" ${d.includeOnSunday === true ? "checked" : ""}> Include on Sunday</label>` : ""}
       <label>Description<textarea data-dish="description">${esc(d.description || "")}</textarea></label>
       <label>Allergens<input data-dish="allergens" value="${esc(d.allergens || "")}"></label>
+      <div class="row-2">
+        <label class="switchline"><input type="checkbox" data-dish="showOnEpos" ${d.showOnEpos === true ? "checked" : ""}> Show on EPOS</label>
+        <label class="switchline"><input type="checkbox" data-dish="showOnWebsite" ${d.showOnWebsite !== false ? "checked" : ""}> Show on website</label>
+      </div>
+      <label>Serving sizes (drinks/wine)<input data-dish="servingSizesText" value="${esc(d.servingSizesText || "")}" placeholder="125ml, 175ml, 250ml, Bottle"></label>
+      <label>Wine tasting notes<textarea data-dish="tastingNotes">${esc(d.tastingNotes || "")}</textarea></label>
     </div>`;
   }
 
@@ -169,7 +175,7 @@
     const tabs = $("#menuTabs");
     tabs.innerHTML = "";
     if (!content.menus.some(menu => menu.id === activeMenuId)) activeMenuId = content.menus[0]?.id;
-    const preferredOrder = ["main", "sunday", "specials", "desserts"];
+    const preferredOrder = ["main", "sunday", "specials", "desserts", "drinks", "wine"];
     const orderedMenus = [...content.menus].sort((a,b) => {
       const rank = menu => preferredOrder.includes(menu.id) ? preferredOrder.indexOf(menu.id) : preferredOrder.length;
       return rank(a) - rank(b);
