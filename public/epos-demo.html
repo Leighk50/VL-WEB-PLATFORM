@@ -126,7 +126,7 @@ const tabs=node("div");tabs.className="category-tabs";for(const c of categoryGro
 const measureBar=node("div");measureBar.className="measure-bar";const spiritCats=["Gin","Vodka","Whisky","Brandy","Other Spirits","Spirits"];const sizes=category==="Draught"?["Pint","Half"]:spiritCats.includes(category)?["Single","Double"]:category==="Wine"?["125ml","250ml","Bottle"]:category==="Soft Drinks"?["Small","Large"]:[];for(const size of sizes){const b=button(size,()=>{preferredMeasures[category]=size;render()},(preferredMeasures[category]||sizes[0])===size?"active":"");measureBar.append(b)}if(sizes.length)screen.append(measureBar);
 const grid=node("div");grid.className="grid products";const shown=items.filter(x=>x[1]===category);for(const p of shown){const size=preferredMeasures[category]||sizes[0];const amount=p[4]?(p[4][size]??Object.values(p[4])[0]):p[2];const b=button(" ",()=>openItem(p),"product-tile");b.replaceChildren();b.append(node("strong",p[0]),node("small",money(amount)));grid.append(b)}if(!shown.length)screen.append(node("p","No products in this category yet. Products will be added from the ICR Touch import and website menus."));screen.append(grid)}
 if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kitchen orders":"Bar orders"));const orders=state.orders.filter(x=>x.route===view&&x.status!=="collected");if(!orders.length)screen.append(node("p","No outstanding orders"));for(const o of orders){const box=node("section","");box.className="panel";box.append(node("h3",o.origin+" — "+o.status));for(const i of o.items){const l=node("div","1 × "+i.name+(i.measure?" ("+i.measure+")":"")+(i.tab?" ["+i.tab+"]":"")+(i.modifier?" + "+i.modifier:"")+(i.garnishes?.length?" + "+i.garnishes.join(" + "):"")+(i.note?" — "+i.note:"")+(i.seat?" · Seat "+i.seat:""));l.className="line";box.append(l)}if(view==="kitchen"){const counts={};o.items.forEach(i=>counts[i.name]=(counts[i.name]||0)+1);box.append(node("strong","DISH SUMMARY"));for(const [name,count] of Object.entries(counts))box.append(node("div",count+" × "+name))}const next={new:"preparing",preparing:"ready",ready:"collected"}[o.status];box.append(button(next==="preparing"?"Start preparing":next==="ready"?"Mark ready":"Mark collected",()=>{o.status=next;save();render()}));screen.append(box)}}
-$("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",(view==="quick"?"":(i.tab||"Tab 1")+" · ")+i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(!i.sent)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total);$("printBills").hidden=view!=="till";}
+$("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;current().forEach((i,index)=>{total+=i.price;const line=node("div",(view==="quick"?"":(i.tab||"Tab 1")+" · ")+i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(i.paid)line.append(node("small","PAID"));if(!i.sent&&!i.paid)line.append(button("Remove",()=>{current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Total "+money(total);$("printBills").hidden=view!=="till";}
 let selectedModifier="";let selectedTab="Tab 1";let selectedGarnishes=[];const garnishOptions=["Ice","Lemon","Lime"];
 /* Product-linked mixer pricing: null means not imported/verified, never free. */
 let mixerCatalog=[];
@@ -200,7 +200,26 @@ $("printBills").onclick=printTableBills;
 $("send").onclick=()=>{const pending=current().filter(x=>!x.sent);for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();render();alert("Sent to DEMO queues only — no real printers")};
 $("clear").onclick=()=>{if(confirm("Clear current demo draft?")){if(view==="quick")state.quick=[];else state.tabs[table]=[];save();render()}};
 $("hold").onclick=()=>{if(view!=="quick")return alert("Hold Sale is for Quick Sale only.");if(!state.quick.length)return;state.held.push(structuredClone(state.quick));state.quick=[];save();render();alert("Quick sale held. Use Recall Held to restore it.")};
-$("pay").onclick=()=>{const total=current().reduce((sum,x)=>sum+x.price,0);if(!total)return alert("No items to pay.");const method=prompt("Demo payment method: enter CASH or CARD","CARD");if(method===null)return;const m=method.trim().toUpperCase();if(!["CASH","CARD"].includes(m))return alert("Choose CASH or CARD.");if(!confirm("Record "+money(total)+" as "+m+"? No actual payment is taken."))return;state.payments.push({origin:label(),method:m,amount:total,at:new Date().toISOString()});if(view==="quick")state.quick=[];else state.tabs[table]=[];save();render();alert("Demo payment recorded. No card terminal was charged.")};
+$("pay").onclick=()=>{
+ let chosen=null,lines=current();
+ if(view==="till"){
+   const available=[...new Set(lines.filter(x=>!x.paid).map(x=>x.tab||"Tab 1"))];
+   if(!available.length)return alert("No unpaid tabs on this table.");
+   const requested=prompt("Which tab is paying?\n"+available.join("\n"),available[0]);
+   if(requested===null)return;
+   if(!available.includes(requested.trim()))return alert("Select one of the listed tabs.");
+   chosen=requested.trim();
+   lines=lines.filter(x=>(x.tab||"Tab 1")===chosen&&!x.paid);
+ }else if(view!=="quick")return alert("Select Quick Sale or a table before recording payment.");
+ const total=lines.reduce((sum,x)=>sum+x.price,0);
+ if(!total)return alert("No unpaid items.");
+ const method=prompt("Demo payment method: CASH or CARD","CARD");if(method===null)return;
+ const m=method.trim().toUpperCase();if(!["CASH","CARD"].includes(m))return alert("Choose CASH or CARD.");
+ if(!confirm("Record "+money(total)+" for "+(chosen||"Quick Sale")+" as "+m+"? No actual payment is taken."))return;
+ state.payments.push({origin:label(),tab:chosen,method:m,amount:total,at:new Date().toISOString()});
+ if(view==="quick")state.quick=[];else lines.forEach(x=>x.paid=true);
+ save();render();alert("Demo payment recorded for "+(chosen||"Quick Sale")+". No card terminal was charged.");
+};
 async function loadCatalogue(){
  try{
    const response=await fetch("/catalogue-data.json",{cache:"no-store"});
