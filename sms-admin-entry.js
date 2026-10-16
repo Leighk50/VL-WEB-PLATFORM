@@ -10,7 +10,7 @@ const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
 const WEBEX_TOKEN = process.env.WEBEX_INTERACT_TOKEN || process.env.WEBEX_API_TOKEN || process.env.WEBEX_TOKEN || process.env["Webex API"] || "";
 const WEBEX_ENDPOINT = "https://api.webexinteract.com/v1/sms";
 const DATA_DIR = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, "site", "data") : path.join(__dirname, "data"));
-const KEY_SAFE_FILE = path.join(DATA_DIR, "key-safe-codes.json");
+const keySafeStorage = require("./key-safe-storage").createStorage();
 const CONTENT_FILE = path.join(DATA_DIR, "content.json");
 const ALLOWED_SENDERS = new Map([
   ["447860008022", "+447860008022"],
@@ -77,35 +77,9 @@ function readJsonBody(req, max = 100000) {
   });
 }
 
-function emptyCodes() {
-  return {"1":"","2":"","3":"","4":"","5":"","6":""};
-}
+function readKeySafeCodes() { return keySafeStorage.read(); }
 
-function readKeySafeCodes() {
-  try {
-    const saved = JSON.parse(fs.readFileSync(KEY_SAFE_FILE, "utf8"));
-    const codes = emptyCodes();
-    for (let room = 1; room <= 6; room++) codes[String(room)] = String(saved[String(room)] || "");
-    return codes;
-  } catch {
-    return emptyCodes();
-  }
-}
-
-function writeKeySafeCodes(input) {
-  fs.mkdirSync(DATA_DIR, {recursive:true});
-  const codes = emptyCodes();
-  for (let room = 1; room <= 6; room++) {
-    const value = String((input || {})[String(room)] || "").trim();
-    if (value && !/^\d{1,12}$/.test(value)) throw new Error(`Room ${room} code must contain digits only.`);
-    codes[String(room)] = value;
-  }
-  const temp = KEY_SAFE_FILE + ".tmp";
-  fs.writeFileSync(temp, JSON.stringify(codes, null, 2), {encoding:"utf8", mode:0o600});
-  fs.renameSync(temp, KEY_SAFE_FILE);
-  try { fs.chmodSync(KEY_SAFE_FILE, 0o600); } catch {}
-  return codes;
-}
+function writeKeySafeCodes(input) { return keySafeStorage.write(input); }
 
 // Remove any key-safe values that an earlier draft may have placed in the public content store.
 function scrubLegacyPublicCodes() {
