@@ -1,6 +1,6 @@
 "use strict";
 const http=require("node:http"),fs=require("node:fs"),path=require("node:path");
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/catalogue-data.json":"catalogue-data.json"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/catalogue-data.json":"catalogue-data.json"};
 http.createServer((req,res)=>{
  const route=(req.url||"/").split("?")[0];
  if(req.method!=="GET"||!Object.hasOwn(files,route)){res.writeHead(404,{"Content-Type":"text/plain","Cache-Control":"no-store"});return res.end("Not found")}
