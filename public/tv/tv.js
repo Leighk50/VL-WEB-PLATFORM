@@ -85,6 +85,7 @@ function applyRemoteVolumeTest(command){
  var report=new XMLHttpRequest();report.open('POST',origin+'/api/tv/rooms/1/volume-result',true);report.timeout=10000;report.setRequestHeader('Content-Type','application/json');report.setRequestHeader('X-TV-Token',guestToken);try{report.send(JSON.stringify(result));}catch(e){}
 }
 
+function departureMessage(value){return value&&Date.parse(value.expiresAt)>Date.now()&&value.isCheckoutDay===true&&typeof value.checkoutMessage==='string'&&value.checkoutMessage.length<=500?value.checkoutMessage:'';}
 function renderRoomSetup(){
  view='setup';document.getElementById('room').textContent='TV SETUP';heading('ONE APP, EVERY ROOM','Assign this television','Select the room this TV is installed in. This is saved on the TV and does not change Airtime verification.');
  var choices=node('div','','room-choices');for(var i=1;i<=6;i++)(function(id){choices.appendChild(action('Room '+id,function(){assignRoom(id);}));})(i);panel.appendChild(choices);status.textContent='Staff setup · Select a room and press OK';var list=choices.querySelectorAll('[data-action]');if(list[setupIndex])list[setupIndex].focus();
@@ -106,7 +107,7 @@ function render(){
  if(view==='staff-pin'){renderStaffPIN();
  }else if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',guestWelcome&&Date.parse(guestWelcome.expiresAt)>Date.now()?'Welcome, '+guestWelcome.name:(data?data.pages[0].title:'Make yourself at home'),'A little comfort. A good meal. Something to look forward to.');
-  var copy=node('div','','welcome-copy');copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
+  var departure=departureMessage(guestWelcome);var copy=node('div','','welcome-copy'+(departure?' checkout-reminder':''));if(departure){copy.appendChild(node('strong','Before you leave'));copy.appendChild(node('p',departure));}else copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
   var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Use GUIDE for channel selection and Return for the hotel menu.');
@@ -184,7 +185,7 @@ function renderStay(){
   dishes.forEach(function(dish){var row=node('div','','item');row.appendChild(node('strong',dish[0]));row.appendChild(node('p',dish[1]));row.appendChild(node('p','Allergens: '+dish[2],'allergens'));panel.appendChild(row);});
   guestCard('Hot Drinks','Pot of tea · Americano · Latte · Cappuccino · Hot chocolate');
   guestCard('Allergies & Intolerances','Please advise a member of our team if anyone in your party has a food allergy or intolerance. We cannot guarantee that items are completely allergen-free, as our kitchen contains ingredients with allergens.\n\nC: Crustaceans · Ce: Celery · D: Dairy · E: Eggs · F: Fish · P: Peanuts · G: Gluten · L: Lupin · N: Nuts · M: Molluscs · Mu: Mustard · S: Soya · Sd: Sulphur dioxide · Se: Sesame seeds');
- }else if(staySection==='checkout')guestCard('Checkout','Monday–Friday: by 10am\nSaturday & Sunday: by 11am\n\nPlease leave your room key in your room when you depart.\n\nThank you for staying at The Village Limits. We hope to welcome you back soon.');
+ }else if(staySection==='checkout')guestCard('Checkout','Monday–Friday: by 10am\nSaturday & Sunday: by 11am\n\nWhen you are ready to check out, please leave your keys in your room and close the door behind you.\n\nThank you for staying at The Village Limits. We hope to welcome you back soon.');
  else if(staySection==='heating'){
   guestCard('Radiator Heating','Each radiator has a thermostatic valve. Turn it towards a higher number for more warmth or a lower number for less warmth. The radiator may cool down once the room reaches the selected temperature.');
   guestCard('Fujitsu Air Conditioning','1. Press the power button at the bottom right of the wall controller to turn it on or off.\n2. Use ◀ ▶ to highlight Mode, then ▲ ▼ to select Cool or Heat, where available.\n3. Use ◀ ▶ to highlight Set temp., then ▲ ▼ to adjust the temperature.\n4. Highlight Fan to adjust the fan speed. Auto is a simple choice.\n\nKeep windows and doors closed while it is running. Please speak to our team if you need help.');
@@ -354,7 +355,7 @@ function renderDiagnostics(){
  panel.appendChild(action(diagAll?'Show Guide / Channel List candidates':'Show all app IDs',function(){diagAll=!diagAll;diagPage=0;render();}));
  var keyNames=diagKeys.filter(function(k){return /guide|channel|home/i.test(k.name);}).map(function(k){return k.name+' ('+k.code+')';});
  panel.appendChild(node('p','Private guest welcome TV code: '+(guestPairCode||'Waiting for connection')+'. Approve this code for Room '+room+' in the TV back office.'));
- panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Version 1.2.1. Programme details and schedule diagnostics available. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
+ panel.appendChild(node('p','Supported relevant keys: '+(keyNames.join(', ')||'none reported')+'. Version 1.2.2. Programme details and schedule diagnostics available. GUIDE opens an in-widget channel selector during embedded TV. Choose a channel with arrows and OK, then press GUIDE again. The native EPG test button still hands over to Samsung TV.'));
  var apps=diagApps?(diagAll?diagApps:diagApps.filter(diagCandidate)):[];
  if(diagApps&&!apps.length)panel.appendChild(node('p','No matching Guide / Channel List apps were reported. Show all app IDs to inspect the inventory.'));
  var pages=Math.max(1,Math.ceil(apps.length/6));diagPage=Math.min(diagPage,pages-1);
@@ -418,7 +419,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.1'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.2'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}

@@ -7,7 +7,15 @@ function today(now){const p=ukParts(now);return p.year+'-'+p.month+'-'+p.day;}
 function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!isNaN(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s;}
 function checkoutTime(day){const d=new Date(day+'T12:00:00Z'),weekend=[0,6].includes(d.getUTCDay()),base=new Date(day+'T'+(weekend?'11':'10')+':00:00Z'),p=ukParts(base),local=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute);return new Date(base.getTime()-(local-base.getTime())).toISOString();}
 function cleanArrivals(items){if(!Array.isArray(items)||items.length>1000)throw Error('Invalid booking import.');return items.map(r=>{if(!r||!Number.isInteger(r.room)||r.room<1||r.room>6||!validDate(r.checkin)||!validDate(r.checkout)||r.checkout<=r.checkin)throw Error('Invalid booking dates or room.');const first=String(r.first||'').trim(),last=String(r.last||'').trim();if(!first||!last||first.length>80||last.length>100||/[\x00-\x1f<>]/.test(first+last))throw Error('Invalid guest name.');return {room:r.room,first,last,checkin:r.checkin,checkout:r.checkout};});}
-function activeWelcome(items,room,now=new Date()){const matches=items.filter(r=>r.room===room&&r.checkin<=today(now)&&Date.parse(checkoutTime(r.checkout))>now.getTime());if(matches.length!==1)return null;const r=matches[0];return {name:r.first+' '+r.last,expiresAt:checkoutTime(r.checkout)};}
+function activeWelcome(items,room,now=new Date()){
+ const day=today(now),time=now.getTime();
+ // Arrival-day welcomes start after the outgoing checkout cutoff, never at midnight.
+ const matches=items.filter(r=>r.room===room&&Date.parse(checkoutTime(r.checkin))<=time&&Date.parse(checkoutTime(r.checkout))>time);
+ if(matches.length!==1)return null;
+ const r=matches[0],expiresAt=checkoutTime(r.checkout),isCheckoutDay=r.checkout===day;
+ const weekend=[0,6].includes(new Date(r.checkout+'T12:00:00Z').getUTCDay()),checkoutLabel=weekend?'11am':'10am';
+ return {name:r.first+' '+r.last,expiresAt,isCheckoutDay,checkoutLabel,checkoutMessage:isCheckoutDay?'Thank you for staying at The Village Limits. Checkout today is by '+checkoutLabel+'. When you are ready to check out, please leave your keys in your room and close the door behind you.':''};
+}
 async function payload(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>256000)throw Error('Import too large.');}return JSON.parse(text);}
 function hash(token){return crypto.createHash('sha256').update(token).digest('hex');}
 function devices(){return read('tv-devices.json',[]).filter(d=>d.approved||Date.now()-Date.parse(d.created)<86400000);}
