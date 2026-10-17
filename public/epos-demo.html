@@ -117,7 +117,7 @@ const save=()=>localStorage.setItem(key,JSON.stringify(state));
 function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n}
 function button(text,fn){const b=node("button",text);b.onclick=fn;return b}
 function show(v){view=v;render()}
-function render(){const nav=$("nav");nav.replaceChildren();for(const v of ["quick","tables","till","kitchen","bar"]){const b=button(v.toUpperCase(),()=>show(v));if(view===v)b.className="active";nav.append(b)}
+function render(){const nav=$("nav");nav.replaceChildren();for(const v of ["quick","tables","till","kitchen","bar","manager"]){const b=button(v.toUpperCase(),()=>v==="manager"?location.assign("/manager"):show(v));if(view===v)b.className="active";nav.append(b)}
 const screen=$("screen");screen.replaceChildren();
 if(view==="tables"){screen.append(node("h2","Table plan"));const grid=node("div","");grid.className="grid";tables.forEach((covers,i)=>grid.append(button("Table "+(i+1)+" · "+covers+" covers"+(i<2?" · Dog":"")+" · "+state.tabs[i].length+" items",()=>{table=i;show("till")})));screen.append(grid)}
 if(view==="quick"&&state.held.length){screen.append(button("Recall Held Sale ("+state.held.length+")",()=>{if(state.quick.length)return alert("Clear or hold the current quick sale first.");state.quick=state.held.pop();save();render()}))}
