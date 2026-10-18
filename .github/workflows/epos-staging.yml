@@ -31,7 +31,7 @@ jobs:
       - name: Validate EPOS source and tests
         run: |
           node --check epos/catalogue.js
-          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js
+          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js
       - name: Build isolated EPOS staging package
         run: |
           mkdir -p epos-staging
