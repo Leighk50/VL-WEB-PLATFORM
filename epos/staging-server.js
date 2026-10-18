@@ -17,7 +17,7 @@ http.createServer(async(req,res)=>{
   let device;
   try{device=await authenticateDevice(pool,req)}catch(e){console.error("Till authentication unavailable",e.code||"error");return json(503,{error:"authentication_unavailable"})}
   if(!device||device.kind!=="till")return json(401,{error:"till_registration_required"});
-  const match=route.match(/^\\/api\\/till\\/tables\\/(\\d{1,2})$/);
+  const match=/^\/api\/till\/tables\/(\d{1,2})$/.exec(route);
   if(!match)return json(404,{error:"unknown_endpoint"});
   const tableId=Number(match[1]);
   if(!Number.isInteger(tableId)||tableId<1||tableId>11)return json(400,{error:"invalid_table"});
@@ -30,7 +30,6 @@ http.createServer(async(req,res)=>{
   try{
    for await(const chunk of req){body+=chunk;if(body.length>12000)return json(413,{error:"payload_too_large"})}
    const data=JSON.parse(body);
-   if(route.endsWith("/open"))return json(404,{error:"unknown_endpoint"});
    if(data.action==="open")return json(200,await sharedTill.openTable(pool,{tableId}));
    if(data.action==="addTab"){
     const session=await sharedTill.getSession(pool,tableId);
