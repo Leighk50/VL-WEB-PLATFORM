@@ -1,11 +1,25 @@
 "use strict";
 const http=require("node:http"),fs=require("node:fs"),path=require("node:path");
 const {Pool}=require("pg");
+const {authenticated,getTableSnapshot}=require("./shared-read-api");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
 const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/catalogue-data.json":"catalogue-data.json"};
 http.createServer((req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route==="/api/shared/tables"){
+   res.setHeader("Content-Type","application/json; charset=utf-8");
+   res.setHeader("Cache-Control","no-store");
+   if(req.method!=="GET"){res.writeHead(405);return res.end(JSON.stringify({error:"method_not_allowed"}))}
+   if(!authenticated(req,process.env.EPOS_STAGING_API_KEY)){res.writeHead(401);return res.end(JSON.stringify({error:"unauthorised"}))}
+   if(!pool){res.writeHead(503);return res.end(JSON.stringify({error:"database_unavailable"}))}
+   return getTableSnapshot(pool).then(tables=>{
+     res.writeHead(200);res.end(JSON.stringify({tables}))
+   }).catch(err=>{
+     console.error("Shared EPOS snapshot error",err.code||"query_failed");
+     res.writeHead(503);res.end(JSON.stringify({error:"snapshot_unavailable"}))
+   });
+ }
  if(route==="/health/database"){
    res.setHeader("Content-Type","application/json; charset=utf-8");
    res.setHeader("Cache-Control","no-store");
