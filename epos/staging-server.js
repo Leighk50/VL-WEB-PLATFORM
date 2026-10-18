@@ -3,11 +3,31 @@ const http=require("node:http"),fs=require("node:fs"),path=require("node:path");
 const {Pool}=require("pg");
 const {authenticated,getTableSnapshot}=require("./shared-read-api");
 const {authenticateDevice}=require("./device-auth");
+const {startPairing,redeemPairing}=require("./device-pairing");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/catalogue-data.json":"catalogue-data.json"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/catalogue-data.json":"catalogue-data.json"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route==="/api/devices/pair"||route==="/api/devices/redeem"){
+  res.setHeader("Content-Type","application/json; charset=utf-8");
+  res.setHeader("Cache-Control","no-store");
+  if(req.method!=="POST"){res.writeHead(405);return res.end(JSON.stringify({error:"method_not_allowed"}))}
+  if(!pool){res.writeHead(503);return res.end(JSON.stringify({error:"database_unavailable"}))}
+  if(route==="/api/devices/pair"&&!authenticated(req,process.env.EPOS_STAGING_API_KEY)){
+   res.writeHead(401);return res.end(JSON.stringify({error:"unauthorised"}));
+  }
+  let body="";
+  try{
+   for await(const part of req){body+=part;if(body.length>4096)throw Error("Payload too large")}
+   const input=JSON.parse(body);
+   const result=route==="/api/devices/pair"?await startPairing(pool,input):await redeemPairing(pool,input.code);
+   res.writeHead(200);return res.end(JSON.stringify(result));
+  }catch(err){
+   console.error("Device pairing rejected",err.code||err.message);
+   res.writeHead(400);return res.end(JSON.stringify({error:"pairing_failed"}));
+  }
+ }
  if(route==="/api/shared/tables"){
    res.setHeader("Content-Type","application/json; charset=utf-8");
    res.setHeader("Cache-Control","no-store");
