@@ -15,7 +15,7 @@ async function startPairing(pool,{deviceCode,kind,name}){
    ON CONFLICT(venue_id,code) DO UPDATE SET display_name=EXCLUDED.display_name
    RETURNING id,kind,enabled`,[randomUUID(),venueId,deviceCode,name,kind]);
   if(!dev.rows[0].enabled||dev.rows[0].kind!==kind)throw Error("Device disabled or type mismatch");
-  await client.query("DELETE FROM epos_device_pairings WHERE device_id=$1",[dev.rows[0].id]);
+  await client.query("UPDATE epos_device_pairings SET expires_at=now() WHERE device_id=$1 AND redeemed_at IS NULL AND expires_at>now()",[dev.rows[0].id]);
   const code=pairingCode();
   await client.query("INSERT INTO epos_device_pairings(id,venue_id,device_id,code_hash,expires_at) VALUES($1,$2,$3,$4,now()+interval '5 minutes')",[randomUUID(),venueId,dev.rows[0].id,hash(code)]);
   await client.query("COMMIT");
