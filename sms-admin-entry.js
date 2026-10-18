@@ -11,6 +11,7 @@ const WEBEX_TOKEN = process.env.WEBEX_INTERACT_TOKEN || process.env.WEBEX_API_TO
 const WEBEX_ENDPOINT = "https://api.webexinteract.com/v1/sms";
 const DATA_DIR = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, "site", "data") : path.join(__dirname, "data"));
 const keySafeStorage = require("./key-safe-storage").createStorage();
+const reservationReport = require("./guest-sms-report").createStore();
 const CONTENT_FILE = path.join(DATA_DIR, "content.json");
 const ALLOWED_SENDERS = new Map([
   ["447860008022", "+447860008022"],
@@ -187,6 +188,15 @@ async function handleSmsAdmin(req, res, pathname) {
   }
 
   try {
+    if (pathname === "/api/admin/guest-sms/latest-upload") {
+      if (req.method === "GET") sendJson(res, 200, {report:reservationReport.read()});
+      else if (req.method === "PUT") {
+        if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) {
+          sendJson(res, 403, {error:"Invalid request origin."});
+        } else sendJson(res, 200, {ok:true, report:reservationReport.save(await readJsonBody(req, 2000000))});
+      } else sendJson(res, 405, {error:"Method not allowed"});
+      return true;
+    }
     if (pathname === "/api/admin/key-safe-codes" && req.method === "GET") {
       sendJson(res, 200, {codes:readKeySafeCodes()});
       return true;

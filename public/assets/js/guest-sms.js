@@ -43,5 +43,31 @@
    const items=allReservations.map(g=>({room:welcomeRoom(g.room),...welcomeNames(g),checkin:parseCheckinDate(g.checkin),checkout:parseCheckinDate(g.checkout)})).filter(g=>g.room&&g.first&&g.last&&g.checkin&&g.checkout&&g.checkout>g.checkin);if(allReservations.length&&!items.length)throw Error('TV welcomes not saved: no complete name, room and stay dates found.');
    const result=await api('/api/admin/guest-sms/tv-arrivals',{method:'POST',body:JSON.stringify({items,cancelled:cancelledReservations.map(g=>({room:welcomeRoom(g.room),checkin:parseCheckinDate(g.checkin)}))})});$('#smsStatus').textContent+=' TV welcomes saved for '+result.count+' bookings; '+(allReservations.length-items.length)+' incomplete or ambiguous bookings skipped. No SMS messages were sent.';
   }
-  const input=$("#hotelCsv");if(input)input.onchange=async()=>{const f=input.files?.[0];if(!f)return;const parsed=parseCsv(await f.text());csvHeaders=parsed[0]?Object.keys(parsed[0]):[];cancelledReservations=parsed.filter(cancelled).map(mapped);cancelledCount=cancelledReservations.length;allReservations=parsed.filter(o=>!cancelled(o)).map(mapped).filter(g=>g.first||g.room||g.phone||g.checkin);reportInfo={};filterArrivals();try{await syncTVArrivals();}catch(e){$("#smsStatus").textContent+=" "+e.message;}};$("#smsArrivalDay").onchange=filterArrivals;$("#sendSmsBatch").onclick=send;$("#saveKeySafeCodes").onclick=saveKeySafeCodes;$("#showKeySafeCodes").onclick=toggleKeySafeCodes;loadKeySafeCodes();checkSmsStatus();
+  function applyReport(report){
+    csvHeaders=report.headers;allReservations=report.reservations;cancelledReservations=report.cancelled;cancelledCount=cancelledReservations.length;reportInfo={};filterArrivals();
+    const uploaded=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",dateStyle:"medium",timeStyle:"short"}).format(new Date(report.uploadedAt));
+    $("#smsUploadStatus").textContent=`Latest upload: ${report.filename} · ${uploaded} · ${allReservations.length+cancelledCount} reservations. Kept until replaced by your next upload.`;
+  }
+  const input=$("#hotelCsv");
+  async function loadLatestUpload(){
+    if(!input)return;input.disabled=true;
+    try{const data=await api('/api/admin/guest-sms/latest-upload');if(data.report)applyReport(data.report);}
+    catch(e){$("#smsUploadStatus").textContent=e.message;}
+    finally{input.disabled=false;}
+  }
+  if(input)input.onchange=async()=>{
+    const f=input.files?.[0];if(!f)return;input.disabled=true;
+    try{
+      const parsed=parseCsv(await f.text()),headers=parsed[0]?Object.keys(parsed[0]):[];
+      const recognised=[['guestname','guestfullname','name','customername','customerfullname','guestfirstname','firstname','customerfirstname'],['checkindate','checkin','arrival','arrivaldate','arrivalday','dateofarrival','dateofcheckin','checkindatetime','arrivaldatetime']];
+      if(!parsed.length||!recognised.every(names=>headers.some(h=>names.includes(canon(h)))))throw Error('Please choose a reservation CSV with guest names and check-in dates. The previous upload has been kept.');
+      const reservations=parsed.filter(o=>!cancelled(o)).map(mapped).filter(g=>g.first||g.room||g.phone||g.checkin),cancelledRows=parsed.filter(cancelled).map(mapped);
+      const data=await api('/api/admin/guest-sms/latest-upload',{method:'PUT',body:JSON.stringify({filename:f.name,headers,reservations,cancelled:cancelledRows})});
+      applyReport(data.report);
+      try{await syncTVArrivals();}catch(e){$("#smsStatus").textContent+=" "+e.message;}
+    }catch(e){$("#smsUploadStatus").textContent=e.message;}
+    finally{input.disabled=false;input.value="";}
+  };
+  loadLatestUpload();
+  $("#smsArrivalDay").onchange=filterArrivals;$("#sendSmsBatch").onclick=send;$("#saveKeySafeCodes").onclick=saveKeySafeCodes;$("#showKeySafeCodes").onclick=toggleKeySafeCodes;loadKeySafeCodes();checkSmsStatus();
 })();
