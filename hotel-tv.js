@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {dir,contentDir,write:writeTvState}=require('./hotel-tv-storage');
+const videoLibrary=require('./hotel-tv-video-library').createLibrary(require('./hotel-tv-storage'));
 const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
 const {handleGuestTv}=require('./hotel-tv-guests');
@@ -34,13 +35,16 @@ function json(res,status,value,headers={}){res.writeHead(status,{'Content-Type':
 async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>40000)throw Error('TV settings are too large.');}return JSON.parse(raw);}
 function sameOrigin(req){if(!req.headers.origin)return true;try{return new URL(req.headers.origin).host===req.headers.host;}catch{return false;}}
 async function uploadVideo(req,res){
+ let title;try{title=decodeURIComponent(String(req.headers['x-video-title']||'Welcome video')).trim();}catch{return json(res,400,{error:'Invalid video title.'});}
+ if(!title||title.length>120)return json(res,400,{error:'Enter a video title of up to 120 characters.'});
  if(!String(req.headers['content-type']||'').split(';')[0].match(/^video\/mp4$/i))return json(res,415,{error:'Please upload an MP4 video.'});
  if(Number(req.headers['content-length'])>MAX_VIDEO_BYTES)return json(res,413,{error:'The video must be 100 MB or smaller.'});
  fs.mkdirSync(mediaDir,{recursive:true});const name=crypto.randomUUID()+'.mp4',temp=path.join(mediaDir,name+'.tmp'),target=path.join(mediaDir,name);let size=0,handle;
  try{handle=await fs.promises.open(temp,'wx');for await(const chunk of req){size+=chunk.length;if(size>MAX_VIDEO_BYTES){const error=Error('The video must be 100 MB or smaller.');error.status=413;throw error;}await handle.writeFile(chunk);}await handle.close();handle=null;
   const fd=await fs.promises.open(temp,'r');const header=Buffer.alloc(32);await fd.read(header,0,32,0);await fd.close();
   if(size<24||header.toString('ascii',4,8)!=='ftyp'){const error=Error('This file is not a valid MP4 container.');error.status=415;throw error;}
-  await fs.promises.rename(temp,target);json(res,201,{ok:true,path:'/tv/media/'+name,size});
+  videoLibrary.read(readConfig().welcomeVideo);
+  await fs.promises.rename(temp,target);const videos=videoLibrary.add({path:'/tv/media/'+name,title,uploadedAt:new Date().toISOString(),size});json(res,201,{ok:true,path:'/tv/media/'+name,size,videos});
  }catch(e){if(handle)await handle.close();await fs.promises.unlink(temp).catch(()=>{});if(!res.destroyed)json(res,e.status||400,{error:e.status?e.message:'Video upload failed. Please try again.'});}
 }
 function serveVideo(req,res,pathname){
@@ -57,6 +61,12 @@ function serveVideo(req,res,pathname){
 async function handleHotelTv(req,res,pathname,identity){
  if(await handleGuestTv(req,res,pathname,identity,id=>readConfig().rooms.some(r=>r.id===id&&r.enabled)))return true;
  if(pathname.startsWith('/tv/media/')){serveVideo(req,res,pathname);return true;}
+ if(pathname==='/api/admin/tv/videos'){
+  if(!identity)return json(res,401,{error:'Please sign in.'}),true;
+  if(!identity.isOwner&&!identity.permissions.includes('settings'))return json(res,403,{error:'Website Details permission is required.'}),true;
+  if(req.method!=='GET')return json(res,405,{error:'Method not allowed.'},{Allow:'GET'}),true;
+  json(res,200,{videos:videoLibrary.read(readConfig().welcomeVideo)});return true;
+ }
  if(pathname==='/api/admin/tv/video'){
   if(!identity)return json(res,401,{error:'Please sign in.'}),true;
   if(!identity.isOwner&&!identity.permissions.includes('settings'))return json(res,403,{error:'Website Details permission is required.'}),true;

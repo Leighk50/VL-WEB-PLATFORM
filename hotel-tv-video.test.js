@@ -9,6 +9,20 @@ test('MP4 upload authorization, validation, durable file, byte ranges and saved 
  let full=await fetch(base+info.path);assert.equal(full.headers.get('content-type'),'video/mp4');assert.deepEqual(Buffer.from(await full.arrayBuffer()),mp4);
  let range=await fetch(base+info.path,{headers:{Range:'bytes=8-15'}});assert.equal(range.status,206);assert.equal(range.headers.get('content-range'),'bytes 8-15/128');assert.deepEqual(Buffer.from(await range.arrayBuffer()),mp4.subarray(8,16));let suffix=await fetch(base+info.path,{headers:{Range:'bytes=-4'}});assert.equal((await suffix.arrayBuffer()).byteLength,4);assert.equal((await fetch(base+info.path,{headers:{Range:'bytes=999-'}})).status,416);let head=await fetch(base+info.path,{method:'HEAD'});assert.equal(head.headers.get('content-length'),'128');assert.equal((await head.arrayBuffer()).byteLength,0);assert.equal((await fetch(base+'/tv/media/not-a-file.mp4')).status,404);
  let get=await fetch(base+'/api/admin/tv',{headers:{'x-owner':'yes'}});let settings=(await get.json()).config;settings.rooms[2].enabled=true;settings.welcomeVideo={title:'Welcome',url:'https://www.villagelimits.co.uk'+info.path};let saved=await fetch(base+'/api/admin/tv',{method:'PUT',headers:{'x-owner':'yes','Content-Type':'application/json','If-Match':get.headers.get('etag')},body:JSON.stringify(settings)});assert.equal(saved.status,200);let config=(await saved.json()).config;assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'hotel-tv.json'))).welcomeVideo,settings.welcomeVideo);assert.deepEqual(publicFeed({settings:{}},config,3).welcomeVideo,settings.welcomeVideo);assert.equal(clean({...config,welcomeVideo:null}).welcomeVideo,null);assert.throws(()=>clean({...config,welcomeVideo:{title:'Bad',url:'javascript:alert(1)'}}));
+
+ assert.equal((await fetch(base+'/api/admin/tv/videos')).status,401);
+ assert.equal((await fetch(base+'/api/admin/tv/videos',{headers:{'x-staff':'yes'}})).status,403);
+ const previous=JSON.parse(fs.readFileSync(path.join(dir,'hotel-tv.json')));
+ for(let i=1;i<=3;i++){const r=await upload({'x-owner':'yes','X-Video-Title':encodeURIComponent('Saved clip '+i)});assert.equal(r.status,201);}
+ const library=(await (await fetch(base+'/api/admin/tv/videos',{headers:{'x-owner':'yes'}})).json()).videos;
+ assert.deepEqual(library.map(v=>v.title),['Saved clip 3','Saved clip 2','Saved clip 1']);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'hotel-tv.json'))),previous,'uploads must not change playing video or room settings');
+ assert.equal((await fetch(base+info.path)).status,200,'currently playing older video remains available');
+ const selected=library[1];get=await fetch(base+'/api/admin/tv',{headers:{'x-owner':'yes'}});settings=(await get.json()).config;settings.welcomeVideo={title:selected.title,url:'https://www.villagelimits.co.uk'+selected.path};
+ saved=await fetch(base+'/api/admin/tv',{method:'PUT',headers:{'x-owner':'yes','Content-Type':'application/json','If-Match':get.headers.get('etag')},body:JSON.stringify(settings)});
+ assert.equal(saved.status,200);assert.deepEqual(publicFeed({settings:{}},(await saved.json()).config,3).welcomeVideo,settings.welcomeVideo);
+ assert.equal((await upload({'x-owner':'yes'},Buffer.from('not video'))).status,415);
+ assert.deepEqual((await (await fetch(base+'/api/admin/tv/videos',{headers:{'x-owner':'yes'}})).json()).videos,library,'failed upload does not replace saved videos');
  }finally{await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
 });
 
