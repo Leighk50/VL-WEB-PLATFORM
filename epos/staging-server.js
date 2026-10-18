@@ -4,11 +4,43 @@ const {Pool}=require("pg");
 const {authenticated,getTableSnapshot}=require("./shared-read-api");
 const {authenticateDevice}=require("./device-auth");
 const {startPairing,redeemPairing}=require("./device-pairing");
+const sharedTill=require("./shared-till");
+const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/catalogue-data.json":"catalogue-data.json"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/catalogue-data.json":"catalogue-data.json"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route.startsWith("/api/till/")){
+  const json=(status,data)=>{res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
+  if(!pool)return json(503,{error:"database_unavailable"});
+  let device;
+  try{device=await authenticateDevice(pool,req)}catch(e){console.error("Till authentication unavailable",e.code||"error");return json(503,{error:"authentication_unavailable"})}
+  if(!device||device.kind!=="till")return json(401,{error:"till_registration_required"});
+  const match=route.match(/^\\/api\\/till\\/tables\\/(\\d{1,2})$/);
+  if(!match)return json(404,{error:"unknown_endpoint"});
+  const tableId=Number(match[1]);
+  if(!Number.isInteger(tableId)||tableId<1||tableId>11)return json(400,{error:"invalid_table"});
+  if(req.method==="GET"){
+   try{return json(200,await sharedTill.getSession(pool,tableId))}
+   catch(e){console.error("Shared till read",e.code||e.message);return json(503,{error:"table_unavailable"})}
+  }
+  if(req.method!=="POST")return json(405,{error:"method_not_allowed"});
+  let body="";
+  try{
+   for await(const chunk of req){body+=chunk;if(body.length>12000)return json(413,{error:"payload_too_large"})}
+   const data=JSON.parse(body);
+   if(route.endsWith("/open"))return json(404,{error:"unknown_endpoint"});
+   if(data.action==="open")return json(200,await sharedTill.openTable(pool,{tableId}));
+   if(data.action==="addTab"){
+    const session=await sharedTill.getSession(pool,tableId);
+    if(!session.sessionId) return json(409,{error:"table_not_open"});
+    return json(200,await sharedTill.addTab(pool,session.sessionId,data.label));
+   }
+   if(data.action==="order")return json(200,await sharedTill.submitOrder(pool,catalogue,{tableId,tabId:data.tabId,requestId:data.requestId,lines:data.lines},device));
+   return json(400,{error:"unknown_action"});
+  }catch(e){console.error("Shared till mutation",e.code||e.message);return json(409,{error:"operation_rejected",message:e.message})}
+ }
  if(route==="/api/devices/pair"||route==="/api/devices/redeem"){
   res.setHeader("Content-Type","application/json; charset=utf-8");
   res.setHeader("Cache-Control","no-store");
