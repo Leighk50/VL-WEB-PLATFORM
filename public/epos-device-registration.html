@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Village Limits · Register Device</title><style>body{font:16px system-ui;margin:0;background:#eff2f0;color:#1b3930}header{background:#153d32;color:white;padding:20px}main{max-width:950px;margin:20px auto;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:white;padding:22px;border-radius:16px;border:1px solid #d8e4db}input,select,button{box-sizing:border-box;width:100%;padding:13px;border-radius:8px;border:1px solid #cbdad0;font:inherit;margin:7px 0 16px}button{background:#24654e;color:white;cursor:pointer;font-weight:700}label{display:block;font-weight:650}small{color:#60776b}output{display:block;overflow-wrap:anywhere;background:#e9f3ed;padding:14px;border-radius:8px}#pairingCode{font-size:22px;letter-spacing:2px;font-weight:800}@media(max-width:700px){main{grid-template-columns:1fr}}</style><header><strong>THE VILLAGE LIMITS · EPOS</strong> <small style="color:#e4e9e6">Device registration · Staging</small></header><main><section class="panel"><h2>Manager · Generate code</h2><p>Use this on a trusted manager computer. The code expires after five minutes and can be used once.</p><label>Manager staging API key<input id="adminKey" type="password" autocomplete="off"></label><label>Device code<input id="deviceCode" value="TILL-01" maxlength="32"></label><label>Device name<input id="deviceName" value="Main Bar Till 1" maxlength="80"></label><label>Device type<select id="kind"><option value="till">Windows till</option><option value="ipad">Tablet / phone</option><option value="kitchen">Kitchen</option><option value="bar">Bar display</option></select></label><button id="create">Generate one-time code</button><output id="pairingCode">Not generated</output></section><section class="panel"><h2>New till, tablet or phone</h2><p>Open this page on the device you want to register. No camera is required.</p><label>One-time code<input id="code" autocomplete="off" placeholder="Enter code from manager"></label><button id="redeem">Register this device</button><output id="status">Not registered in this browser</output><button id="verify">Check stored registration</button><p><small>Staging only. Registering a device does not yet enable shared order entry. Each staff member will later sign in separately.</small></p></section></main><script>
+const $=id=>document.getElementById(id);
+async function request(url,payload,key){
+ const headers={"Content-Type":"application/json"};if(key)headers["x-epos-staging-key"]=key;
+ const response=await fetch(url,{method:"POST",headers,body:JSON.stringify(payload),cache:"no-store"});
+ const data=await response.json();if(!response.ok)throw Error(data.error||"Request failed");return data;
+}
+$("create").onclick=async()=>{
+ $("pairingCode").textContent="Creating…";
+ try{const result=await request("/api/devices/pair",{deviceCode:$("deviceCode").value.trim().toUpperCase(),name:$("deviceName").value.trim(),kind:$("kind").value},$("adminKey").value);$("pairingCode").textContent=result.code+" (5 minutes)";$("adminKey").value=""}catch(e){$("pairingCode").textContent="Unable to create code: "+e.message}
+};
+$("redeem").onclick=async()=>{
+ $("status").textContent="Registering…";
+ try{const result=await request("/api/devices/redeem",{code:$("code").value.trim()});localStorage.setItem("vl_epos_device_token",result.token);localStorage.setItem("vl_epos_device_code",result.deviceCode);$("code").value="";$("status").textContent="Registered as "+result.deviceCode+" on this browser."}catch(e){$("status").textContent="Registration failed: "+e.message}
+};
+$("verify").onclick=async()=>{
+ const token=localStorage.getItem("vl_epos_device_token");if(!token){$("status").textContent="No device credential stored";return}
+ try{const response=await fetch("/api/shared/tables",{headers:{Authorization:"Bearer "+token},cache:"no-store"});$("status").textContent=response.ok?"Registered device authenticated successfully":"Credential not accepted ("+response.status+")"}catch(e){$("status").textContent="Connection unavailable"}
+};
+</script></html>
