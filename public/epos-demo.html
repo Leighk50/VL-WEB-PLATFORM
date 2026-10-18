@@ -130,7 +130,7 @@ async function refreshSharedTables(){
  if(view==="tables")render();
 }
 function show(v){view=v;render();if(v==="tables")refreshSharedTables()}
-function render(){const nav=$("nav");nav.replaceChildren();for(const v of ["quick","tables","till","kitchen","bar","manager"]){const b=button(v.toUpperCase(),()=>v==="manager"?location.assign("/manager"):v==="till"?show("tables"):show(v));if(view===v)b.className="active";nav.append(b)}
+function render(){const nav=$("nav");nav.replaceChildren();for(const v of ["quick","tables","till","kitchen","bar","shared test","manager"]){const b=button(v.toUpperCase(),()=>v==="shared test"?location.assign("/shared"):v==="manager"?location.assign("/manager"):v==="till"?show("tables"):show(v));if(view===v)b.className="active";nav.append(b)}
 const screen=$("screen");screen.replaceChildren();const orderPanel=document.querySelector("main > aside.panel");orderPanel.hidden=view==="tables"||view==="kitchen"||view==="bar";
 if(view==="tables"){
  screen.append(node("h2","Table plan"));
