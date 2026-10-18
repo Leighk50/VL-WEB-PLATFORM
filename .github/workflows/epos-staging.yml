@@ -42,6 +42,8 @@ jobs:
           cp epos/catalogue-import.json epos-staging/catalogue-data.json
           cp epos/staging-server.js epos-staging/server.js
           cp epos/staging-package.json epos-staging/package.json
+          cd epos-staging
+          npm install --omit=dev --no-audit --no-fund
       - uses: actions/upload-artifact@v4
         with:
           name: epos-staging-package
