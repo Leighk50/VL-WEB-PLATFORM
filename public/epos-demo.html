@@ -197,7 +197,7 @@ function printTableBills(){
  window.print();
 }
 $("printBills").onclick=printTableBills;
-$("send").onclick=()=>{const pending=current().filter(x=>!x.sent);for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();render();alert("Sent to DEMO queues only — no real printers")};
+$("send").onclick=()=>{if(view!=="till"&&view!=="quick")return;const pending=current().filter(x=>!x.sent);if(!pending.length)return alert("No unsent items on this sale.");for(const route of ["kitchen","bar"]){const lines=pending.filter(x=>x.route===route);if(lines.length)state.orders.push({origin:label(),route,status:"new",items:structuredClone(lines)})}pending.forEach(x=>x.sent=true);save();show("quick");alert("Order sent to DEMO queues. Table remains open with its bill and tabs. No real printers have been used.")};
 $("clear").onclick=()=>{if(confirm("Clear current demo draft?")){if(view==="quick")state.quick=[];else state.tabs[table]=[];save();render()}};
 $("hold").onclick=()=>{if(view!=="quick")return alert("Hold Sale is for Quick Sale only.");if(!state.quick.length)return;state.held.push(structuredClone(state.quick));state.quick=[];save();render();alert("Quick sale held. Use Recall Held to restore it.")};
 $("pay").onclick=()=>{
