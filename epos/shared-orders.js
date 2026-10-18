@@ -11,7 +11,8 @@ async function openTable(pool,{tableId,venueId=null}){
   if(venue.rowCount!==1)throw Error("Venue not registered");
   const id=venueId||venue.rows[0].id;
   if(id!==venue.rows[0].id)throw Error("Venue mismatch");
-  await client.query("SELECT id FROM epos_tables WHERE id=$1 FOR UPDATE",[tableId]);
+  const locked=await client.query("SELECT id FROM epos_tables WHERE id=$1 FOR UPDATE",[tableId]);
+  if(locked.rowCount!==1)throw Error("Table not found");
   const existing=await client.query("SELECT id,version FROM epos_sessions WHERE table_id=$1 AND status='open' FOR UPDATE",[tableId]);
   let sessionId;
   if(existing.rowCount){sessionId=existing.rows[0].id}
