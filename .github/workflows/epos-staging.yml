@@ -31,7 +31,7 @@ jobs:
       - name: Validate EPOS source and tests
         run: |
           node --check epos/catalogue.js
-          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js
+          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js epos/device-auth.test.js
       - name: Build isolated EPOS staging package
         run: |
           mkdir -p epos-staging
@@ -42,6 +42,7 @@ jobs:
           cp epos/catalogue-import.json epos-staging/catalogue-data.json
           cp epos/staging-server.js epos-staging/server.js
           cp epos/shared-read-api.js epos-staging/shared-read-api.js
+          cp epos/device-auth.js epos-staging/device-auth.js
           cp epos/staging-package.json epos-staging/package.json
           cd epos-staging
           npm install --omit=dev --no-audit --no-fund
