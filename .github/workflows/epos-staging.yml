@@ -7,6 +7,7 @@ on:
       - feature/epos-catalogue-v01
     paths:
       - "public/epos-demo.html"
+      - "public/epos-device-registration.html"
       - "public/epos-manager-preview.html"
       - "public/kitchen-display-preview.html"
       - "public/epos-catalogue-preview.html"
@@ -31,11 +32,12 @@ jobs:
       - name: Validate EPOS source and tests
         run: |
           node --check epos/catalogue.js
-          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js epos/device-auth.test.js
+          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js epos/device-auth.test.js epos/device-pairing.test.js
       - name: Build isolated EPOS staging package
         run: |
           mkdir -p epos-staging
           cp public/epos-demo.html epos-staging/index.html
+          cp public/epos-device-registration.html epos-staging/devices.html
           cp public/epos-manager-preview.html epos-staging/manager.html
           cp public/kitchen-display-preview.html epos-staging/kitchen.html
           cp public/epos-catalogue-preview.html epos-staging/catalogue.html
@@ -43,6 +45,7 @@ jobs:
           cp epos/staging-server.js epos-staging/server.js
           cp epos/shared-read-api.js epos-staging/shared-read-api.js
           cp epos/device-auth.js epos-staging/device-auth.js
+          cp epos/device-pairing.js epos-staging/device-pairing.js
           cp epos/staging-package.json epos-staging/package.json
           cd epos-staging
           npm install --omit=dev --no-audit --no-fund
