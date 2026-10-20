@@ -39,29 +39,12 @@ function retryWelcomeVideo(){
  }
 }
 function renderWelcomeVideo(){
- var card=node('section','','welcome-media');
- var video=document.createElement('video');
- video.muted=true;video.defaultMuted=true;video.autoplay=true;video.loop=true;
- video.setAttribute('muted','');video.setAttribute('autoplay','');video.setAttribute('playsinline','');
- video.preload='auto';card.appendChild(video);
- var caption=node('div','','media-caption');
- caption.appendChild(node('span','THE VILLAGE LIMITS','eyebrow'));
- caption.appendChild(node('h2','Good food. Great company.'));
- var state=node('p','Discover more during your stay.');caption.appendChild(state);card.appendChild(caption);panel.appendChild(card);
- welcomeVideo=video;
- welcomeVideoSources=(data&&data.welcomeVideo?[data.welcomeVideo]:[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
- video.oncanplay=function(){retryWelcomeVideo();};
- video.onloadeddata=function(){retryWelcomeVideo();};
- video.onplaying=function(){state.textContent='A taste of life at The Village Limits';};
- video.onerror=function(){state.textContent='Video unavailable on this television';diagRecord('Welcome video media error '+(video.error?video.error.code:'unknown'));};
- if(welcomeVideoSources.length){
-  welcomeVideoUrl=welcomeVideoSources[0].url;
-  video.src=welcomeVideoUrl;
-  state.textContent='Loading welcome video…';
-  video.load();
-  retryWelcomeVideo();
-  welcomeVideoRetryTimer=setTimeout(function(){if(welcomeVideo===video&&video.readyState<2){diagRecord('Welcome video stalled: readyState='+video.readyState+' networkState='+video.networkState);state.textContent='Welcome video is taking longer to load';}},12000);
- }else state.textContent='Our hotel video will appear here when added.';
+ var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=true;video.autoplay=true;video.setAttribute('muted','');video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
+ var caption=node('div','','media-caption');caption.appendChild(node('span','THE VILLAGE LIMITS','eyebrow'));caption.appendChild(node('h2','Good food. Great company.'));var state=node('p','Discover more during your stay.');caption.appendChild(state);card.appendChild(caption);panel.appendChild(card);
+ welcomeVideo=video;welcomeVideoSources=(data&&data.welcomeVideo?[data.welcomeVideo]:[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
+ function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=true;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
+ video.onended=function(){welcomeVideoIndex++;next();};video.onerror=function(){state.textContent='Video is temporarily unavailable.';};
+ if(welcomeVideoSources.length){state.textContent='A taste of life at The Village Limits';next();}else state.textContent='Our hotel video will appear here when added.';
 }
 function renderAirtimeSelection(target){
  var catalogue=data&&data.airtime;if(!catalogue||!catalogue.updatedAt||Date.now()-Date.parse(catalogue.updatedAt)>=21600000||!catalogue.posters||!catalogue.posters.length)return;
@@ -134,7 +117,7 @@ function assignRoom(id){
 }
 function changeRoomAssignment(){stopLive();if(mode==='video')stopVideo();try{localStorage.removeItem('vl-assigned-room');}catch(ignore){}room=null;data=null;url='';cacheKey='';setupIndex=0;render();}
 function render(){
- var keepWelcomeMedia=view==='welcome'&&mode==='menu'&&welcomeVideo&&welcomeVideo.parentNode;
+ var keepWelcomeMedia=false;
  if(!keepWelcomeMedia)stopWelcomeVideo();
  setTimeout(syncWelcomeMusic,0);
  var scroll=panel.scrollTop,active=document.activeElement,actionIndex=-1,oldActions=panel.querySelectorAll('[data-action]');
@@ -528,7 +511,7 @@ document.addEventListener('keydown',function(e){retryWelcomeVideo();syncWelcomeM
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.9'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.10'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
