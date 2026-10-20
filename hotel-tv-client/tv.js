@@ -318,17 +318,33 @@ function tuneGuideChannel(){
 }
 
 // Embedded TV numeric channel entry (Room 1 pilot).
-var numericChannel='',numericTimer=null,numericGeneration=0;
+var numericChannel='',numericTimer=null,numericGeneration=0,channelDisplayTimer=null;
+function showChannelNumber(value,label){
+ var display=document.getElementById('channel-number-display');
+ if(!display)return;
+ clearTimeout(channelDisplayTimer);
+ display.textContent=String(value);
+ display.setAttribute('aria-label',(label||'Channel')+' '+value);
+ display.className='visible';
+ channelDisplayTimer=setTimeout(function(){display.className='hidden';},2500);
+}
+function hideChannelNumber(){
+ clearTimeout(channelDisplayTimer);
+ var display=document.getElementById('channel-number-display');
+ if(display)display.className='hidden';
+}
 function resetNumericChannel(){clearTimeout(numericTimer);numericTimer=null;numericChannel='';numericGeneration++;}
 function numericChannelKey(digit){
  if(mode!=='tv-embedded'||document.hidden)return;
  numericChannel=(numericChannel+digit).slice(-3);
+ showChannelNumber(numericChannel,'Entering channel');
  guideMessage('Channel '+numericChannel);
  clearTimeout(numericTimer);
  numericTimer=setTimeout(function(){
   var wanted=Number(numericChannel),generation=++numericGeneration;
   numericChannel='';numericTimer=null;
   if(!wanted||channelBusy)return;
+  showChannelNumber(wanted,'Selecting channel');
   var offset=0,found=false,seen=0;
   function active(){return generation===numericGeneration&&mode==='tv-embedded'&&!document.hidden;}
   function error(e){if(active())diagRecord('Number tune failed: '+(e.name||e.message||e));}
@@ -341,7 +357,7 @@ function numericChannelKey(digit){
      if(number===wanted){
       found=true;channelBusy=true;
       var finished=false,timeout=setTimeout(function(){if(!finished){finished=true;channelBusy=false;diagRecord('Channel '+wanted+' tune timed out');}},8000);
-      try{tizen.tvchannel.tune(c,{onsuccess:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+' selected');if(channelGuideOpen)closeChannelGuide();},onnosignal:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+': no signal');}},function(e){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;error(e);});}catch(e){clearTimeout(timeout);channelBusy=false;error(e);}
+      try{tizen.tvchannel.tune(c,{onsuccess:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+' selected');showChannelNumber(wanted,'Channel');if(channelGuideOpen)closeChannelGuide();},onnosignal:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+': no signal');}},function(e){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;error(e);});}catch(e){clearTimeout(timeout);channelBusy=false;error(e);}
       return;
      }
     }
@@ -399,7 +415,7 @@ function renderDiagnostics(){
  panel.appendChild(node('h2','Diagnostic log'));var log=node('pre',diagLog.join('\n'),'diag-log');log.id='diag-log';panel.appendChild(log);
 }
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
-function stopLive(){resetNumericChannel();
+function stopLive(){resetNumericChannel();hideChannelNumber();
  if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
  welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
