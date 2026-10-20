@@ -248,6 +248,35 @@ function changeEmbeddedChannel(up){
 
 
 var channelGuideOpen=false,guideChannels=[],guideIndex=0,guideGeneration=0,guideTimer=null;
+var directChannelDigits='',directChannelTimer=null;
+function clearDirectChannel(){clearTimeout(directChannelTimer);directChannelTimer=null;directChannelDigits='';}
+function selectDirectChannel(digit){
+ if(room!==1||mode!=='tv-embedded'||document.hidden)return false;
+ directChannelDigits=(directChannelDigits+digit).slice(-4);
+ clearTimeout(directChannelTimer);
+ var requested=directChannelDigits;
+ diagRecord('Room 1 channel number entered: '+requested);
+ directChannelTimer=setTimeout(function(){
+  clearDirectChannel();
+  if(mode!=='tv-embedded'||room!==1||channelBusy)return;
+  var api=window.tizen&&tizen.tvchannel;
+  if(!api||typeof api.getChannelList!=='function'||typeof api.tune!=='function'){say('Channel selection is unavailable on this TV.');return;}
+  var token=tvToken;
+  try{api.getChannelList(function(channels){
+   if(token!==tvToken||mode!=='tv-embedded'||room!==1)return;
+   var matches=channels.filter(function(c){return String(c.major)===requested||String(c.programNumber)===requested;});
+   if(!matches.length){say('Channel '+requested+' not found.');return;}
+   channelBusy=true;var finished=false;
+   var timeout=setTimeout(function(){if(!finished){finished=true;channelBusy=false;say('Channel '+requested+' did not respond.');}},8000);
+   function finish(error){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;if(error)say(error);}
+   try{api.tune(matches[0],{onsuccess:function(){finish();},onnosignal:function(){finish('No signal on channel '+requested+'.');}},function(){finish('Unable to select channel '+requested+'.');});}
+   catch(e){finish('Unable to select channel '+requested+'.');}
+  },function(){say('Unable to read the channel list.');});}
+  catch(e){say('Channel selection is unavailable.');}
+ },1100);
+ return true;
+}
+
 
 var programmeCache={},scheduleSequence=0,scheduleTimer=null,scheduleShape=-1;
 function programmeTime(value){try{if(value&&typeof value.getHours==='function')return ('0'+value.getHours()).slice(-2)+':'+('0'+value.getMinutes()).slice(-2);if(value&&typeof value.getTime==='function'){var d=new Date(value.getTime());if(isFinite(d.getTime()))return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}}catch(ignore){}return '';}
@@ -366,7 +395,7 @@ function renderDiagnostics(){
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
 function stopLive(){
  if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
- welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
+ welcomeGuidePending=false;clearDirectChannel();closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
 }
 function startEmbeddedTV(){
@@ -405,7 +434,7 @@ document.getElementById('video-return').onclick=function(){stopVideo();open(navF
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
 document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k)||staffShortcut(k,e.repeat)){e.preventDefault();return;}if(!room){var choices=panel.querySelectorAll('[data-action]');if(k===37||k===38)setupIndex=(setupIndex+5)%6;else if(k===39||k===40)setupIndex=(setupIndex+1)%6;else if(k===13){assignRoom(setupIndex+1);e.preventDefault();return;}if(choices[setupIndex])choices[setupIndex].focus();e.preventDefault();return;}if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat){if(mode==='tv-embedded')openChannelGuide();else if(mode==='tv-loading')welcomeGuidePending=true;else{if(mode==='video')stopVideo();cancelEmbeddedResume();view='live';welcomeGuidePending=true;startEmbeddedTV();}}return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
- if(mode==='tv-embedded'){if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
+ if(mode==='tv-embedded'){if(room===1&&k>=48&&k<=57){if(selectDirectChannel(String(k-48)))e.preventDefault();return;}if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
