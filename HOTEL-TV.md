@@ -69,3 +69,10 @@ Published unchanged signed package supplied by Leigh: 103612 bytes, SHA-256 `d46
 
 ## TV state durability
 On Azure App Service, TV settings, approvals, arrivals and uploaded MP4 files use `/home/site/vl-tv-state`, independent of the application container HOME and deployment files. Existing local files are copied on first use without replacing durable files. JSON writes keep the previous version and a current recovery copy in `/home/site/vl-tv-state-backups`. Private records are never included in public deployment artifacts. Before deploying this change, back up the current running application state: a replacement container cannot recover files that existed only inside the previous container. Verify the /home persistent mount on the production service.
+
+
+## Shared release 1.2.11
+
+The H.Browser address stays `https://www.villagelimits.co.uk/tv/install/`. Firmware requests `sssp_config.xml` and `VillageLimits.wgt` beneath it; the directory itself is not a browser landing page. The shared manifest now advertises 1.2.11. TVs check through their existing launcher on launch/restart; validate one additional room before restarting the rest. Do not uninstall or clear app storage.
+
+The exact Room 1 tested signed widget is 35,375,903 bytes, SHA-256 `a1289b8de33ad426982066b5c623a842a9d5af181a41bece36e6af877102c6a7`. Four binary repository parts are joined in order and checked before serving one unchanged WGT. Parts are used because the publishing transport limits individual requests. The app/package IDs and author certificate match the existing release. Room assignment and private approval tokens remain in existing local storage. Server room, approval, guest and video records are not changed by this release. The Room 3 recovery installer is unchanged.
