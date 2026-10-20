@@ -382,7 +382,23 @@ function numericChannelKey(digit){
    },error,'ALL',offset,50);}catch(e){error(e);}
   }
   page();
- },1200);
+ },numericConfirmImmediate?0:1200);
+ numericConfirmImmediate=false;
+}
+var numericConfirmImmediate=false;
+function confirmNumericChannel(){
+ if(!numericChannel)return false;
+ clearTimeout(numericTimer);
+ // Reuse the existing tuner lookup, triggering it immediately.
+ var digits=numericChannel;
+ numericChannel='';
+ numericConfirmImmediate=true;
+ numericChannelKey(digits);
+ // Let the same channel-selection timer run immediately on OK.
+
+ // The normal tuning callback is scheduled at 1200ms; pressing OK must
+ // not return to the welcome screen while that operation is pending.
+ return true;
 }
 function registerChannelKeys(){
  if(preview)return;
@@ -472,7 +488,7 @@ document.getElementById('video-return').onclick=function(){stopVideo();open(navF
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
 document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k)||staffShortcut(k,e.repeat)){e.preventDefault();return;}if(!room){var choices=panel.querySelectorAll('[data-action]');if(k===37||k===38)setupIndex=(setupIndex+5)%6;else if(k===39||k===40)setupIndex=(setupIndex+1)%6;else if(k===13){assignRoom(setupIndex+1);e.preventDefault();return;}if(choices[setupIndex])choices[setupIndex].focus();e.preventDefault();return;}if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat){if(mode==='tv-embedded')openChannelGuide();else if(mode==='tv-loading')welcomeGuidePending=true;else{if(mode==='video')stopVideo();cancelEmbeddedResume();view='live';welcomeGuidePending=true;startEmbeddedTV();}}return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
- if(mode==='tv-embedded'){if(k>=48&&k<=57){if(!e.repeat)numericChannelKey(String(k-48));e.preventDefault();return;}if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
+ if(mode==='tv-embedded'){if(k>=48&&k<=57){if(!e.repeat)numericChannelKey(String(k-48));e.preventDefault();return;}if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(k===13){if(numericChannel)confirmNumericChannel();e.preventDefault();return;}if(isBack(k)){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
@@ -486,7 +502,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.6'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.7'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
