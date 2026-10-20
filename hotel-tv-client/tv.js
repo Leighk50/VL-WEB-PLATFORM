@@ -27,7 +27,7 @@ function syncWelcomeMusic(){
 }
 function initWelcomeMusic(){
  welcomeMusic=document.createElement('audio');
- welcomeMusic.src='lindus-welcome-music.mp3';
+ welcomeMusic.src='lindus-welcome-music.wav';
  welcomeMusic.loop=true;welcomeMusic.preload='auto';welcomeMusic.volume=0.16;
  document.body.appendChild(welcomeMusic);
 }
