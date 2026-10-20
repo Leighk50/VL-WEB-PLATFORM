@@ -456,10 +456,23 @@ function renderDiagnostics(){
  panel.appendChild(node('h2','Diagnostic log'));var log=node('pre',diagLog.join('\n'),'diag-log');log.id='diag-log';panel.appendChild(log);
 }
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
-function stopLive(){resetNumericChannel();hideChannelNumber();
+function stopLive(){hideLiveHint();resetNumericChannel();hideChannelNumber();
  if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
  welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
+}
+var liveHintTimer=null;
+function showLiveHint(){
+ var hint=document.getElementById('live-return-hint');
+ if(!hint)return;
+ clearTimeout(liveHintTimer);
+ hint.className='visible';
+ liveHintTimer=setTimeout(function(){hint.className='hidden';},5000);
+}
+function hideLiveHint(){
+ clearTimeout(liveHintTimer);
+ var hint=document.getElementById('live-return-hint');
+ if(hint)hint.className='hidden';
 }
 function startEmbeddedTV(){if(welcomeMusic)welcomeMusic.pause();
  if(preview){welcomeGuidePending=false;say('Embedded antenna TV can only be tested on the room television.');return;}
@@ -467,7 +480,7 @@ function startEmbeddedTV(){if(welcomeMusic)welcomeMusic.pause();
  if(!tizen.tvwindow){welcomeGuidePending=false;diagRecord('TVWindow unavailable');say('TVWindow is unavailable. Native Watch TV remains available.');return;}
  stopWelcomeVideo();mode='tv-loading';var token=++tvToken;diagRecord('Starting embedded antenna TV');say('Opening antenna TV inside widget…');
  function failed(e){if(token!==tvToken)return;stopLive();embeddedGuideResume=false;diagRecord('Embedded TV failed: '+(e.name||e.message));say('Embedded TV failed: '+(e.name||e.message)+'. Use native Watch TV.');}
- function showTV(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(rect){if(token!==tvToken){try{tizen.tvwindow.hide(function(){},function(){});}catch(ignore){}return;}clearTimeout(tvTimer);embeddedGuideResume=false;mode='tv-embedded';document.body.className='live';document.documentElement.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();diagRecord('Embedded TV visible; widget hidden='+document.hidden+'; rect='+rect.join(','));if(welcomeGuidePending){welcomeGuidePending=false;openChannelGuide();}},failed,['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){failed(e);}}
+ function showTV(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(rect){if(token!==tvToken){try{tizen.tvwindow.hide(function(){},function(){});}catch(ignore){}return;}clearTimeout(tvTimer);embeddedGuideResume=false;mode='tv-embedded';document.body.className='live';document.documentElement.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();showLiveHint();diagRecord('Embedded TV visible; widget hidden='+document.hidden+'; rect='+rect.join(','));if(welcomeGuidePending){welcomeGuidePending=false;openChannelGuide();}},failed,['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){failed(e);}}
  tvTimer=setTimeout(function(){failed({name:'TVWindow timed out'});},12000);
  try{var current=tizen.tvwindow.getSource();diagRecord('Current TV source: '+current.type);if(current.type==='TV'){showTV();return;}}catch(e){diagRecord('Source discovery: '+(e.name||e.message));}
  try{tizen.systeminfo.getPropertyValue('VIDEOSOURCE',function(info){if(token!==tvToken)return;var sources=info.connected||[],source=null;for(var i=0;i<sources.length;i++)if(sources[i].type==='TV'){source=sources[i];break;}if(!source){failed({name:'No TV tuner source reported'});return;}try{tizen.tvwindow.setSource(source,showTV,failed,'MAIN');}catch(e){failed(e);}},failed);}catch(e){failed(e);}
