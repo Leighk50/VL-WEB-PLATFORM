@@ -16,6 +16,21 @@ function heading(label,title,text){panel.appendChild(node('div',label,'eyebrow')
 function price(value){if(!value)return '';return /^\d+(\.\d+)?$/.test(value)?'£'+value:value;}
 function tile(symbol,title,detail,name){var el=action('',function(){open(navFor(name));},'tile');var mark=node('span','','tile-symbol');var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('aria-hidden','true');var path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',name==='live'?'M4 5h16v12H4z M8 21h8 M12 17v4':name==='movies'?'M8 5l12 7-12 7z':'M5 3v6 M8 3v6 M11 3v6 M5 9h6 M8 9v12 M18 3v18 M18 3c-4 3-4 8 0 8');svg.appendChild(path);mark.appendChild(svg);el.appendChild(mark);el.appendChild(node('strong',title));el.appendChild(node('small',detail));return el;}
 var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[];
+// Lindus welcome music: only while the welcome screen is visible.
+var welcomeMusic=null;
+function syncWelcomeMusic(){
+ if(!welcomeMusic)return;
+ if(view==='welcome'&&mode==='menu'&&!document.hidden&&room){
+  welcomeMusic.volume=0.16;
+  if(welcomeMusic.paused){try{var play=welcomeMusic.play();if(play&&play.catch)play.catch(function(){/* TV may require a remote keypress before audio playback */});}catch(ignore){}}
+ }else welcomeMusic.pause();
+}
+function initWelcomeMusic(){
+ welcomeMusic=document.createElement('audio');
+ welcomeMusic.src='lindus-welcome-music.mp3';
+ welcomeMusic.loop=true;welcomeMusic.preload='auto';welcomeMusic.volume=0.16;
+ document.body.appendChild(welcomeMusic);
+}
 function stopWelcomeVideo(){if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;}}
 function renderWelcomeVideo(){
  var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=true;video.autoplay=true;video.setAttribute('muted','');video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
@@ -97,6 +112,7 @@ function assignRoom(id){
 function changeRoomAssignment(){stopLive();if(mode==='video')stopVideo();try{localStorage.removeItem('vl-assigned-room');}catch(ignore){}room=null;data=null;url='';cacheKey='';setupIndex=0;render();}
 function render(){
  stopWelcomeVideo();
+ setTimeout(syncWelcomeMusic,0);
  var scroll=panel.scrollTop,active=document.activeElement,actionIndex=-1,oldActions=panel.querySelectorAll('[data-action]');
  for(var a=0;a<oldActions.length;a++)if(oldActions[a]===active)actionIndex=a;
  while(panel.firstChild)panel.removeChild(panel.firstChild);
@@ -420,7 +436,7 @@ function stopLive(){resetNumericChannel();hideChannelNumber();
  welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
 }
-function startEmbeddedTV(){
+function startEmbeddedTV(){if(welcomeMusic)welcomeMusic.pause();
  if(preview){welcomeGuidePending=false;say('Embedded antenna TV can only be tested on the room television.');return;}
  if(mode!=='menu')return;
  if(!tizen.tvwindow){welcomeGuidePending=false;diagRecord('TVWindow unavailable');say('TVWindow is unavailable. Native Watch TV remains available.');return;}
@@ -431,7 +447,7 @@ function startEmbeddedTV(){
  try{var current=tizen.tvwindow.getSource();diagRecord('Current TV source: '+current.type);if(current.type==='TV'){showTV();return;}}catch(e){diagRecord('Source discovery: '+(e.name||e.message));}
  try{tizen.systeminfo.getPropertyValue('VIDEOSOURCE',function(info){if(token!==tvToken)return;var sources=info.connected||[],source=null;for(var i=0;i<sources.length;i++)if(sources[i].type==='TV'){source=sources[i];break;}if(!source){failed({name:'No TV tuner source reported'});return;}try{tizen.tvwindow.setSource(source,showTV,failed,'MAIN');}catch(e){failed(e);}},failed);}catch(e){failed(e);}
 }
-function startLive(){
+function startLive(){if(welcomeMusic)welcomeMusic.pause();
  if(preview){say('Watch TV opens Samsung’s native TV screen on the room TV.');return;}
  if(mode!=='menu')return;
  if(!tizen.application||!tizen.application.launch){say('Samsung TV could not open: application launch is unavailable.');return;}
@@ -443,13 +459,13 @@ function startLive(){
 function stopVideo(){clip.pause();clip.removeAttribute('src');clip.load();document.getElementById('video-overlay').className='hidden';if(mode==='video'){mode='menu';document.body.className='';}}
 function playRejected(){document.getElementById('clip-status').textContent='Press OK to play. If playback fails, press Return.';}
 function playClip(){try{var attempt=clip.play();if(attempt&&attempt.catch)attempt.catch(playRejected);}catch(e){playRejected();}}
-function playVideo(video){if(!/^https:\/\//i.test(video.url)){say('This clip needs an HTTPS video address.');return;}stopLive();stopVideo();mode='video';document.body.className='playing';document.getElementById('video-overlay').className='';document.getElementById('clip-title').textContent=video.title;document.getElementById('clip-status').textContent='Loading…';clip.src=video.url;document.getElementById('video-return').focus();playClip();}
+function playVideo(video){if(welcomeMusic)welcomeMusic.pause();if(!/^https:\/\//i.test(video.url)){say('This clip needs an HTTPS video address.');return;}stopLive();stopVideo();mode='video';document.body.className='playing';document.getElementById('video-overlay').className='';document.getElementById('clip-title').textContent=video.title;document.getElementById('clip-status').textContent='Loading…';clip.src=video.url;document.getElementById('video-return').focus();playClip();}
 clip.addEventListener('playing',function(){document.getElementById('clip-status').textContent='Playing';});
 clip.addEventListener('pause',function(){if(mode==='video')document.getElementById('clip-status').textContent='Paused · OK to continue';});
 clip.addEventListener('waiting',function(){document.getElementById('clip-status').textContent='Buffering…';});
 clip.addEventListener('error',function(){if(mode==='video')document.getElementById('clip-status').textContent='Clip could not play. Press Return to go back.';});
 clip.addEventListener('ended',function(){stopVideo();open(navFor('videos'));});
-function open(i){var target=buttons[i].getAttribute('data-view');if(target==='diagnostics'&&!staffUnlocked){openStaffPIN();return;}if(target!=='diagnostics')staffUnlocked=false;cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=target;if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
+function open(i){if(welcomeMusic)welcomeMusic.pause();var target=buttons[i].getAttribute('data-view');if(target==='diagnostics'&&!staffUnlocked){openStaffPIN();return;}if(target!=='diagnostics')staffUnlocked=false;cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=target;if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
 for(var i=0;i<buttons.length;i++)(function(index){buttons[index].onclick=function(){open(index);};})(i);
 document.getElementById('live-return').onclick=function(){embeddedGuideResume=false;stopLive();open(0);};
 document.getElementById('video-return').onclick=function(){stopVideo();open(navFor('videos'));};
@@ -470,7 +486,7 @@ document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.4'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.6'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
@@ -478,7 +494,7 @@ try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause',
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
 registerGuide();registerChannelKeys();
 function clock(){if(guestWelcome&&Date.parse(guestWelcome.expiresAt)<=Date.now())applyGuestWelcome(null);document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
-focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
+initWelcomeMusic();focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
 function scheduleEmbeddedResume(){
  clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;
@@ -488,11 +504,11 @@ function scheduleEmbeddedResume(){
 }
 function onWidgetVisibility(){
  diagRecord('Visibility: '+(document.hidden?'hidden':'visible'));
- if(document.hidden){staffUnlocked=false;staffPinInput='';stopWelcomeVideo();clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;if(embeddedGuideResume)diagRecord('TV restore pending: widget hidden again');diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}
+ if(document.hidden){if(welcomeMusic)welcomeMusic.pause();staffUnlocked=false;staffPinInput='';stopWelcomeVideo();clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;if(embeddedGuideResume)diagRecord('TV restore pending: widget hidden again');diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}
  else{if(embeddedGuideResume){scheduleEmbeddedResume();poll();return;}if(diagResume){diagResume=false;open(navFor('diagnostics'));diagRecord('Returned to diagnostic widget.');}else open(0);poll();}
 }
 document.addEventListener('visibilitychange',onWidgetVisibility);
-window.addEventListener('pagehide',function(){clearInterval(promoTimer);clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
+window.addEventListener('pagehide',function(){if(welcomeMusic)welcomeMusic.pause();clearInterval(promoTimer);clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
 })();
 
 
