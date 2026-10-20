@@ -15,7 +15,7 @@ function navFor(name){for(var i=0;i<buttons.length;i++)if(buttons[i].getAttribut
 function heading(label,title,text){panel.appendChild(node('div',label,'eyebrow'));message(title,text);}
 function price(value){if(!value)return '';return /^\d+(\.\d+)?$/.test(value)?'£'+value:value;}
 function tile(symbol,title,detail,name){var el=action('',function(){open(navFor(name));},'tile');var mark=node('span','','tile-symbol');var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('aria-hidden','true');var path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',name==='live'?'M4 5h16v12H4z M8 21h8 M12 17v4':name==='movies'?'M8 5l12 7-12 7z':'M5 3v6 M8 3v6 M11 3v6 M5 9h6 M8 9v12 M18 3v18 M18 3c-4 3-4 8 0 8');svg.appendChild(path);mark.appendChild(svg);el.appendChild(mark);el.appendChild(node('strong',title));el.appendChild(node('small',detail));return el;}
-var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[];
+var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[],welcomeVideoUrl='',welcomeVideoRetryTimer=null;
 // Lindus welcome music: only while the welcome screen is visible.
 var welcomeMusic=null;
 function syncWelcomeMusic(){
@@ -31,7 +31,7 @@ function initWelcomeMusic(){
  welcomeMusic.loop=true;welcomeMusic.preload='auto';welcomeMusic.volume=0.16;
  document.body.appendChild(welcomeMusic);
 }
-function stopWelcomeVideo(){if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;}}
+function stopWelcomeVideo(){clearTimeout(welcomeVideoRetryTimer);welcomeVideoRetryTimer=null;if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;welcomeVideoUrl='';}}
 function retryWelcomeVideo(){
  if(welcomeVideo&&view==='welcome'&&mode==='menu'&&!document.hidden&&welcomeVideo.paused&&welcomeVideoSources.length){
   try{var p=welcomeVideo.play();if(p&&p.catch)p.catch(function(e){diagRecord('Welcome video retry: '+(e.name||e.message||e));});}
@@ -55,10 +55,12 @@ function renderWelcomeVideo(){
  video.onplaying=function(){state.textContent='A taste of life at The Village Limits';};
  video.onerror=function(){state.textContent='Video unavailable on this television';diagRecord('Welcome video media error '+(video.error?video.error.code:'unknown'));};
  if(welcomeVideoSources.length){
-  video.src=welcomeVideoSources[0].url;
+  welcomeVideoUrl=welcomeVideoSources[0].url;
+  video.src=welcomeVideoUrl;
   state.textContent='Loading welcome video…';
   video.load();
   retryWelcomeVideo();
+  welcomeVideoRetryTimer=setTimeout(function(){if(welcomeVideo===video&&video.readyState<2){diagRecord('Welcome video stalled: readyState='+video.readyState+' networkState='+video.networkState);state.textContent='Welcome video is taking longer to load';}},12000);
  }else state.textContent='Our hotel video will appear here when added.';
 }
 function renderAirtimeSelection(target){
@@ -132,10 +134,13 @@ function assignRoom(id){
 }
 function changeRoomAssignment(){stopLive();if(mode==='video')stopVideo();try{localStorage.removeItem('vl-assigned-room');}catch(ignore){}room=null;data=null;url='';cacheKey='';setupIndex=0;render();}
 function render(){
- stopWelcomeVideo();
+ var keepWelcomeMedia=view==='welcome'&&mode==='menu'&&welcomeVideo&&welcomeVideo.parentNode;
+ if(!keepWelcomeMedia)stopWelcomeVideo();
  setTimeout(syncWelcomeMusic,0);
  var scroll=panel.scrollTop,active=document.activeElement,actionIndex=-1,oldActions=panel.querySelectorAll('[data-action]');
  for(var a=0;a<oldActions.length;a++)if(oldActions[a]===active)actionIndex=a;
+ var savedMedia=keepWelcomeMedia?welcomeVideo.parentNode:null;
+ if(savedMedia&&savedMedia.parentNode===panel)panel.removeChild(savedMedia);
  while(panel.firstChild)panel.removeChild(panel.firstChild);
  if(!room){panel.className='';renderRoomSetup();return;}
  for(var b=0;b<buttons.length;b++){var isActive=buttons[b].getAttribute('data-view')===view;buttons[b].className=isActive?'active':'';buttons[b].setAttribute('aria-current',isActive?'page':'false');}
@@ -145,7 +150,7 @@ function render(){
  }else if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',guestWelcome&&Date.parse(guestWelcome.expiresAt)>Date.now()?'Welcome, '+guestWelcome.name:(data?data.pages[0].title:'Make yourself at home'),'A little comfort. A good meal. Something to look forward to.');
   var departure=departureMessage(guestWelcome);var copy=node('div','','welcome-copy'+(departure?' checkout-reminder':''));if(departure){copy.appendChild(node('strong','Before you leave'));copy.appendChild(node('p',departure));}else copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);renderWelcomeVideo();
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);if(savedMedia){panel.appendChild(savedMedia);retryWelcomeVideo();}else renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Use GUIDE for channel selection and Return for the hotel menu.');
   panel.appendChild(action('Watch TV',startEmbeddedTV));
@@ -523,7 +528,7 @@ document.addEventListener('keydown',function(e){retryWelcomeVideo();syncWelcomeM
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.8'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.9'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
@@ -531,7 +536,7 @@ try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause',
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
 registerGuide();registerChannelKeys();
 function clock(){if(guestWelcome&&Date.parse(guestWelcome.expiresAt)<=Date.now())applyGuestWelcome(null);document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
-initWelcomeMusic();focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
+initWelcomeMusic();focus(0);render();setTimeout(syncWelcomeMusic,300);poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
 function scheduleEmbeddedResume(){
  clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;
