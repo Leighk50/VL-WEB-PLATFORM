@@ -1,3 +1,7 @@
+const fsForStore=require("node:fs"), osForStore=require("node:os"), pathForStore=require("node:path");
+const enquiryTestDir=fsForStore.mkdtempSync(pathForStore.join(osForStore.tmpdir(),"vl-security-store-"));
+process.env.CONTENT_DATA_DIR=enquiryTestDir;
+process.on("exit",()=>fsForStore.rmSync(enquiryTestDir,{recursive:true,force:true}));
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {Readable}=require("node:stream");

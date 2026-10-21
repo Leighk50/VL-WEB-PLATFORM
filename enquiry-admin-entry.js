@@ -1,21 +1,11 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 const http = require("http");
 
 const USER = process.env.ADMIN_USERNAME || "admin";
 const SECRET = process.env.SESSION_SECRET || "replace-this-secret";
-const DATA_DIR = process.env.CONTENT_DATA_DIR || (process.env.HOME ? path.join(process.env.HOME, "site", "data") : path.join(__dirname, "data"));
-const ENQUIRIES_FILE = path.join(DATA_DIR, "enquiries.json");
-
-const FORM_ROUTES = new Map([
-  ["/contact/enquire", "Contact"],
-  ["/christmas/enquire", "Christmas"],
-  ["/afternoon-tea/enquire", "Afternoon Tea"],
-  ["/private-events/enquire", "Private Event"]
-]);
+const {readEnquiries, writeEnquiries} = require("./enquiry-store");
 
 function sign(value) {
   return crypto.createHmac("sha256", SECRET).update(value).digest("hex");
@@ -67,64 +57,6 @@ function readJsonBody(req, max = 50000) {
   });
 }
 
-function readEnquiries() {
-  try {
-    const value = JSON.parse(fs.readFileSync(ENQUIRIES_FILE, "utf8"));
-    if (!Array.isArray(value)) throw new Error("Enquiry records have an invalid format.");
-    return value;
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-}
-
-function writeEnquiries(items) {
-  fs.mkdirSync(DATA_DIR, {recursive:true});
-  const temp = ENQUIRIES_FILE + ".tmp";
-  fs.writeFileSync(temp, JSON.stringify(items, null, 2), {encoding:"utf8", mode:0o600});
-  fs.renameSync(temp, ENQUIRIES_FILE);
-  try { fs.chmodSync(ENQUIRIES_FILE, 0o600); } catch {}
-}
-
-function cleanText(value, max = 4000) {
-  return String(value || "").trim().slice(0, max);
-}
-
-function createEnquiry(type, body) {
-  const p = new URLSearchParams(body);
-  const details = {};
-  for (const [key, value] of p.entries()) {
-    if (key === "form_token" || key === "contact_reference") continue;
-    details[key] = cleanText(value);
-  }
-  return {
-    id: crypto.randomUUID(),
-    receivedAt: new Date().toISOString(),
-    type,
-    name: cleanText(p.get("name"), 120),
-    email: cleanText(p.get("email"), 180),
-    phone: cleanText(p.get("phone"), 60),
-    details,
-    dealtWith: false,
-    dealtWithAt: null
-  };
-}
-
-function saveSubmittedEnquiry(type, body) {
-  const items = readEnquiries();
-  const record = createEnquiry(type, body);
-  record.deliveryStatus = "pending";
-  items.unshift(record);
-  writeEnquiries(items.slice(0, 2000));
-  return async status => {
-    const current = readEnquiries();
-    const item = current.find(entry => entry.id === record.id);
-    if (!item) throw new Error("Enquiry record is missing.");
-    item.deliveryStatus = status;
-    writeEnquiries(current);
-  };
-}
-
 async function handleAdminApi(req, res, pathname) {
   if (pathname !== "/api/admin/enquiries" && !pathname.startsWith("/api/admin/enquiries/")) return false;
   if (!validAdmin(req)) {
@@ -134,7 +66,7 @@ async function handleAdminApi(req, res, pathname) {
 
   if (pathname === "/api/admin/enquiries" && req.method === "GET") {
     try {
-      const enquiries = readEnquiries().filter(item => item.deliveryStatus !== "failed").sort((a,b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
+      const enquiries = readEnquiries().sort((a,b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
       sendJson(res, 200, {enquiries});
     } catch (error) {
       console.error("Could not read enquiry records", error);
@@ -175,10 +107,6 @@ http.createServer = function enquiryCreateServer(options, requestListener) {
     const pathname = decodeURIComponent(url.pathname);
     if (await handleAdminApi(req, res, pathname)) return;
 
-    const type = req.method === "POST" ? FORM_ROUTES.get(pathname) : null;
-    if (!type) return listener(req, res);
-
-    req.createEnquiryRecord = (_formType, body) => saveSubmittedEnquiry(type, body);
     return listener(req, res);
   };
 
