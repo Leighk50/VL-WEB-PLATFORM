@@ -1,4 +1,6 @@
 const crypto=require("crypto");
+const {saveSubmittedEnquiry}=require("./enquiry-store");
+const FORM_LABELS={contact:"Contact",christmas:"Christmas","afternoon-tea":"Afternoon Tea","private-events":"Private Event"};
 
 class EnquiryError extends Error{
   constructor(message,category="validation",status=400){super(message);this.name="EnquiryError";this.category=category;this.status=status}
@@ -140,7 +142,8 @@ async function processEnquiry(req,type,secret,send){
     if(String(q.contact_reference||"").trim())throw new EnquiryError("We could not accept this enquiry. Please contact us by phone if you need assistance.","honeypot");
     verifyTiming(q.form_token,secret);
     const clean=validate(type,q);
-    if(req.createEnquiryRecord)updateRecord=await req.createEnquiryRecord(type,q);
+    // Persist every validated enquiry before email, regardless of the server entry point.
+    updateRecord=saveSubmittedEnquiry(FORM_LABELS[type],q);
     await send(clean);
     if(updateRecord)try{await updateRecord("sent")}catch(error){console.error("Could not confirm delivered enquiry record",error)}
     log(type,"graph_success","sent");
