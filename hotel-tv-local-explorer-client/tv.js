@@ -196,6 +196,31 @@ function renderExplore(){
 function localExplorerVisible(item){return item.category!=='events'||(isFinite(Date.parse(item.endsAt))&&Date.parse(item.endsAt)>Date.now());}
 function explorePhoto(place){if(!place.image||!/^https:\/\//i.test(place.image))return null;var figure=node('figure','','explore-photo'),img=document.createElement('img');img.src=place.image;img.alt=place.imageAlt||place.title;if(place.imageFit==='contain')img.className='photo-contain';img.onerror=function(){figure.style.display='none';};figure.appendChild(img);figure.appendChild(node('figcaption',place.imageCredit||place.title));return figure;}
 function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',place.qr?label:'Visitor website'));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
+function pageControlRows(){
+ var rows=[],all=panel.querySelectorAll('[data-action]');
+ for(var i=0;i<all.length;i++){var parent=all[i].parentNode,found=null;for(var j=0;j<rows.length;j++)if(rows[j].parent===parent)found=rows[j];if(!found){found={parent:parent,buttons:[]};rows.push(found);}found.buttons.push(all[i]);}
+ return rows;
+}
+function focusPageEntry(){
+ var chosen=panel.querySelector('.tabs .chosen')||panel.querySelector('.stay-buttons .chosen'),actions=panel.querySelectorAll('[data-action]');
+ if(chosen)chosen.focus();else if(actions.length)actions[0].focus();else panel.focus();
+}
+function movePageFocus(k,active){
+ if(mode!=='menu'||view==='staff-pin'||view==='diagnostics'||!active||active.parentNode===nav)return false;
+ var rows=pageControlRows(),row=-1,index=-1;
+ for(var i=0;i<rows.length;i++)for(var j=0;j<rows[i].buttons.length;j++)if(rows[i].buttons[j]===active){row=i;index=j;}
+ function focusRow(n){var choices=rows[n].buttons,selected=rows[n].parent.querySelector('.chosen');if(choices.indexOf(selected)<0)selected=null;(selected||choices[0]).focus();}
+ if(active===panel){
+  if(k===38&&panel.scrollTop<=1){if(rows.length)focusRow(0);else focus(selected);return true;}
+  return false;
+ }
+ if(row<0)return false;
+ if(k===40){if(row+1<rows.length)focusRow(row+1);else{panel.scrollTop=0;panel.focus();}return true;}
+ if(k===38){if(row>0)focusRow(row-1);else focus(selected);return true;}
+ if(k===37){if(index>0)rows[row].buttons[index-1].focus();else if(row===0)focus(selected);else rows[row].buttons[rows[row].buttons.length-1].focus();return true;}
+ if(k===39){rows[row].buttons[(index+1)%rows[row].buttons.length].focus();return true;}
+ return false;
+}
 function moveExploreFocus(k,active){
  if(view!=='local'||!active)return false;
  var tabs=panel.querySelector('.explore-tabs'),pager=panel.querySelector('.explore-controls');
@@ -233,7 +258,7 @@ function renderStay(){
   guestCard('Fujitsu Air Conditioning','1. Press the power button at the bottom right of the wall controller to turn it on or off.\n2. Use ◀ ▶ to highlight Mode, then ▲ ▼ to select Cool or Heat, where available.\n3. Use ◀ ▶ to highlight Set temp., then ▲ ▼ to adjust the temperature.\n4. Highlight Fan to adjust the fan speed. Auto is a simple choice.\n\nKeep windows and doors closed while it is running. Please speak to our team if you need help.');
  }else if(staySection==='restaurant'){
   guestCard('Restaurant Opening Times','Wednesday–Saturday: from 6pm\nSunday: from 12pm');
-  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));panel.focus();}));
+  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));focusPageEntry();}));
  }else if(staySection==='emergency')guestCard('Emergency Information','In an emergency, please call\n01526 353312\nand select Option 0.');
 }
 function renderEventPoster(){
@@ -558,9 +583,9 @@ document.addEventListener('keydown',function(e){retryWelcomeVideo();syncWelcomeM
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
- else if(moveExploreFocus(k,active)||moveStayFocus(k,active)){e.preventDefault();}
+ else if(movePageFocus(k,active)){e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
- else if(inNav&&k===39){if(actions.length)actions[0].focus();else panel.focus();e.preventDefault();}
+ else if(inNav&&k===39){focusPageEntry();e.preventDefault();}
  else if(k===37){if(n>0)actions[n-1].focus();else focus(selected);e.preventDefault();}
  else if(k===39&&n>=0){actions[(n+1)%actions.length].focus();e.preventDefault();}
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}

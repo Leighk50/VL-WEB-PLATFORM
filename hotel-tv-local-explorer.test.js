@@ -57,3 +57,15 @@ test('Down reaches the pager directly, Up restores its selected tab and horizont
  const ctx={view:'local',explorePagerFocus:0,panel:{querySelector:s=>s==='.explore-tabs'?tabs:pager}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function moveExploreFocus('),source.indexOf('function focusStayTab(')),ctx);
  assert.equal(ctx.moveExploreFocus(40,otherTab),true);assert.equal(focused,previous);ctx.moveExploreFocus(39,previous);assert.equal(focused,next);ctx.moveExploreFocus(38,next);assert.equal(focused,tab);ctx.moveExploreFocus(40,tab);assert.equal(focused,next);ctx.moveExploreFocus(37,next);assert.equal(focused,previous);ctx.view='info';assert.equal(ctx.moveExploreFocus(40,tab),false);ctx.view='local';ctx.panel.querySelector=s=>s==='.explore-tabs'?tabs:null;assert.equal(ctx.moveExploreFocus(40,tab),false);
 });
+test('Shared page navigation connects tabs, controls, reading area and rail on every guest page',()=>{
+ const vm=require('node:vm'),source=fs.readFileSync('hotel-tv-local-explorer-client/tv.js','utf8');
+ for(const view of ['local','info','dining','events','welcome','movies','videos','live']){
+  let focused;const make=parent=>({parentNode:parent,focus(){focused=this;}}),nav={},tabs={querySelector:()=>chosen},pager={querySelector:()=>null};const chosen=make(tabs),tab=make(tabs),previous=make(pager),next=make(pager);let actions=view==='local'||view==='info'?[chosen,tab,previous,next]:view==='dining'?[chosen,tab]:[previous,next];
+  const panel={scrollTop:0,querySelectorAll:()=>actions,querySelector:()=>view==='dining'?chosen:null,focus(){focused=this;}};
+  const c={mode:'menu',view,nav,panel,selected:4,focus(i){focused='rail-'+i;}};vm.createContext(c);vm.runInContext(source.slice(source.indexOf('function pageControlRows('),source.indexOf('function moveExploreFocus(')),c);
+  c.focusPageEntry();assert.equal(focused,actions[0]);
+  if(view==='local'||view==='info'){assert(c.movePageFocus(40,tab));assert.equal(focused,previous);c.movePageFocus(39,previous);assert.equal(focused,next);c.movePageFocus(38,next);assert.equal(focused,chosen);}
+  const last=actions[actions.length-1];c.movePageFocus(40,last);assert.equal(focused,panel);panel.scrollTop=300;assert.equal(c.movePageFocus(38,panel),false);panel.scrollTop=0;c.movePageFocus(38,panel);assert.equal(focused,actions[0]);c.movePageFocus(38,actions[0]);assert.equal(focused,'rail-4');assert.equal(c.movePageFocus(40,make(nav)),false);
+  c.mode='tv-embedded';assert.equal(c.movePageFocus(40,last),false);
+ }
+});
