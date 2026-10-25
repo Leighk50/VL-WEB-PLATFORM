@@ -441,7 +441,7 @@
   };
 
   async function saveContent() {
-    const statuses = [$("#saveStatus"), $("#menuSaveStatus")].filter(Boolean);
+    const statuses = [$("#saveStatus"), $("#menuSaveStatus"), $("#eventSaveStatus")].filter(Boolean);
     statuses.forEach(status => { status.textContent = "Saving…"; });
     try {
       await request("/api/admin/content", {method:"PUT", body:JSON.stringify(content)});
@@ -467,7 +467,7 @@
 
   const testEmailBtn=$("#testEmailBtn"); if(testEmailBtn)testEmailBtn.onclick=testWebsiteEmail;
   const saveEvents = $("#saveEvents");
-  if (saveEvents) saveEvents.onclick = () => $("#saveAll").click();
+  if (saveEvents) saveEvents.onclick = async () => { saveEvents.disabled = true; try { await saveContent(); } finally { saveEvents.disabled = false; } };
   request("/api/admin/content")
     .then(data => { content = data; renderAll(); })
     .catch(err => {
