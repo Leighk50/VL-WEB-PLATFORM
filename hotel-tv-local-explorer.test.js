@@ -50,3 +50,10 @@ test('Expanded WOW catalogue has 22 original review records with destination QRs
  const seed=require('./hotel-tv-local-explorer-seed.json'),qr=require('./hotel-tv-local-explorer-qr.json');assert.equal(seed.length,22);assert.equal(new Set(seed.map(i=>i.id)).size,22);assert.equal(seed.filter(i=>i.category==='events').length,7);
  for(const item of seed){const result=clean(item);assert.equal(result.status,'draft');assert.equal(result.sourceName,'Discovered through WOW Lincs');assert(qr[item.url].startsWith('data:image/png;base64,'));assert(!/petwood|dower house|bar eleven/i.test(item.title+' '+item.venue));}
 });
+test('Down reaches the pager directly, Up restores its selected tab and horizontal arrows stay on the pager',()=>{
+ const vm=require('node:vm'),source=fs.readFileSync('hotel-tv-local-explorer-client/tv.js','utf8');let focused;
+ const tabs={querySelector:s=>s==='.chosen'?tab:null,querySelectorAll:()=>[tab,otherTab]},pager={querySelectorAll:()=>[previous,next]};
+ const tab={parentNode:tabs,focus(){focused=this;}},otherTab={parentNode:tabs,focus(){focused=this;}},previous={parentNode:pager,focus(){focused=this;}},next={parentNode:pager,focus(){focused=this;}};
+ const ctx={view:'local',explorePagerFocus:0,panel:{querySelector:s=>s==='.explore-tabs'?tabs:pager}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function moveExploreFocus('),source.indexOf('function focusStayTab(')),ctx);
+ assert.equal(ctx.moveExploreFocus(40,otherTab),true);assert.equal(focused,previous);ctx.moveExploreFocus(39,previous);assert.equal(focused,next);ctx.moveExploreFocus(38,next);assert.equal(focused,tab);ctx.moveExploreFocus(40,tab);assert.equal(focused,next);ctx.moveExploreFocus(37,next);assert.equal(focused,previous);ctx.view='info';assert.equal(ctx.moveExploreFocus(40,tab),false);ctx.view='local';ctx.panel.querySelector=s=>s==='.explore-tabs'?tabs:null;assert.equal(ctx.moveExploreFocus(40,tab),false);
+});

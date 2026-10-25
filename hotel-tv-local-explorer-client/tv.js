@@ -4,7 +4,7 @@ var room=null,setupIndex=0,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typ
 if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=1;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
 var url=room?origin+'/api/tv/rooms/'+room+'/content':'',cacheKey=room?'vl-local-explorer-pilot-room-'+room:'',data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
 var staffUnlocked=false,staffPinInput='',staffPinIndex=0,staffZeroCount=0,staffZeroTime=0,staffPinError='',staffFailures=0,staffBlockedUntil=0;
-var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0,airtimeIndex=0,promoType="",promoTimer=null;
+var staySection='',eventIndex=0,localSection='cinema',localIndex=0,explorePagerFocus=0,cinemaDay=0,airtimeIndex=0,promoType="",promoTimer=null;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -189,13 +189,24 @@ function renderExplore(){
   else{places=extra.filter(function(p){return localExplorerVisible(p)&&((localSection==='aviation'&&(p.category==='heritage'||p.category==='museums'))||(localSection==='days'&&(p.category==='attractions'||p.category==='family')));}).concat(info.attractions.filter(function(p){return p.id!=='petwood'&&p.category===localSection;}));}
   if(localSection==='events')places.sort(function(a,b){return Date.parse(a.startsAt)-Date.parse(b.startsAt);});
   if(!places.length){panel.appendChild(node('p','No current listings are available in this section. Please ask our team for local ideas.'));return;}localIndex=Math.max(0,Math.min(localIndex,places.length-1));
-  var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
+  var controls=node('div','','event-controls explore-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
   var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');var photo=explorePhoto(place);if(photo)copy.appendChild(photo);copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));if(place.sourceName)copy.appendChild(node('p',place.sourceName,'wow-source'));if(place.startsAt)copy.appendChild(node('p',new Date(place.startsAt).toLocaleString('en-GB')+' – '+new Date(place.endsAt).toLocaleString('en-GB'),'date'));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
  }
 }
 function localExplorerVisible(item){return item.category!=='events'||(isFinite(Date.parse(item.endsAt))&&Date.parse(item.endsAt)>Date.now());}
 function explorePhoto(place){if(!place.image||!/^https:\/\//i.test(place.image))return null;var figure=node('figure','','explore-photo'),img=document.createElement('img');img.src=place.image;img.alt=place.imageAlt||place.title;if(place.imageFit==='contain')img.className='photo-contain';img.onerror=function(){figure.style.display='none';};figure.appendChild(img);figure.appendChild(node('figcaption',place.imageCredit||place.title));return figure;}
 function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',place.qr?label:'Visitor website'));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
+function moveExploreFocus(k,active){
+ if(view!=='local'||!active)return false;
+ var tabs=panel.querySelector('.explore-tabs'),pager=panel.querySelector('.explore-controls');
+ if(!tabs||!pager)return false;
+ var onTabs=active.parentNode===tabs,onPager=active.parentNode===pager;
+ if(onTabs&&k===40){var controls=pager.querySelectorAll('[data-action]');if(controls.length){controls[Math.min(explorePagerFocus,controls.length-1)].focus();return true;}}
+ if(onPager&&k===38){var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen){chosen.focus();return true;}}
+ if(onPager&&(k===37||k===39)){var buttons=pager.querySelectorAll('[data-action]'),index=0;for(var i=0;i<buttons.length;i++)if(buttons[i]===active)index=i;explorePagerFocus=(index+(k===37?-1:1)+buttons.length)%buttons.length;buttons[explorePagerFocus].focus();return true;}
+ if(onTabs&&k===39){var choices=tabs.querySelectorAll('[data-action]');for(var j=0;j<choices.length;j++)if(choices[j]===active){choices[(j+1)%choices.length].focus();return true;}}
+ return false;
+}
 function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
 function moveStayFocus(k,active){
  if(view!=='info'||(k!==38&&k!==40))return false;
@@ -547,7 +558,7 @@ document.addEventListener('keydown',function(e){retryWelcomeVideo();syncWelcomeM
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
- else if(moveStayFocus(k,active)){e.preventDefault();}
+ else if(moveExploreFocus(k,active)||moveStayFocus(k,active)){e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
  else if(inNav&&k===39){if(actions.length)actions[0].focus();else panel.focus();e.preventDefault();}
  else if(k===37){if(n>0)actions[n-1].focus();else focus(selected);e.preventDefault();}
