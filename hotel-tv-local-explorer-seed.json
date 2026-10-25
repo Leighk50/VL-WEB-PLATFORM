@@ -1,0 +1,40 @@
+[
+  {
+    "id": "local-spa-trail",
+    "title": "The Spa Trail",
+    "area": "Woodhall Spa",
+    "venue": "",
+    "description": "Explore a walking and cycling route along the former railway. Read the route guide for access points, surfaces and current notices.",
+    "category": "walks",
+    "url": "https://www.woodhallspa.org/wp/?page_id=304",
+    "sourceUrl": "https://wowlincs.co.uk/explore-woodhall/local-walks/",
+    "status": "draft",
+    "reviewedNonCompeting": false
+  },
+  {
+    "id": "local-trail",
+    "title": "Woodhall Spa Heritage Trail",
+    "area": "Woodhall Spa",
+    "venue": "",
+    "description": "Discover the village through its heritage trail. Use the route guide to plan your walk and learn about local landmarks.",
+    "category": "walks",
+    "url": "https://www.woodhallspa.org/wp/?page_id=40",
+    "sourceUrl": "https://wowlincs.co.uk/explore-woodhall/local-walks/",
+    "status": "draft",
+    "reviewedNonCompeting": false
+  },
+  {
+    "id": "bowls-2026-10-26",
+    "title": "Woodhall Spa Short Mat Bowls",
+    "area": "Woodhall Spa",
+    "venue": "Coronation Hall",
+    "description": "Try an afternoon of indoor short mat bowls. Contact the club before your first visit to confirm participation, equipment and charges.",
+    "category": "events",
+    "url": "https://wssmbc.co.uk/",
+    "sourceUrl": "https://wowlincs.co.uk/events/woodhall-spa-carpet-bowls-16/",
+    "startsAt": "2026-10-26T14:00:00Z",
+    "endsAt": "2026-10-26T16:00:00Z",
+    "status": "draft",
+    "reviewedNonCompeting": false
+  }
+]

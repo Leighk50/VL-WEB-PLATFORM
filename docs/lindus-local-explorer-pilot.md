@@ -24,3 +24,16 @@ WOW Lincs is a discovery source, not an embedded site. Verify availability of a 
 - No competing food/drink or lodging promotion appears in local pages or welcome spotlight.
 - Approval, expiry, fallback, safe rendering and remote navigation work.
 - Existing TV installation, signing and update mechanism remain unchanged until pilot validation.
+
+## Implemented pilot (25 October 2026)
+- Independent `tv-local-explorer.json` in existing durable TV storage, with the same recovery backup protections. No changes to approvals or room records.
+- Staff editor at `/admin/tv/local-explorer`: save draft/withdraw or approve, with permission checks, same-origin writes and revision protection. Category and venue review exclude competing promotions; this is curated publication, not an unattended scraper.
+- Three initial drafts: Spa Trail, Heritage Trail and a dated short mat bowls session. Original summaries; no copied photographs. New records need explicit review. Events expire server-side and are filtered again in the pilot client, including cached data.
+- Additive feed data only when Room 1 explicitly sends `localExplorerPilot=1`. Normal feeds and all other rooms are unchanged. A corrupt Explorer store leaves Kinema and the ordinary feed available.
+- Browser pilot at `/tv/local-explorer-pilot/`. Client source extracted from the verified signed 1.2.11 package, with separate preview cache keys, two additional tabs and unchanged Kinema controls. Preview media is read from the existing signed archive; the installer is untouched. Existing competing hotel heritage listing is omitted from the pilot and its welcome spotlight.
+- New items without an existing QR display their visitor URL; generating QR codes for newly approved destinations is a remaining enhancement. Image upload is not included; existing attraction images remain.
+
+## Verification and next deployment step
+Full `npm test` includes Local Explorer tests for rejected promotions, approval/withdrawal, event expiry, recovery, staff access, stale writes, feed isolation, fallback and signed media continuity. DOM rendering and remote-style action tests cover the new tabs and the unchanged Kinema today/tomorrow toggle.
+
+Development branch only: no production deploy, no widget version bump and no signed widget publication. The headless browser download was unavailable in this environment, so visual browser review is still pending. Next prepare an isolated hosted preview, verify layout and physical remote behaviour, then sign and test in Room 1. Retain the signed 1.2.11 widget and package identity; do not rebuild the pilot from the older `hotel-tv-client` source. All-room distribution still requires the agreed Room 1 sign-off.
