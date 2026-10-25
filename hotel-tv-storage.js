@@ -5,7 +5,7 @@ const contentDir=env.CONTENT_DATA_DIR||(env.HOME?path.join(env.HOME,'site','data
 // Azure's application HOME may be /root, which belongs to the disposable container.
 // The App Service /home mount survives replacement of the running container.
 const dir=env.WEBSITE_SITE_NAME?azureDir:contentDir;
-const files=['hotel-tv.json','hotel-tv.json.previous','tv-devices.json','tv-arrivals.json'];
+const files=['hotel-tv.json','hotel-tv.json.previous','tv-devices.json','tv-arrivals.json','tv-local-explorer.json'];
 function migrate(){
  if(dir===contentDir)return;
  fs.mkdirSync(dir,{recursive:true});
@@ -15,8 +15,8 @@ function migrate(){
 }
 migrate();
 const backupDir=path.join(path.dirname(dir),path.basename(dir)+'-backups');
-for(const name of ['hotel-tv.json','tv-devices.json','tv-arrivals.json']){const target=path.join(dir,name),backup=path.join(backupDir,name);if(!fs.existsSync(target)&&fs.existsSync(backup)){JSON.parse(fs.readFileSync(backup,'utf8'));fs.mkdirSync(dir,{recursive:true});fs.copyFileSync(backup,target,fs.constants.COPYFILE_EXCL);}}
-for(const name of ['hotel-tv.json','tv-devices.json','tv-arrivals.json']){const target=path.join(dir,name),backup=path.join(backupDir,name);if(fs.existsSync(target)&&!fs.existsSync(backup)){JSON.parse(fs.readFileSync(target,'utf8'));fs.mkdirSync(backupDir,{recursive:true});fs.copyFileSync(target,backup,fs.constants.COPYFILE_EXCL);}}
+for(const name of ['hotel-tv.json','tv-devices.json','tv-arrivals.json','tv-local-explorer.json']){const target=path.join(dir,name),backup=path.join(backupDir,name);if(!fs.existsSync(target)&&fs.existsSync(backup)){JSON.parse(fs.readFileSync(backup,'utf8'));fs.mkdirSync(dir,{recursive:true});fs.copyFileSync(backup,target,fs.constants.COPYFILE_EXCL);}}
+for(const name of ['hotel-tv.json','tv-devices.json','tv-arrivals.json','tv-local-explorer.json']){const target=path.join(dir,name),backup=path.join(backupDir,name);if(fs.existsSync(target)&&!fs.existsSync(backup)){JSON.parse(fs.readFileSync(target,'utf8'));fs.mkdirSync(backupDir,{recursive:true});fs.copyFileSync(target,backup,fs.constants.COPYFILE_EXCL);}}
 function write(name,value){
  fs.mkdirSync(dir,{recursive:true});const target=path.join(dir,name),temp=target+'.'+crypto.randomUUID()+'.tmp';
  try{fs.writeFileSync(temp,JSON.stringify(value,null,2),{mode:0o600});if(fs.existsSync(target))fs.copyFileSync(target,target+'.previous');fs.renameSync(temp,target);

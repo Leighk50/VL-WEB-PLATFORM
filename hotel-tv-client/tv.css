@@ -68,3 +68,39 @@ html.live,body.live{background:transparent}
 #nav button[hidden]{display:none!important}.staff-pin-pad{display:grid;grid-template-columns:repeat(3,130px);gap:14px;margin-top:20px}.staff-pin-pad button{padding:16px;font-size:25px}.staff-pin-mask{font-size:40px;letter-spacing:18px;color:#165d42}
 
 .welcome-copy.checkout-reminder{border-left-width:5px;background:#f5f0e4}.checkout-reminder strong{display:block;color:#165d42;font-size:1.2vw;margin:.6vh 0}.welcome-layout .checkout-reminder p{line-height:1.55}
+
+/* Channel entry overlay — Room 1 pilot */
+#channel-number-display{position:fixed;top:5%;right:5%;z-index:9999;min-width:92px;padding:14px 22px;border-radius:12px;background:rgba(15,28,35,.84);color:#fff;font:bold 44px Arial,sans-serif;text-align:center;pointer-events:none;box-shadow:0 5px 18px rgba(0,0,0,.25)}
+#channel-number-display.hidden{display:none}
+
+/* Lindus discreet LIVE TV message */
+body.live #live-overlay .mode-label,
+body.live #live-overlay #live-return,
+body.live #live-overlay .live-help {
+ display:none!important;
+}
+
+#live-return-hint {
+ position:fixed;
+ bottom:4%;
+ left:50%;
+ transform:translateX(-50%);
+ z-index:9998;
+ background:rgba(15,35,30,.70);
+ color:white;
+ padding:10px 18px;
+ border-radius:8px;
+ font:18px Arial,sans-serif;
+ pointer-events:none;
+ white-space:nowrap;
+}
+
+#live-return-hint.hidden {
+ display:none;
+}
+/* Lindus LIVE TV channel information */
+#channel-info-banner{position:fixed;left:4%;bottom:5%;z-index:9997;max-width:70%;padding:12px 20px;background:rgba(15,35,30,.84);color:#fff;border-radius:10px;font:20px Arial,sans-serif;pointer-events:none}
+#channel-info-banner.hidden{display:none}
+.explore-tabs{display:flex;flex-wrap:wrap;gap:8px}.explore-tabs button{font-size:20px;padding:12px 16px}
+
+.wow-source{display:inline-block;font-size:18px;font-weight:600;letter-spacing:.02em;color:#295b43;background:#e5eddf;border-radius:20px;padding:6px 14px;margin:0 0 12px}

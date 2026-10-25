@@ -1,10 +1,10 @@
 (function () {
 'use strict';
 var room=null,setupIndex=0,origin=VL_SERVER_ORIGIN.replace(/\/$/,''),preview=typeof tizen==='undefined';
-if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=match?Number(match[1]):3;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
+if(preview){var match=location.search.match(/[?&]room=([1-6])(?:&|$)/);room=match?Number(match[1]):1;}else{try{var savedRoom=Number(localStorage.getItem('vl-assigned-room'));if(savedRoom>=1&&savedRoom<=6&&savedRoom%1===0)room=savedRoom;}catch(ignore){}}
 var url=room?origin+'/api/tv/rooms/'+room+'/content':'',cacheKey=room?'vl-cloud-room-'+room:'',data=null,view='welcome',selected=0,menuIndex=0,busy=false,mode='menu',tvToken=0,tvTimer=null,welcomeGuidePending=false,noticeUntil=0,diagApps=null,diagPage=0,diagAll=false,diagLog=[],diagKeys=[],diagRegistered=[],diagResume=false,guideCode=458,embeddedGuideResume=false,embeddedResumeTimer=null;
 var staffUnlocked=false,staffPinInput='',staffPinIndex=0,staffZeroCount=0,staffZeroTime=0,staffPinError='',staffFailures=0,staffBlockedUntil=0;
-var staySection='',eventIndex=0,localSection='cinema',localIndex=0,cinemaDay=0,airtimeIndex=0,promoType="",promoTimer=null;
+var staySection='',eventIndex=0,localSection='cinema',localIndex=0,explorePagerFocus=0,cinemaDay=0,airtimeIndex=0,promoType="",promoTimer=null;
 var nav=document.getElementById('nav'),buttons=nav.getElementsByTagName('button'),panel=document.getElementById('content'),status=document.getElementById('status'),clip=document.getElementById('clip');
 function node(tag,value,cls){var el=document.createElement(tag);el.textContent=value||'';if(cls)el.className=cls;return el;}
 function say(text){status.textContent=text;noticeUntil=Date.now()+15000;}
@@ -15,13 +15,34 @@ function navFor(name){for(var i=0;i<buttons.length;i++)if(buttons[i].getAttribut
 function heading(label,title,text){panel.appendChild(node('div',label,'eyebrow'));message(title,text);}
 function price(value){if(!value)return '';return /^\d+(\.\d+)?$/.test(value)?'£'+value:value;}
 function tile(symbol,title,detail,name){var el=action('',function(){open(navFor(name));},'tile');var mark=node('span','','tile-symbol');var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('aria-hidden','true');var path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',name==='live'?'M4 5h16v12H4z M8 21h8 M12 17v4':name==='movies'?'M8 5l12 7-12 7z':'M5 3v6 M8 3v6 M11 3v6 M5 9h6 M8 9v12 M18 3v18 M18 3c-4 3-4 8 0 8');svg.appendChild(path);mark.appendChild(svg);el.appendChild(mark);el.appendChild(node('strong',title));el.appendChild(node('small',detail));return el;}
-var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[];
-function stopWelcomeVideo(){if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;}}
+var welcomeVideo=null,welcomeVideoIndex=0,welcomeVideoSources=[],welcomeVideoUrl='',welcomeVideoRetryTimer=null;
+// Lindus welcome music: only while the welcome screen is visible.
+var welcomeMusic=null;
+function syncWelcomeMusic(){
+ if(!welcomeMusic)return;
+ if(view==='welcome'&&mode==='menu'&&!document.hidden&&room){
+  welcomeMusic.volume=0.16;
+  if(welcomeMusic.paused){try{var play=welcomeMusic.play();if(play&&play.catch)play.catch(function(){/* TV may require a remote keypress before audio playback */});}catch(ignore){}}
+ }else welcomeMusic.pause();
+}
+function initWelcomeMusic(){
+ welcomeMusic=document.createElement('audio');
+ welcomeMusic.src='lindus-welcome-music.wav';
+ welcomeMusic.loop=true;welcomeMusic.preload='auto';welcomeMusic.volume=0.16;
+ document.body.appendChild(welcomeMusic);
+}
+function stopWelcomeVideo(){clearTimeout(welcomeVideoRetryTimer);welcomeVideoRetryTimer=null;if(welcomeVideo){welcomeVideo.pause();welcomeVideo.removeAttribute('src');welcomeVideo.load();welcomeVideo=null;welcomeVideoUrl='';}}
+function retryWelcomeVideo(){
+ if(welcomeVideo&&view==='welcome'&&mode==='menu'&&!document.hidden&&welcomeVideo.paused&&welcomeVideoSources.length){
+  try{var p=welcomeVideo.play();if(p&&p.catch)p.catch(function(e){diagRecord('Welcome video retry: '+(e.name||e.message||e));});}
+  catch(e){diagRecord('Welcome video retry: '+(e.name||e.message));}
+ }
+}
 function renderWelcomeVideo(){
- var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=true;video.autoplay=true;video.setAttribute('muted','');video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
+ var card=node('section','','welcome-media');var video=document.createElement('video');video.muted=false;video.autoplay=true;video.setAttribute('playsinline','');video.preload='metadata';card.appendChild(video);
  var caption=node('div','','media-caption');caption.appendChild(node('span','THE VILLAGE LIMITS','eyebrow'));caption.appendChild(node('h2','Good food. Great company.'));var state=node('p','Discover more during your stay.');caption.appendChild(state);card.appendChild(caption);panel.appendChild(card);
- welcomeVideo=video;welcomeVideoSources=(data&&data.welcomeVideo?[data.welcomeVideo]:[]).filter(function(v){return v&&/^https:\/\//i.test(v.url);});
- function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=true;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
+ welcomeVideo=video;welcomeVideoSources=[{url:'lindus-combined-test.mp4'}];
+ function next(){if(welcomeVideo!==video||mode!=='menu'||view!=='welcome'||document.hidden)return;var item=welcomeVideoSources[welcomeVideoIndex%welcomeVideoSources.length];video.src=item.url;video.muted=false;var result=video.play();if(result&&result.catch)result.catch(function(){state.textContent='Video is temporarily unavailable.';});}
  video.onended=function(){welcomeVideoIndex++;next();};video.onerror=function(){state.textContent='Video is temporarily unavailable.';};
  if(welcomeVideoSources.length){state.textContent='A taste of life at The Village Limits';next();}else state.textContent='Our hotel video will appear here when added.';
 }
@@ -39,7 +60,7 @@ function renderWelcomePromo(keepFocus){
  while(host.firstChild)host.removeChild(host.firstChild);var types=welcomePromoTypes();if(types.indexOf(promoType)<0)promoType=nextPromoType(types,'');if(!promoType)return;
  if(promoType==='movies')renderAirtimeSelection(host);
  else{
-  var section=node('section','','welcome-films'),events=promoType==='events',items=events?data.events:data.explore.attractions,visual=items.filter(function(item){return !!item.image;}),pool=visual.length?visual:items,item=pool[Math.floor(Math.random()*pool.length)];
+  var section=node('section','','welcome-films'),events=promoType==='events',items=events?data.events:data.explore.attractions.filter(function(p){return p.id!=='petwood';}),visual=items.filter(function(item){return !!item.image;}),pool=visual.length?visual:items,item=pool[Math.floor(Math.random()*pool.length)];
   section.appendChild(node('h2',events?'What’s On at The Village Limits':'Explore Woodhall Spa'));
   var button=action('',function(){if(events){eventIndex=items.indexOf(item);open(navFor('events'));}else{localSection=item.category;localIndex=data.explore.attractions.filter(function(p){return p.category===item.category;}).indexOf(item);open(navFor('local'));}},'welcome-spotlight');
   if(item.image){var source=events&&/^\/uploads\/[a-zA-Z0-9_.-]+$/.test(item.image)?origin+item.image:!events&&/^https:\/\//.test(item.image)?item.image:'';if(source){var img=document.createElement('img');img.src=source;img.alt=item.title;img.className=events?'spotlight-poster':'spotlight-photo';img.onerror=function(){this.style.display='none';};button.appendChild(img);}}
@@ -96,9 +117,13 @@ function assignRoom(id){
 }
 function changeRoomAssignment(){stopLive();if(mode==='video')stopVideo();try{localStorage.removeItem('vl-assigned-room');}catch(ignore){}room=null;data=null;url='';cacheKey='';setupIndex=0;render();}
 function render(){
- stopWelcomeVideo();
+ var keepWelcomeMedia=false;
+ if(!keepWelcomeMedia)stopWelcomeVideo();
+
  var scroll=panel.scrollTop,active=document.activeElement,actionIndex=-1,oldActions=panel.querySelectorAll('[data-action]');
  for(var a=0;a<oldActions.length;a++)if(oldActions[a]===active)actionIndex=a;
+ var savedMedia=keepWelcomeMedia?welcomeVideo.parentNode:null;
+ if(savedMedia&&savedMedia.parentNode===panel)panel.removeChild(savedMedia);
  while(panel.firstChild)panel.removeChild(panel.firstChild);
  if(!room){panel.className='';renderRoomSetup();return;}
  for(var b=0;b<buttons.length;b++){var isActive=buttons[b].getAttribute('data-view')===view;buttons[b].className=isActive?'active':'';buttons[b].setAttribute('aria-current',isActive?'page':'false');}
@@ -108,7 +133,7 @@ function render(){
  }else if(view==='welcome'){
   heading('YOUR STAY, YOUR WAY',guestWelcome&&Date.parse(guestWelcome.expiresAt)>Date.now()?'Welcome, '+guestWelcome.name:(data?data.pages[0].title:'Make yourself at home'),'A little comfort. A good meal. Something to look forward to.');
   var departure=departureMessage(guestWelcome);var copy=node('div','','welcome-copy'+(departure?' checkout-reminder':''));if(departure){copy.appendChild(node('strong','Before you leave'));copy.appendChild(node('p',departure));}else copy.appendChild(node('p',data?data.pages[0].text:'Hotel information is temporarily unavailable. Please speak to our team.'));panel.appendChild(copy);
-  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);renderWelcomeVideo();
+  var welcomeText=node('div','','welcome-text');while(panel.firstChild)welcomeText.appendChild(panel.firstChild);panel.appendChild(welcomeText);var promo=node('div','','welcome-promo');promo.id='welcome-promo';welcomeText.appendChild(promo);renderWelcomePromo(false);if(savedMedia){panel.appendChild(savedMedia);retryWelcomeVideo();}else renderWelcomeVideo();
  }else if(view==='live'){
   heading('ROOM ENTERTAINMENT','Watch TV',preview?'Live TV is available on the room television.':'Open Samsung TV for channels and the programme guide. Use GUIDE for channel selection and Return for the hotel menu.');
   panel.appendChild(action('Watch TV',startEmbeddedTV));
@@ -145,6 +170,7 @@ function render(){
 function renderExplore(){
  heading('EXPLORE YOUR SURROUNDINGS','Explore Woodhall Spa','Local favourites, aviation heritage and days out.');
  var tabs=node('div','','tabs explore-tabs'),sections=[['cinema','Kinema'],['village','Woodhall Spa'],['aviation','Aviation & Museums'],['days','Nearby Days Out']];
+ if(data.explore&&data.explore.localExplorer){sections.push(['walks','Walks & Nature'],['events','Local Events']);}
  sections.forEach(function(item){var button=action(item[1],function(){localSection=item[0];localIndex=0;panel.scrollTop=0;render();var chosen=panel.querySelector('.explore-tabs .chosen');if(chosen)chosen.focus();});if(localSection===item[0])button.className+=' chosen';tabs.appendChild(button);if(item[0]==='cinema'&&localSection==='cinema'){tabs.appendChild(action(cinemaDay?'Today':'Tomorrow',function(){cinemaDay=cinemaDay?0:1;panel.scrollTop=0;render();var toggle=panel.querySelector('.kinema-day-toggle');if(toggle)toggle.focus();},'action kinema-day-toggle'));}});panel.appendChild(tabs);
  var info=data.explore;if(!info){panel.appendChild(node('p','Visitor information is loading. Please try again shortly.'));return;}
  var kinema=info.attractions.filter(function(p){return p.id==='kinema';})[0];
@@ -158,13 +184,54 @@ function renderExplore(){
   layout.appendChild(list);if(kinema)layout.appendChild(exploreQR(kinema,'Scan for listings & tickets'));panel.appendChild(layout);
   if(cinema.updatedAt)panel.appendChild(node('p','Listings checked '+new Date(cinema.updatedAt).toLocaleString('en-GB')+' · Times may change; confirm when booking.','allergens'));
  }else{
-  var places=info.attractions.filter(function(p){return p.category===localSection;});if(!places.length)return;localIndex=Math.max(0,Math.min(localIndex,places.length-1));
-  var controls=node('div','','event-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
-  var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');var photo=explorePhoto(place);if(photo)copy.appendChild(photo);copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
+  var extra=info.localExplorer?info.localExplorer.items:[],places;
+  if(localSection==='walks'||localSection==='events'){places=extra.filter(function(p){return localExplorerVisible(p)&&((localSection==='walks'&&(p.category==='walks'||p.category==='nature'))||(localSection==='events'&&p.category==='events'));});}
+  else{places=extra.filter(function(p){return localExplorerVisible(p)&&((localSection==='aviation'&&(p.category==='heritage'||p.category==='museums'))||(localSection==='days'&&(p.category==='attractions'||p.category==='family')));}).concat(info.attractions.filter(function(p){return p.id!=='petwood'&&p.category===localSection;}));}
+  if(localSection==='events')places.sort(function(a,b){return Date.parse(a.startsAt)-Date.parse(b.startsAt);});
+  if(!places.length){panel.appendChild(node('p','No current listings are available in this section. Please ask our team for local ideas.'));return;}localIndex=Math.max(0,Math.min(localIndex,places.length-1));
+  var controls=node('div','','event-controls explore-controls');controls.appendChild(action('◀ Previous',function(){localIndex=(localIndex+places.length-1)%places.length;panel.scrollTop=0;render();}));controls.appendChild(node('span',(localIndex+1)+' of '+places.length));controls.appendChild(action('Next ▶',function(){localIndex=(localIndex+1)%places.length;panel.scrollTop=0;render();}));panel.appendChild(controls);
+  var place=places[localIndex],layout=node('div','','explore-layout'),copy=node('article','','explore-copy');var photo=explorePhoto(place);if(photo)copy.appendChild(photo);copy.appendChild(node('div',place.area,'eyebrow'));copy.appendChild(node('h2',place.title));if(place.sourceName)copy.appendChild(node('p',place.sourceName,'wow-source'));if(place.startsAt)copy.appendChild(node('p',new Date(place.startsAt).toLocaleString('en-GB')+' – '+new Date(place.endsAt).toLocaleString('en-GB'),'date'));copy.appendChild(node('p',place.description,'lead'));copy.appendChild(node('p','Check the official website for opening dates, admission and booking before setting off.'));layout.appendChild(copy);layout.appendChild(exploreQR(place,'Scan to plan your visit'));panel.appendChild(layout);
  }
 }
+function localExplorerVisible(item){return item.category!=='events'||(isFinite(Date.parse(item.endsAt))&&Date.parse(item.endsAt)>Date.now());}
 function explorePhoto(place){if(!place.image||!/^https:\/\//i.test(place.image))return null;var figure=node('figure','','explore-photo'),img=document.createElement('img');img.src=place.image;img.alt=place.imageAlt||place.title;if(place.imageFit==='contain')img.className='photo-contain';img.onerror=function(){figure.style.display='none';};figure.appendChild(img);figure.appendChild(node('figcaption',place.imageCredit||place.title));return figure;}
-function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',label));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
+function exploreQR(place,label){var card=node('aside','','explore-qr');if(place.qr&&/^data:image\/png;base64,/.test(place.qr)){var img=document.createElement('img');img.src=place.qr;img.alt='QR code for '+place.title;card.appendChild(img);}card.appendChild(node('strong',place.qr?label:'Visitor website'));card.appendChild(node('p',place.url.replace(/^https:\/\//,'')));return card;}
+function pageControlRows(){
+ var rows=[],all=panel.querySelectorAll('[data-action]');
+ for(var i=0;i<all.length;i++){var parent=all[i].parentNode,found=null;for(var j=0;j<rows.length;j++)if(rows[j].parent===parent)found=rows[j];if(!found){found={parent:parent,buttons:[]};rows.push(found);}found.buttons.push(all[i]);}
+ return rows;
+}
+function focusPageEntry(){
+ var chosen=panel.querySelector('.tabs .chosen')||panel.querySelector('.stay-buttons .chosen'),actions=panel.querySelectorAll('[data-action]');
+ if(chosen)chosen.focus();else if(actions.length)actions[0].focus();else panel.focus();
+}
+function movePageFocus(k,active){
+ if(mode!=='menu'||view==='staff-pin'||view==='diagnostics'||!active||active.parentNode===nav)return false;
+ var rows=pageControlRows(),row=-1,index=-1;
+ for(var i=0;i<rows.length;i++)for(var j=0;j<rows[i].buttons.length;j++)if(rows[i].buttons[j]===active){row=i;index=j;}
+ function focusRow(n){var choices=rows[n].buttons,selected=rows[n].parent.querySelector('.chosen');if(choices.indexOf(selected)<0)selected=null;(selected||choices[0]).focus();}
+ if(active===panel){
+  if(k===38&&panel.scrollTop<=1){if(rows.length)focusRow(0);else focus(selected);return true;}
+  return false;
+ }
+ if(row<0)return false;
+ if(k===40){if(row+1<rows.length)focusRow(row+1);else{panel.scrollTop=0;panel.focus();}return true;}
+ if(k===38){if(row>0)focusRow(row-1);else focus(selected);return true;}
+ if(k===37){if(index>0)rows[row].buttons[index-1].focus();else if(row===0)focus(selected);else rows[row].buttons[rows[row].buttons.length-1].focus();return true;}
+ if(k===39){rows[row].buttons[(index+1)%rows[row].buttons.length].focus();return true;}
+ return false;
+}
+function moveExploreFocus(k,active){
+ if(view!=='local'||!active)return false;
+ var tabs=panel.querySelector('.explore-tabs'),pager=panel.querySelector('.explore-controls');
+ if(!tabs||!pager)return false;
+ var onTabs=active.parentNode===tabs,onPager=active.parentNode===pager;
+ if(onTabs&&k===40){var controls=pager.querySelectorAll('[data-action]');if(controls.length){controls[Math.min(explorePagerFocus,controls.length-1)].focus();return true;}}
+ if(onPager&&k===38){var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen){chosen.focus();return true;}}
+ if(onPager&&(k===37||k===39)){var buttons=pager.querySelectorAll('[data-action]'),index=0;for(var i=0;i<buttons.length;i++)if(buttons[i]===active)index=i;explorePagerFocus=(index+(k===37?-1:1)+buttons.length)%buttons.length;buttons[explorePagerFocus].focus();return true;}
+ if(onTabs&&k===39){var choices=tabs.querySelectorAll('[data-action]');for(var j=0;j<choices.length;j++)if(choices[j]===active){choices[(j+1)%choices.length].focus();return true;}}
+ return false;
+}
 function focusStayTab(){var tabs=panel.querySelector('.stay-buttons');if(!tabs)return;var chosen=tabs.querySelector('.chosen')||tabs.querySelector('[data-action]');if(chosen)chosen.focus();}
 function moveStayFocus(k,active){
  if(view!=='info'||(k!==38&&k!==40))return false;
@@ -191,7 +258,7 @@ function renderStay(){
   guestCard('Fujitsu Air Conditioning','1. Press the power button at the bottom right of the wall controller to turn it on or off.\n2. Use ◀ ▶ to highlight Mode, then ▲ ▼ to select Cool or Heat, where available.\n3. Use ◀ ▶ to highlight Set temp., then ▲ ▼ to adjust the temperature.\n4. Highlight Fan to adjust the fan speed. Auto is a simple choice.\n\nKeep windows and doors closed while it is running. Please speak to our team if you need help.');
  }else if(staySection==='restaurant'){
   guestCard('Restaurant Opening Times','Wednesday–Saturday: from 6pm\nSunday: from 12pm');
-  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));panel.focus();}));
+  panel.appendChild(action('View Our Restaurant Menus',function(){open(navFor('dining'));focusPageEntry();}));
  }else if(staySection==='emergency')guestCard('Emergency Information','In an emergency, please call\n01526 353312\nand select Option 0.');
 }
 function renderEventPoster(){
@@ -236,6 +303,27 @@ function readTunerData(){
  var done=false,timer=setTimeout(function(){if(!done){done=true;diagRecord('Channel list: no callback after 8 seconds');}},8000);
  try{api.getChannelList(function(channels){if(done)return;done=true;clearTimeout(timer);diagRecord('Channel list received: '+channels.length);channels.slice(0,10).forEach(function(c){tunerValue('Channel',c);});},function(e){if(done)return;done=true;clearTimeout(timer);tunerError('Channel list failed',e);},'ALL',0,10);}catch(e){done=true;clearTimeout(timer);tunerError('Channel list failed',e);}
 }
+var channelInfoTimer=null;
+function showChannelInfo(channel,program){
+ var banner=document.getElementById('channel-info-banner');
+ if(!banner||!channel)return;
+ var number=channel.lcn||channel.major||channel.programNumber||'';
+ var name=channel.channelName||channel.serviceName||'Channel';
+ var title=program&&program.title?program.title:'Programme details unavailable';
+ banner.textContent=String(number)+'  '+name+'  |  '+title;
+ banner.className='visible';
+ clearTimeout(channelInfoTimer);
+ channelInfoTimer=setTimeout(function(){banner.className='hidden';},5000);
+}
+function updateChannelInfo(){
+ if(mode!=='tv-embedded'||document.hidden)return;
+ try{
+  var channel=tizen.tvchannel.getCurrentChannel();
+  var program=null;
+  try{program=tizen.tvchannel.getCurrentProgram();}catch(ignore){}
+  if(channel)showChannelInfo(channel,program);
+ }catch(e){diagRecord('Channel information unavailable: '+(e.name||e.message));}
+}
 function changeEmbeddedChannel(up){
  if(preview||mode!=='tv-embedded'||document.hidden||channelBusy)return;
  var api=tizen.tvchannel,method=up?'tuneUp':'tuneDown';
@@ -243,7 +331,7 @@ function changeEmbeddedChannel(up){
  channelBusy=true;var token=tvToken,done=false;diagRecord('Request '+method+'; widget visible');
  function finish(){done=true;clearTimeout(channelTimer);channelTimer=null;channelBusy=false;}
  channelTimer=setTimeout(function(){finish();diagRecord(method+': no callback after 8 seconds');},8000);
- try{api[method]({onsuccess:function(channel){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);tunerValue('Tune callback channel',channel);try{tunerValue('Tuned channel',api.getCurrentChannel());tunerValue('Programme after tuning',api.getCurrentProgram());}catch(e){tunerError('Tuned data read failed',e);}},onnosignal:function(){if(done)return;finish();diagRecord(method+': no signal');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Tune programme event',program);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
+ try{api[method]({onsuccess:function(channel){if(done)return;if(token!==tvToken){finish();return;}finish();diagRecord(method+' succeeded; hidden='+document.hidden+'; mode='+mode);updateChannelInfo();tunerValue('Tune callback channel',channel);try{tunerValue('Tuned channel',api.getCurrentChannel());tunerValue('Programme after tuning',api.getCurrentProgram());}catch(e){tunerError('Tuned data read failed',e);}},onnosignal:function(){if(done)return;finish();diagRecord(method+': no signal');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Tune programme event',program);}},function(e){if(done)return;finish();tunerError(method+' failed',e);});}catch(e){finish();tunerError(method+' failed',e);}
 }
 
 
@@ -288,7 +376,7 @@ function probeCurrentSchedule(){
 }
 
 function guideMessage(text){document.getElementById('channel-message').textContent=text;}
-function closeChannelGuide(){channelGuideOpen=false;scheduleSequence++;clearTimeout(scheduleTimer);guideGeneration++;clearTimeout(guideTimer);document.getElementById('channel-guide').className='hidden';if(mode==='tv-embedded')document.getElementById('live-return').focus();}
+function closeChannelGuide(){channelGuideOpen=false;scheduleSequence++;clearTimeout(scheduleTimer);guideGeneration++;clearTimeout(guideTimer);document.getElementById('channel-guide').className='hidden';if(mode==='tv-embedded')document.getElementById('live-return').focus();showLiveHint();}
 function renderChannelGuide(){
  var list=document.getElementById('channel-list');list.textContent='';
  guideChannels.forEach(function(c,i){var b=node('button',String(c.lcn||c.major||'')+'  '+(c.channelName||c.serviceName||'Channel'));b.className=i===guideIndex?'chosen':'';b.onclick=function(){guideIndex=i;tuneGuideChannel();};list.appendChild(b);});
@@ -317,6 +405,73 @@ function tuneGuideChannel(){
  try{tizen.tvchannel.tune(channel,{onsuccess:function(c){if(!finish())return;diagRecord('Widget guide tune succeeded; hidden='+document.hidden+'; mode='+mode);tunerValue('Selected channel',c);closeChannelGuide();},onnosignal:function(){if(finish())guideMessage('No signal for this channel. Choose another channel.');},onprograminforeceived:function(program){if(token===tvToken)tunerValue('Selected programme',program);}},function(e){if(!finish())return;tunerError('Widget guide tune failed',e);guideMessage('Tuning failed: '+e.name+'. Choose another channel.');});}catch(e){if(finish()){tunerError('Widget guide tune failed',e);guideMessage('Tuning failed: '+e.name+'. Choose another channel.');}}
 }
 
+// Embedded TV numeric channel entry (Room 1 pilot).
+var numericChannel='',numericTimer=null,numericGeneration=0,channelDisplayTimer=null;
+function showChannelNumber(value,label){
+ var display=document.getElementById('channel-number-display');
+ if(!display)return;
+ clearTimeout(channelDisplayTimer);
+ display.textContent=String(value);
+ display.setAttribute('aria-label',(label||'Channel')+' '+value);
+ display.className='visible';
+ channelDisplayTimer=setTimeout(function(){display.className='hidden';},2500);
+}
+function hideChannelNumber(){
+ clearTimeout(channelDisplayTimer);
+ var display=document.getElementById('channel-number-display');
+ if(display)display.className='hidden';
+}
+function resetNumericChannel(){clearTimeout(numericTimer);numericTimer=null;numericChannel='';numericGeneration++;}
+function numericChannelKey(digit){
+ if(mode!=='tv-embedded'||document.hidden)return;
+ numericChannel=(numericChannel+digit).slice(-3);
+ showChannelNumber(numericChannel,'Entering channel');
+ guideMessage('Channel '+numericChannel);
+ clearTimeout(numericTimer);
+ numericTimer=setTimeout(function(){
+  var wanted=Number(numericChannel),generation=++numericGeneration;
+  numericChannel='';numericTimer=null;
+  if(!wanted||channelBusy)return;
+  showChannelNumber(wanted,'Selecting channel');
+  var offset=0,found=false,seen=0;
+  function active(){return generation===numericGeneration&&mode==='tv-embedded'&&!document.hidden;}
+  function error(e){if(active())diagRecord('Number tune failed: '+(e.name||e.message||e));}
+  function page(){
+   if(!active()||found)return;
+   try{tizen.tvchannel.getChannelList(function(batch){
+    if(!active())return;
+    for(var i=0;i<batch.length;i++){
+     var c=batch[i],number=Number(c.lcn||c.major||0);
+     if(number===wanted){
+      found=true;channelBusy=true;
+      var finished=false,timeout=setTimeout(function(){if(!finished){finished=true;channelBusy=false;diagRecord('Channel '+wanted+' tune timed out');}},8000);
+      try{tizen.tvchannel.tune(c,{onsuccess:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+' selected');showChannelNumber(wanted,'Channel');if(channelGuideOpen)closeChannelGuide();},onnosignal:function(){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;diagRecord('Channel '+wanted+': no signal');}},function(e){if(finished)return;finished=true;clearTimeout(timeout);channelBusy=false;error(e);});}catch(e){clearTimeout(timeout);channelBusy=false;error(e);}
+      return;
+     }
+    }
+    offset+=batch.length;seen+=batch.length;
+    if(batch.length===50&&seen<500)page();else diagRecord('Channel '+wanted+' not found');
+   },error,'ALL',offset,50);}catch(e){error(e);}
+  }
+  page();
+ },numericConfirmImmediate?0:1200);
+ numericConfirmImmediate=false;
+}
+var numericConfirmImmediate=false;
+function confirmNumericChannel(){
+ if(!numericChannel)return false;
+ clearTimeout(numericTimer);
+ // Reuse the existing tuner lookup, triggering it immediately.
+ var digits=numericChannel;
+ numericChannel='';
+ numericConfirmImmediate=true;
+ numericChannelKey(digits);
+ // Let the same channel-selection timer run immediately on OK.
+
+ // The normal tuning callback is scheduled at 1200ms; pressing OK must
+ // not return to the welcome screen while that operation is pending.
+ return true;
+}
 function registerChannelKeys(){
  if(preview)return;
  ['ChannelUp','ChannelDown'].forEach(function(name){try{var key=tizen.tvinputdevice.getKey(name);tizen.tvinputdevice.registerKey(name);diagRecord(name+' registered ('+(key?key.code:'unknown')+')');}catch(e){diagRecord(name+' registration: '+(e.name||e.message));}});
@@ -364,23 +519,40 @@ function renderDiagnostics(){
  panel.appendChild(node('h2','Diagnostic log'));var log=node('pre',diagLog.join('\n'),'diag-log');log.id='diag-log';panel.appendChild(log);
 }
 function launchMovies(){if(preview){say('Airtime opens on the room TV. It is not available in the browser preview.');return;}try{tizen.application.getAppsInfo(function(apps){var id=null;for(var i=0;i<apps.length;i++)if(apps[i].name.toLowerCase()==='airtime'){id=apps[i].id;break;}if(!id){say('Airtime is not installed on this TV.');return;}tizen.application.launch(id,function(){},function(e){say('Unable to open Airtime: '+e.name);});},function(e){say('Unable to find Airtime: '+e.name);});}catch(e){say('Unable to open Airtime: '+e.message);}}
-function stopLive(){
+var liveHintTimer=null;
+
+function showLiveHint(){
+ var hint=document.getElementById('live-return-hint');
+ if(!hint)return;
+ clearTimeout(liveHintTimer);
+ hint.className='visible';
+ liveHintTimer=setTimeout(function(){
+  hint.className='hidden';
+ },5000);
+}
+
+function hideLiveHint(){
+ clearTimeout(liveHintTimer);
+ var hint=document.getElementById('live-return-hint');
+ if(hint)hint.className='hidden';
+}
+function stopLive(){hideLiveHint();resetNumericChannel();hideChannelNumber();
  if(mode!=='tv-loading'&&mode!=='tv-embedded')return;
  welcomeGuidePending=false;closeChannelGuide();var embedded=mode==='tv-embedded';clearTimeout(channelTimer);channelTimer=null;channelBusy=false;tvToken++;clearTimeout(tvTimer);mode='menu';
  if(embedded){document.body.className='';document.documentElement.className='';document.getElementById('live-overlay').className='hidden';try{tizen.tvwindow.hide(function(){diagRecord('TVWindow hidden');},function(e){diagRecord('TVWindow hide: '+e.name);});}catch(e){diagRecord('TVWindow hide: '+(e.name||e.message));}}
 }
-function startEmbeddedTV(){
+function startEmbeddedTV(){if(welcomeMusic)welcomeMusic.pause();
  if(preview){welcomeGuidePending=false;say('Embedded antenna TV can only be tested on the room television.');return;}
  if(mode!=='menu')return;
  if(!tizen.tvwindow){welcomeGuidePending=false;diagRecord('TVWindow unavailable');say('TVWindow is unavailable. Native Watch TV remains available.');return;}
  stopWelcomeVideo();mode='tv-loading';var token=++tvToken;diagRecord('Starting embedded antenna TV');say('Opening antenna TV inside widget…');
  function failed(e){if(token!==tvToken)return;stopLive();embeddedGuideResume=false;diagRecord('Embedded TV failed: '+(e.name||e.message));say('Embedded TV failed: '+(e.name||e.message)+'. Use native Watch TV.');}
- function showTV(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(rect){if(token!==tvToken){try{tizen.tvwindow.hide(function(){},function(){});}catch(ignore){}return;}clearTimeout(tvTimer);embeddedGuideResume=false;mode='tv-embedded';document.body.className='live';document.documentElement.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();diagRecord('Embedded TV visible; widget hidden='+document.hidden+'; rect='+rect.join(','));if(welcomeGuidePending){welcomeGuidePending=false;openChannelGuide();}},failed,['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){failed(e);}}
+ function showTV(){if(token!==tvToken)return;try{tizen.tvwindow.show(function(rect){if(token!==tvToken){try{tizen.tvwindow.hide(function(){},function(){});}catch(ignore){}return;}clearTimeout(tvTimer);embeddedGuideResume=false;mode='tv-embedded';document.body.className='live';document.documentElement.className='live';document.getElementById('live-overlay').className='';document.getElementById('live-return').focus();showLiveHint();diagRecord('Embedded TV visible; widget hidden='+document.hidden+'; rect='+rect.join(','));if(welcomeGuidePending){welcomeGuidePending=false;openChannelGuide();}},failed,['0%','0%','100%','100%'],'MAIN','BEHIND');}catch(e){failed(e);}}
  tvTimer=setTimeout(function(){failed({name:'TVWindow timed out'});},12000);
  try{var current=tizen.tvwindow.getSource();diagRecord('Current TV source: '+current.type);if(current.type==='TV'){showTV();return;}}catch(e){diagRecord('Source discovery: '+(e.name||e.message));}
  try{tizen.systeminfo.getPropertyValue('VIDEOSOURCE',function(info){if(token!==tvToken)return;var sources=info.connected||[],source=null;for(var i=0;i<sources.length;i++)if(sources[i].type==='TV'){source=sources[i];break;}if(!source){failed({name:'No TV tuner source reported'});return;}try{tizen.tvwindow.setSource(source,showTV,failed,'MAIN');}catch(e){failed(e);}},failed);}catch(e){failed(e);}
 }
-function startLive(){
+function startLive(){if(welcomeMusic)welcomeMusic.pause();
  if(preview){say('Watch TV opens Samsung’s native TV screen on the room TV.');return;}
  if(mode!=='menu')return;
  if(!tizen.application||!tizen.application.launch){say('Samsung TV could not open: application launch is unavailable.');return;}
@@ -392,34 +564,34 @@ function startLive(){
 function stopVideo(){clip.pause();clip.removeAttribute('src');clip.load();document.getElementById('video-overlay').className='hidden';if(mode==='video'){mode='menu';document.body.className='';}}
 function playRejected(){document.getElementById('clip-status').textContent='Press OK to play. If playback fails, press Return.';}
 function playClip(){try{var attempt=clip.play();if(attempt&&attempt.catch)attempt.catch(playRejected);}catch(e){playRejected();}}
-function playVideo(video){if(!/^https:\/\//i.test(video.url)){say('This clip needs an HTTPS video address.');return;}stopLive();stopVideo();mode='video';document.body.className='playing';document.getElementById('video-overlay').className='';document.getElementById('clip-title').textContent=video.title;document.getElementById('clip-status').textContent='Loading…';clip.src=video.url;document.getElementById('video-return').focus();playClip();}
+function playVideo(video){if(welcomeMusic)welcomeMusic.pause();if(!/^https:\/\//i.test(video.url)){say('This clip needs an HTTPS video address.');return;}stopLive();stopVideo();mode='video';document.body.className='playing';document.getElementById('video-overlay').className='';document.getElementById('clip-title').textContent=video.title;document.getElementById('clip-status').textContent='Loading…';clip.src=video.url;document.getElementById('video-return').focus();playClip();}
 clip.addEventListener('playing',function(){document.getElementById('clip-status').textContent='Playing';});
 clip.addEventListener('pause',function(){if(mode==='video')document.getElementById('clip-status').textContent='Paused · OK to continue';});
 clip.addEventListener('waiting',function(){document.getElementById('clip-status').textContent='Buffering…';});
 clip.addEventListener('error',function(){if(mode==='video')document.getElementById('clip-status').textContent='Clip could not play. Press Return to go back.';});
 clip.addEventListener('ended',function(){stopVideo();open(navFor('videos'));});
-function open(i){var target=buttons[i].getAttribute('data-view');if(target==='diagnostics'&&!staffUnlocked){openStaffPIN();return;}if(target!=='diagnostics')staffUnlocked=false;cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=target;if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
+function open(i){if(welcomeMusic)welcomeMusic.pause();var target=buttons[i].getAttribute('data-view');if(target==='diagnostics'&&!staffUnlocked){openStaffPIN();return;}if(target!=='diagnostics')staffUnlocked=false;cancelEmbeddedResume();diagKeyMode(false);stopLive();if(mode==='video')stopVideo();focus(i);view=target;if(view==='info')staySection='';panel.scrollTop=0;if(view==='diagnostics')diagKeyMode(true);render();if(view==='movies')launchMovies();else if(view==='live')startEmbeddedTV();}
 for(var i=0;i<buttons.length;i++)(function(index){buttons[index].onclick=function(){open(index);};})(i);
 document.getElementById('live-return').onclick=function(){embeddedGuideResume=false;stopLive();open(0);};
 document.getElementById('video-return').onclick=function(){stopVideo();open(navFor('videos'));};
 document.addEventListener('focusin',function(e){document.getElementById('help').textContent=e.target.parentNode===nav?'▲ ▼ Menu · OK Open · ▶ Explore · Return Welcome':'▲ ▼ Scroll · ◀ ▶ Choose · OK Open · Return Welcome';});
 function isBack(k){return k===10009||k===27||k===8;}
-document.addEventListener('keydown',function(e){var k=e.keyCode;if(staffPinKey(k)||staffShortcut(k,e.repeat)){e.preventDefault();return;}if(!room){var choices=panel.querySelectorAll('[data-action]');if(k===37||k===38)setupIndex=(setupIndex+5)%6;else if(k===39||k===40)setupIndex=(setupIndex+1)%6;else if(k===13){assignRoom(setupIndex+1);e.preventDefault();return;}if(choices[setupIndex])choices[setupIndex].focus();e.preventDefault();return;}if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat){if(mode==='tv-embedded')openChannelGuide();else if(mode==='tv-loading')welcomeGuidePending=true;else{if(mode==='video')stopVideo();cancelEmbeddedResume();view='live';welcomeGuidePending=true;startEmbeddedTV();}}return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
- if(mode==='tv-embedded'){if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(isBack(k)||k===13){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
+document.addEventListener('keydown',function(e){retryWelcomeVideo();syncWelcomeMusic();var k=e.keyCode;if(staffPinKey(k)||staffShortcut(k,e.repeat)){e.preventDefault();return;}if(!room){var choices=panel.querySelectorAll('[data-action]');if(k===37||k===38)setupIndex=(setupIndex+5)%6;else if(k===39||k===40)setupIndex=(setupIndex+1)%6;else if(k===13){assignRoom(setupIndex+1);e.preventDefault();return;}if(choices[setupIndex])choices[setupIndex].focus();e.preventDefault();return;}if(k===guideCode||e.key==='Guide'){diagRecord('GUIDE received; hidden='+document.hidden+'; view='+view+'; mode='+mode);e.preventDefault();if(!e.repeat){if(mode==='tv-embedded')openChannelGuide();else if(mode==='tv-loading')welcomeGuidePending=true;else{if(mode==='video')stopVideo();cancelEmbeddedResume();view='live';welcomeGuidePending=true;startEmbeddedTV();}}return;}if(view==='diagnostics'&&mode==='menu')diagRecord('Key '+k+(e.key?' · '+e.key:''));
+ if(mode==='tv-embedded'){if(k>=48&&k<=57){if(!e.repeat)numericChannelKey(String(k-48));e.preventDefault();return;}if(channelGuideOpen){if(k===38||k===40){guideIndex=Math.max(0,Math.min(guideChannels.length-1,guideIndex+(k===38?-1:1)));renderChannelGuide();readSelectedSchedule(false);}else if(k===13)tuneGuideChannel();else if(isBack(k))closeChannelGuide();e.preventDefault();return;}if(k===427||k===428){e.preventDefault();if(!e.repeat)changeEmbeddedChannel(k===427);return;}diagRecord('Embedded TV key '+k+(e.key?' · '+e.key:''));if(k===13){if(numericChannel)confirmNumericChannel();e.preventDefault();return;}if(isBack(k)){embeddedGuideResume=false;stopLive();open(0);e.preventDefault();}return;}
  if(mode==='tv-loading'){if(isBack(k)){stopLive();open(0);e.preventDefault();}return;}
  if(mode==='video'){if(isBack(k)){stopVideo();open(navFor('videos'));}else if(k===13||k===10252){if(clip.paused)playClip();else clip.pause();}else if(k===415)playClip();else if(k===19)clip.pause();else if(k===413){stopVideo();open(navFor('videos'));}else if(k===37||k===39){if(isFinite(clip.duration)&&clip.duration>0)clip.currentTime=Math.max(0,Math.min(clip.duration,clip.currentTime+(k===37?-10:10)));}else return;e.preventDefault();return;}
  if(isBack(k)){if(view==='info'&&staySection){staySection='';panel.scrollTop=0;render();panel.querySelector('[data-action]').focus();}else open(0);e.preventDefault();return;}
  var active=document.activeElement,inNav=active&&active.parentNode===nav,actions=panel.querySelectorAll('[data-action]'),n=-1;for(var j=0;j<actions.length;j++)if(active===actions[j])n=j;
  if(k===13){if(inNav)open(selected);else if(n>=0)actions[n].click();e.preventDefault();}
- else if(moveStayFocus(k,active)){e.preventDefault();}
+ else if(movePageFocus(k,active)){e.preventDefault();}
  else if(inNav&&(k===38||k===40)){focus(selected+(k===38?-1:1));e.preventDefault();}
- else if(inNav&&k===39){if(actions.length)actions[0].focus();else panel.focus();e.preventDefault();}
+ else if(inNav&&k===39){focusPageEntry();e.preventDefault();}
  else if(k===37){if(n>0)actions[n-1].focus();else focus(selected);e.preventDefault();}
  else if(k===39&&n>=0){actions[(n+1)%actions.length].focus();e.preventDefault();}
  else if(k===38||k===40){panel.scrollTop+=(k===38?-1:1)*Math.max(100,panel.clientHeight*.35);e.preventDefault();}
 });
 function valid(value){return value&&value.schemaVersion===1&&value.room&&value.room.id===room&&Array.isArray(value.pages)&&value.pages.length===3&&value.pages.every(function(p){return typeof p.title==='string'&&typeof p.text==='string';})&&Array.isArray(value.menus)&&Array.isArray(value.events)&&value.contact;}
-function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.2'+(preview?'&preview=1':''),true);xhr.timeout=10000;
+function poll(){if(busy||!room)return;pollGuestWelcome();busy=true;var requestRoom=room;var xhr=new XMLHttpRequest();xhr.open('GET',url+'?v='+Date.now()+'&appVersion=1.2.12'+(preview?'&preview=1':''),true);xhr.timeout=10000;
  function failed(){busy=false;if(requestRoom!==room)return;if(Date.now()>noticeUntil)status.textContent=data?'Offline · showing saved hotel information':'Hotel information unavailable · retrying automatically';}
  xhr.onerror=failed;xhr.ontimeout=failed;xhr.onload=function(){busy=false;if(requestRoom!==room)return;try{if(xhr.status===404){data=null;try{localStorage.removeItem(cacheKey);}catch(ignore){}say('Cloud content is not enabled for this room.');render();return;}if(xhr.status!==200)throw Error('HTTP '+xhr.status);var next=JSON.parse(xhr.responseText);if(!valid(next))throw Error('Invalid hotel content');var changed=!data||data.revision!==next.revision;data=next;try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(ignore){}if(Date.now()>noticeUntil)status.textContent='Updated '+new Date().toLocaleTimeString();if(changed&&mode==='menu')render();}catch(e){failed();}};try{xhr.send();}catch(e){failed();}}
 try{var cached=JSON.parse(localStorage.getItem(cacheKey));if(valid(cached)){data=cached;status.textContent='Showing saved hotel information · connecting…';}}catch(ignore){}
@@ -427,7 +599,7 @@ try{if(!preview&&tizen.tvinputdevice)['MediaPlayPause','MediaPlay','MediaPause',
 try{var savedLog=JSON.parse(sessionStorage.getItem('vl-epg-log'));if(Array.isArray(savedLog))diagLog=savedLog.slice(-100);}catch(ignore){}
 registerGuide();registerChannelKeys();
 function clock(){if(guestWelcome&&Date.parse(guestWelcome.expiresAt)<=Date.now())applyGuestWelcome(null);document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}clock();setInterval(clock,10000);
-focus(0);render();poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
+focus(0);render();setTimeout(syncWelcomeMusic,300);poll();setInterval(poll,30000);promoTimer=setInterval(rotateWelcomePromo,20000);
 function cancelEmbeddedResume(){clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;embeddedGuideResume=false;}
 function scheduleEmbeddedResume(){
  clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;
@@ -437,11 +609,11 @@ function scheduleEmbeddedResume(){
 }
 function onWidgetVisibility(){
  diagRecord('Visibility: '+(document.hidden?'hidden':'visible'));
- if(document.hidden){staffUnlocked=false;staffPinInput='';stopWelcomeVideo();clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;if(embeddedGuideResume)diagRecord('TV restore pending: widget hidden again');diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}
+ if(document.hidden){if(welcomeMusic)welcomeMusic.pause();staffUnlocked=false;staffPinInput='';stopWelcomeVideo();clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;if(embeddedGuideResume)diagRecord('TV restore pending: widget hidden again');diagKeyMode(false);stopLive();if(mode==='video')stopVideo();}
  else{if(embeddedGuideResume){scheduleEmbeddedResume();poll();return;}if(diagResume){diagResume=false;open(navFor('diagnostics'));diagRecord('Returned to diagnostic widget.');}else open(0);poll();}
 }
 document.addEventListener('visibilitychange',onWidgetVisibility);
-window.addEventListener('pagehide',function(){clearInterval(promoTimer);clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
+window.addEventListener('pagehide',function(){if(welcomeMusic)welcomeMusic.pause();clearInterval(promoTimer);clearTimeout(embeddedResumeTimer);embeddedResumeTimer=null;stopLive();if(mode==='video')stopVideo();});
 })();
 
 
