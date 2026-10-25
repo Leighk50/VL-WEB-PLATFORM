@@ -76,3 +76,10 @@ On Azure App Service, TV settings, approvals, arrivals and uploaded MP4 files us
 The H.Browser address stays `https://www.villagelimits.co.uk/tv/install/`. Firmware requests `sssp_config.xml` and `VillageLimits.wgt` beneath it; the directory itself is not a browser landing page. The shared manifest now advertises 1.2.11. TVs check through their existing launcher on launch/restart; validate one additional room before restarting the rest. Do not uninstall or clear app storage.
 
 The exact Room 1 tested signed widget is 35,375,903 bytes, SHA-256 `a1289b8de33ad426982066b5c623a842a9d5af181a41bece36e6af877102c6a7`. Four binary repository parts are joined in order and checked before serving one unchanged WGT. Parts are used because the publishing transport limits individual requests. The app/package IDs and author certificate match the existing release. Room assignment and private approval tokens remain in existing local storage. Server room, approval, guest and video records are not changed by this release. The Room 3 recovery installer is unchanged.
+
+
+## Shared signed release 1.2.12
+
+The shared installer now advertises 1.2.12 at the unchanged `/tv/install/` address. The uploaded signed package is 35,376,452 bytes, SHA-256 `d8d42c8266e60097685c56ea58495a2244157decb5985b253d1596dfd792b166`. Both XML signatures and every reference digest were cryptographically verified. The author certificate is unchanged from 1.2.11, and index/settings/CSS/JavaScript match the prepared release exactly. Video and music bytes are unchanged. App identity, room assignment and approval-token storage keys are retained.
+
+This publishes the Local Explorer and consistent-navigation client for all room TVs. TVs must perform their normal launcher update check; publication alone does not prove installation on each physical TV. Do not uninstall or clear data. The previous 1.2.11 package parts and Room 3 recovery installer remain available for recovery.
