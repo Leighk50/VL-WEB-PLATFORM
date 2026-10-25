@@ -8,7 +8,7 @@ function clean(raw){
  const out={};
  for(const [key,max] of [['id',80],['title',120],['area',120],['venue',160],['description',900]]){if(typeof raw[key]!=='string'||raw[key].length>max)throw Error('Invalid '+key);out[key]=raw[key].trim();}
  if(!/^[a-z0-9-]+$/.test(out.id)||!out.title||!out.description)throw Error('Enter an ID, title and description.');
- out.category=raw.category;out.url=safeUrl(raw.url);out.sourceUrl=safeUrl(raw.sourceUrl);
+ out.category=raw.category;out.url=safeUrl(raw.url);out.sourceUrl=safeUrl(raw.sourceUrl);out.sourceName=new URL(out.sourceUrl).hostname.replace(/^www\./,'')==='wowlincs.co.uk'?'Discovered through WOW Lincs':'';
  if(blocked.test([out.title,out.venue,out.description,out.url].join(' '))||raw.competitorVenue===true||raw.foodLed===true)throw Error('Food, drink and competing accommodation promotions are excluded.');
  out.status=raw.status==='approved'?'approved':'draft';
  out.reviewedNonCompeting=raw.reviewedNonCompeting===true;
@@ -29,7 +29,7 @@ function createExplorer(store=require('./hotel-tv-storage')){
  function read(){try{return JSON.parse(fs.readFileSync(path.join(store.dir,filename),'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;return {version:1,items:require('./hotel-tv-local-explorer-seed.json')};}}
  function revision(state){return '"'+crypto.createHash('sha256').update(JSON.stringify(state)).digest('hex')+'"';}
  function save(items){if(!Array.isArray(items)||items.length>100)throw Error('Add up to 100 places or events.');const next={version:1,items:items.map(clean)};if(new Set(next.items.map(i=>i.id)).size!==next.items.length)throw Error('IDs must be unique.');store.write(filename,next);return next;}
- function published(now=new Date()){return read().items.map(clean).filter(i=>i.status==='approved'&&(i.category!=='events'||Date.parse(i.endsAt)>now.getTime())).map(({status,reviewedNonCompeting,sourceUrl,...item})=>{const original=require('./hotel-tv-attractions.json').find(a=>a.url===item.url);return original?{...item,qr:original.qr}:item;});}
+ function published(now=new Date()){return read().items.map(clean).filter(i=>i.status==='approved'&&(i.category!=='events'||Date.parse(i.endsAt)>now.getTime())).map(({status,reviewedNonCompeting,sourceUrl,...item})=>{const original=require('./hotel-tv-attractions.json').find(a=>a.url===item.url);const qr=require('./hotel-tv-local-explorer-qr.json')[item.url];return original?{...item,qr:original.qr}:qr?{...item,qr}:item;});}
  return {read,save,revision,published};
 }
 module.exports={createExplorer,clean,CATEGORIES};

@@ -46,3 +46,7 @@ test('Remote-style tab actions render approved walks and events, omit expired ca
  const all=(n)=>[n,...n.children.flatMap(all)],texts=()=>all(panel).map(e=>e.textContent),click=text=>{const el=all(panel).find(e=>e.tag==='button'&&e.textContent===text);assert(el,'Missing '+text);el.onclick();};
  context.render();assert(texts().includes('Film today'));click('Tomorrow');assert(texts().includes('Film tomorrow'));assert(texts().includes('Today'));click('Walks & Nature');assert(texts().includes(walk().title));click('Local Events');assert(texts().includes(event.title));assert(!texts().includes('Expired item'));click('Kinema');assert(texts().includes('Film tomorrow'));
 });
+test('Expanded WOW catalogue has 22 original review records with destination QRs and no competing venues',()=>{
+ const seed=require('./hotel-tv-local-explorer-seed.json'),qr=require('./hotel-tv-local-explorer-qr.json');assert.equal(seed.length,22);assert.equal(new Set(seed.map(i=>i.id)).size,22);assert.equal(seed.filter(i=>i.category==='events').length,7);
+ for(const item of seed){const result=clean(item);assert.equal(result.status,'draft');assert.equal(result.sourceName,'Discovered through WOW Lincs');assert(qr[item.url].startsWith('data:image/png;base64,'));assert(!/petwood|dower house|bar eleven/i.test(item.title+' '+item.venue));}
+});

@@ -102,3 +102,5 @@ body.live #live-overlay .live-help {
 #channel-info-banner{position:fixed;left:4%;bottom:5%;z-index:9997;max-width:70%;padding:12px 20px;background:rgba(15,35,30,.84);color:#fff;border-radius:10px;font:20px Arial,sans-serif;pointer-events:none}
 #channel-info-banner.hidden{display:none}
 .explore-tabs{display:flex;flex-wrap:wrap;gap:8px}.explore-tabs button{font-size:20px;padding:12px 16px}
+
+.wow-source{display:inline-block;font-size:18px;font-weight:600;letter-spacing:.02em;color:#295b43;background:#e5eddf;border-radius:20px;padding:6px 14px;margin:0 0 12px}
