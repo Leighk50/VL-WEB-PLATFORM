@@ -6,6 +6,7 @@ const filename=path.join(dir,'hotel-tv.json');
 const activity=new Map();
 const {handleGuestTv}=require('./hotel-tv-guests');
 const {explore}=require('./hotel-tv-explore');
+const localExplorer=require('./hotel-tv-local-explorer').createExplorer();
 const {airtime}=require('./hotel-tv-airtime');
 const mediaDir=path.join(dir,'tv-media'),MAX_VIDEO_BYTES=100*1024*1024;
 function defaults(){return {version:1,notice:'',welcomeTitle:'Make yourself at home',welcomeText:'Welcome to The Village Limits. We hope you enjoy your stay.',videos:[],welcomeVideo:null,rooms:Array.from({length:6},(_,i)=>({id:i+1,label:'Room '+(i+1),enabled:false,message:''}))};}
@@ -60,6 +61,29 @@ function serveVideo(req,res,pathname){
 }
 async function handleHotelTv(req,res,pathname,identity){
  if(await handleGuestTv(req,res,pathname,identity,id=>readConfig().rooms.some(r=>r.id===id&&r.enabled)))return true;
+ if(pathname==='/admin/tv/local-explorer'||pathname==='/api/admin/tv/local-explorer'){
+  if(!identity)return json(res,401,{error:'Please sign in.'}),true;
+  if(!identity.isOwner&&!(identity.permissions||[]).includes('settings'))return json(res,403,{error:'Website Details permission is required.'}),true;
+  if(pathname==='/admin/tv/local-explorer'){
+   if(req.method!=='GET')return json(res,405,{error:'Method not allowed.'}),true;
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(fs.readFileSync(path.join(__dirname,'hotel-tv-local-explorer-admin.html')));return true;
+  }
+  const state=localExplorer.read();
+  if(req.method==='GET')return json(res,200,state,{ETag:localExplorer.revision(state)}),true;
+  if(req.method!=='PUT')return json(res,405,{error:'Method not allowed.'},{Allow:'GET, PUT'}),true;
+  if(!sameOrigin(req))return json(res,403,{error:'Invalid request origin.'}),true;
+  if(!String(req.headers['content-type']||'').startsWith('application/json'))return json(res,415,{error:'JSON required.'}),true;
+  if(req.headers['if-match']!==localExplorer.revision(state))return json(res,409,{error:'Explorer changed in another session. Reload before saving.'}),true;
+  try{const next=localExplorer.save((await body(req)).items);json(res,200,next,{ETag:localExplorer.revision(next)});}catch(e){json(res,400,{error:e.message});}return true;
+ }
+ const pilotAsset=pathname.match(/^\/tv\/local-explorer-pilot\/(index\.html|tv\.js|tv\.css|settings\.js|lindus-combined-test\.mp4|lindus-welcome-music\.wav)?$/);
+ if(pilotAsset){
+  if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'}),true;
+  const name=pilotAsset[1]||'index.html',isMedia=/\.(mp4|wav)$/.test(name);
+  const bytes=isMedia?require('./hotel-tv-local-explorer-assets').media(name):fs.readFileSync(path.join(__dirname,'hotel-tv-local-explorer-client',name));
+  const type=name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':name.endsWith('.mp4')?'video/mp4':name.endsWith('.wav')?'audio/wav':'text/html';
+  res.writeHead(200,{'Content-Type':type,'Content-Length':bytes.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:bytes);return true;
+ }
  if(pathname.startsWith('/tv/media/')){serveVideo(req,res,pathname);return true;}
  if(pathname==='/api/admin/tv/videos'){
   if(!identity)return json(res,401,{error:'Please sign in.'}),true;
@@ -110,7 +134,7 @@ async function handleHotelTv(req,res,pathname,identity){
   const content=JSON.parse(fs.readFileSync(path.join(contentDir,'content.json'),'utf8').replace(/^\uFEFF/,''));
   const room=Number(match[1]),feed=publicFeed(content,readConfig(),room);if(!feed)return json(res,404,{error:'This room is not enabled.'},{'Access-Control-Allow-Origin':'*'}),true;
   if(new URL(req.url,'http://localhost').searchParams.get('preview')!=='1'){const reported=new URL(req.url,'http://localhost').searchParams.get('appVersion');activity.set(room,{lastRequest:new Date().toISOString(),appVersion:/^\d+\.\d+\.\d+$/.test(reported||'')?reported:null});}
-  feed.explore=await explore();feed.airtime=airtime();feed.revision=revision(feed).slice(1,-1);
+  feed.explore=await explore();if(new URL(req.url,'http://localhost').searchParams.get('localExplorerPilot')!=='0'){try{feed.explore.localExplorer={items:localExplorer.published()};}catch{feed.explore.localExplorer={items:[],status:'unavailable'};}}feed.airtime=airtime();feed.revision=revision(feed).slice(1,-1);
   json(res,200,feed,{'Access-Control-Allow-Origin':'*'});return true;
  }
  return false;
