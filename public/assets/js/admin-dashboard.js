@@ -337,6 +337,18 @@
         <input data-event="ticketUrl" value="${esc(event.ticketUrl||"")}">
       </label>
 
+      <div class="admin-card event-menu-editor" style="margin:14px 0">
+        <h3>Event Menu</h3>
+        <label class="switchline"><input type="checkbox" data-menu-enabled ${event.eventMenu?.enabled?'checked':''}> Show menu on event</label>
+        <label>Menu heading<input data-menu-heading value="${esc(event.eventMenu?.heading||'Three-Course Menu')}"></label>
+        <label>Price display (e.g. £120 per couple)<input data-menu-price value="${esc(event.eventMenu?.priceLabel||'')}"></label>
+        <label>Starter<textarea rows="4" data-menu-starter>${esc(event.eventMenu?.starter||'')}</textarea></label>
+        <label>Main course<textarea rows="7" data-menu-main>${esc(event.eventMenu?.main||'')}</textarea></label>
+        <label>Desserts (separate choices with a blank line)<textarea rows="6" data-menu-dessert>${esc(event.eventMenu?.dessert||'')}</textarea></label>
+        <button type="button" class="small-btn" data-butcher-template>Fill Butcher's Block menu</button>
+        <p style="font-size:.85rem">Save Changes to publish. The menu is attached to this event only.</p>
+      </div>
+
       <div class="event-image-editor">
         <label>Event Image</label>
         <img data-image-preview src="${esc(event.image||"/assets/images/event.webp")}" alt="Current event image" style="display:block;width:min(100%,520px);max-height:300px;object-fit:cover;margin:8px 0 12px;border:1px solid #ddd">
@@ -365,6 +377,24 @@
           else event[key]=input.type==="checkbox"?input.checked:input.value;
         };
       });
+
+      const menuBox=$(".event-menu-editor",el);
+      const menu=event.eventMenu ||= {enabled:false,heading:"Three-Course Menu",priceLabel:"",starter:"",main:"",dessert:""};
+      const fields={"[data-menu-heading]":"heading","[data-menu-price]":"priceLabel","[data-menu-starter]":"starter","[data-menu-main]":"main","[data-menu-dessert]":"dessert"};
+      Object.entries(fields).forEach(([selector,key])=>{$(selector,menuBox).oninput=e=>{menu[key]=e.target.value;};});
+      $("[data-menu-enabled]",menuBox).onchange=e=>{menu.enabled=e.target.checked;};
+      $("[data-butcher-template]",menuBox).onclick=()=>{
+        if(!/butcher.s? block/i.test(event.title||"")){alert("This template is for Butcher's Block Night only.");return;}
+        if(!confirm("Replace this event's menu fields with the Butcher's Block menu?"))return;
+        Object.assign(menu,{
+          enabled:true,heading:"Three-Course Menu",priceLabel:"£120 per couple",
+          starter:"King scallop served in its shell with crispy black pudding, parsnip purée and bacon crisp.",
+          main:"Butcher's Block Côte de Boeuf — 350g per person, cooked medium-rare.\\nHomemade chips with truffle and rosemary salt.\\nIceberg wedge Caesar salad with Caesar dressing, anchovies, bacon lardons and Parmesan.\\nPeppercorn sauce and Béarnaise sauce.",
+          dessert:"Raspberry Ripple Baked Alaska — Victoria sponge topped with Cornish raspberry ripple ice cream, wrapped in meringue and baked until golden.\\n\\nMelting Chocolate Ball — chocolate sphere with brownie, mousse and candied hazelnuts."
+        });
+        Object.entries(fields).forEach(([selector,key])=>{$(selector,menuBox).value=menu[key];});
+        $("[data-menu-enabled]",menuBox).checked=true;
+      };
 
       const uploader=$("[data-event-upload]",el);
       if(uploader)uploader.onchange=()=>{const file=uploader.files&&uploader.files[0];uploadEventImage(file,event,el);};
