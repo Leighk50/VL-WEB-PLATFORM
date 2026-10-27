@@ -38,6 +38,9 @@ jobs:
         run: |
           mkdir -p epos-staging
           cp public/epos-demo.html epos-staging/index.html
+          cp epos/pwa/manifest.webmanifest epos-staging/manifest.webmanifest
+          cp epos/pwa/icon.svg epos-staging/icon.svg
+          cp epos/pwa/service-worker.js epos-staging/service-worker.js
           cp public/epos-shared-test.html epos-staging/shared.html
           cp public/epos-device-registration.html epos-staging/devices.html
           cp public/epos-manager-preview.html epos-staging/manager.html
