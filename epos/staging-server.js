@@ -8,7 +8,7 @@ const sharedTill=require("./shared-till");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/catalogue-data.json":"catalogue-data.json"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
  if(route.startsWith("/api/till/")){
@@ -91,5 +91,5 @@ http.createServer(async(req,res)=>{
 
  if(req.method!=="GET"||!Object.hasOwn(files,route)){res.writeHead(404,{"Content-Type":"text/plain","Cache-Control":"no-store"});return res.end("Not found")}
  const file=path.join(root,files[route]);
- fs.readFile(file,(err,bytes)=>{if(err){res.writeHead(500);return res.end("Unavailable")}res.writeHead(200,{"Content-Type":route.endsWith(".json")?"application/json; charset=utf-8":"text/html; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Robots-Tag":"noindex, nofollow","Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});res.end(bytes)})
+ fs.readFile(file,(err,bytes)=>{if(err){res.writeHead(500);return res.end("Unavailable")}res.writeHead(200,{"Content-Type":route.endsWith(".json")||route.endsWith(".webmanifest")?"application/json; charset=utf-8":route.endsWith(".svg")?"image/svg+xml":route.endsWith(".js")?"application/javascript; charset=utf-8":"text/html; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Robots-Tag":"noindex, nofollow","Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});res.end(bytes)})
 }).listen(process.env.PORT||8080,"0.0.0.0");
