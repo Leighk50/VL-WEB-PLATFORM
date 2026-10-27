@@ -194,6 +194,21 @@ if(view==="quick"||view==="till"){
   finally{printTest.disabled=false}
  });
  screen.append(printTest);
+ if(view==="till"&&sharedEnabled&&sharedTable?.sessionId){
+  const queueBill=async(tabId)=>{
+   const token=localStorage.getItem("vl_epos_device_token");
+   const payload={tableNumber:table+1};if(tabId)payload.tabId=tabId;
+   const response=await fetch("/api/print/bill",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
+   const result=await response.json();if(!response.ok)throw Error(result.error||"Bill could not be queued");
+   alert("UNPAID bill queued for the Master Till printer. Job "+result.id);
+  };
+  const printAll=button("PRINT TABLE BILL",async()=>{try{await queueBill()}catch(e){alert(e.message)}});
+  screen.append(printAll);
+  for(const tab of sharedTable.tabs||[]){
+   const printTab=button("PRINT "+tab.label.toUpperCase(),async()=>{try{await queueBill(tab.id)}catch(e){alert(e.message)}});
+   screen.append(printTab);
+  }
+ }
 }
 if(view==="quick"&&state.held.length){screen.append(button("Recall Held Sale ("+state.held.length+")",()=>{if(state.quick.length)return alert("Clear or hold the current quick sale first.");state.quick=state.held.pop();save();render()}))}
 if(view==="till"||view==="quick"){screen.append(node("h2",view==="quick"?"Quick Sale · Bar & Counter":"Table "+(table+1)+" · Ordering"));if(view==="till"&&sharedEnabled){const note=node("p",sharedFailure?"Shared ordering unavailable: "+sharedFailure:sharedTable?"Shared PostgreSQL ordering active":"Connecting to shared table…");note.className="muted";screen.append(note)}const dept=node("div");dept.className="department-tabs";for(const d of ["Food","Drinks"]){const b=button(d.toUpperCase(),()=>{department=d;category=categoryGroups[d][0];render()},department===d?"active":"");dept.append(b)}screen.append(dept);
