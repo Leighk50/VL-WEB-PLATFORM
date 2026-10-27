@@ -38,6 +38,11 @@ http.createServer(async(req,res)=>{
   let device;
   try{device=await authenticateDevice(pool,req)}catch(e){console.error("Till authentication unavailable",e.code||"error");return json(503,{error:"authentication_unavailable"})}
   if(!device||device.kind!=="till")return json(401,{error:"till_registration_required"});
+  if(process.env.EPOS_LICENSING_ENFORCED==="true"){
+    const header=req.headers.authorization||"";
+    const licence=await licensing.status(pool,header.startsWith("Bearer ")?header.slice(7):"").catch(()=>null);
+    if(!licence||!licence.valid)return json(403,{error:"licence_expired_or_inactive"});
+  }
   const match=/^\/api\/till\/tables\/(\d{1,2})$/.exec(route);
   if(!match)return json(404,{error:"unknown_endpoint"});
   const tableId=Number(match[1]);
