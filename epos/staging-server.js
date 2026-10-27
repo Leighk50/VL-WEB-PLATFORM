@@ -8,6 +8,7 @@ const sharedTill=require("./shared-till");
 const licensing=require("./site-licensing");
 const approvals=require("./licence-approval");
 const masterTill=require("./master-till");
+const printQueue=require("./print-queue");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -20,6 +21,29 @@ if(pool){
 const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route.startsWith("/api/print/")){
+  const reply=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
+  if(!pool)return reply(503,{error:"database_unavailable"});
+  let device;
+  try{device=await authenticateDevice(pool,req)}catch(e){return reply(503,{error:"authentication_unavailable"})}
+  if(!device||device.kind!=="till")return reply(401,{error:"registered_till_required"});
+  const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);
+  if(!licence?.valid)return reply(403,{error:"licence_inactive"});
+  let body={};
+  if(req.method==="POST"){
+   let raw="";
+   try{for await(const part of req){raw+=part;if(raw.length>2048)return reply(413,{error:"payload_too_large"})}body=raw?JSON.parse(raw):{}}
+   catch(e){return reply(400,{error:"invalid_payload"})}
+  }
+  try{
+   if(route==="/api/print/test"&&req.method==="POST")return reply(200,await printQueue.enqueueTest(pool,device));
+   const master=await pool.query(`SELECT master_device_id FROM epos_site_local_services WHERE venue_id=$1`,[device.venue_id]);
+   if(master.rows[0]?.master_device_id!==device.id)return reply(403,{error:"master_till_only"});
+   if(route==="/api/print/claim"&&req.method==="POST")return reply(200,{job:await printQueue.claimNext(pool,device)});
+   if(route==="/api/print/complete"&&req.method==="POST")return reply(200,await printQueue.complete(pool,device,body));
+   return reply(405,{error:"unsupported_action"});
+  }catch(e){console.error("Print queue error",e.code||e.message);return reply(409,{error:"print_queue_operation_failed"})}
+ }
  if(route==="/api/master-till"){
   const respond=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
   if(!pool)return respond(503,{error:"database_unavailable"});
