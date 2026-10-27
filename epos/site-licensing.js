@@ -62,4 +62,33 @@ async function deregister(pool,{siteId,deviceId}){
   return {deviceId,deregistered:true};
  }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
 }
-module.exports={register,status,deregister,validate};
+async function listDevices(pool,siteId){
+ if(siteId!=="VL")throw Error("invalid_site");
+ const r=await pool.query(`SELECT d.code AS "deviceId",d.kind AS "deviceType",d.enabled,
+ l.expires_at AS "expiresAt",l.deregistered_at AS "deregisteredAt",
+ (d.enabled AND d.token_hash IS NOT NULL AND l.deregistered_at IS NULL AND l.expires_at>now() AND s.paid_through>now()) AS active
+ FROM epos_devices d JOIN epos_venues v ON v.id=d.venue_id
+ LEFT JOIN epos_device_licences l ON l.device_id=d.id
+ JOIN epos_site_licences s ON s.venue_id=d.venue_id
+ WHERE v.code=$1 ORDER BY d.code`,[siteId]);
+ const site=await pool.query(`SELECT s.max_tills AS "maxTills",s.paid_through AS "paidThrough"
+ FROM epos_site_licences s JOIN epos_venues v ON v.id=s.venue_id WHERE v.code=$1`,[siteId]);
+ if(site.rowCount!==1)throw Error("unknown_site");
+ const active=r.rows.filter(d=>d.active&&d.deviceType==="till").length;
+ return {siteId,limit:site.rows[0].maxTills,used:active,available:Math.max(0,site.rows[0].maxTills-active),paidThrough:site.rows[0].paidThrough,devices:r.rows};
+}
+async function renewPaidLicences(pool,siteId){
+ if(siteId!=="VL")throw Error("invalid_site");
+ // Never extend paid_through here: it must come from verified billing.
+ const r=await pool.query(`UPDATE epos_device_licences l
+ SET expires_at=LEAST(now()+interval '35 days',s.paid_through)
+ FROM epos_devices d JOIN epos_site_licences s ON s.venue_id=d.venue_id
+ JOIN epos_venues v ON v.id=d.venue_id
+ WHERE l.device_id=d.id AND v.code=$1 AND d.enabled=true
+ AND d.token_hash IS NOT NULL AND l.deregistered_at IS NULL
+ AND s.paid_through>now()
+ AND l.expires_at<LEAST(now()+interval '35 days',s.paid_through)
+ RETURNING d.code`,[siteId]);
+ return {renewed:r.rowCount};
+}
+module.exports={register,status,deregister,validate,listDevices,renewPaidLicences};
