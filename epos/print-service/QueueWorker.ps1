@@ -65,8 +65,7 @@ while ($true) {
       $response = Invoke-RestMethod -Uri ($base+'/api/print/claim') -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 15
       if ($null -ne $response.job) {
         $id = [string]$response.job.id
-        if ($id -notmatch '^[0-9a-f-]{36}
-) { throw 'Invalid Azure print job ID' }
+        if ($id.Length -ne 36) { throw 'Invalid Azure job identifier' }
         $jobPath = Join-Path $processing ('azure-'+$id+'.json')
         [System.IO.File]::WriteAllText($jobPath,($response.job | ConvertTo-Json -Depth 5))
         $outcome = 'review'
