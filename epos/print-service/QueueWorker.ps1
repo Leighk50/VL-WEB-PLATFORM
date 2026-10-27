@@ -56,6 +56,7 @@ while ($true) {
   $credentialPath = Join-Path $Root 'service-token.dpapi'
   if (Test-Path -LiteralPath $credentialPath) {
     try {
+      Add-Type -AssemblyName System.Security -ErrorAction Stop
       $cipher = [Convert]::FromBase64String([System.IO.File]::ReadAllText($credentialPath).Trim())
       $raw = [System.Security.Cryptography.ProtectedData]::Unprotect($cipher,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
       $token = [System.Text.Encoding]::UTF8.GetString($raw)
