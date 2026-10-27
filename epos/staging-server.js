@@ -6,6 +6,7 @@ const {authenticateDevice}=require("./device-auth");
 const {startPairing,redeemPairing}=require("./device-pairing");
 const sharedTill=require("./shared-till");
 const licensing=require("./site-licensing");
+const approvals=require("./licence-approval");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -21,16 +22,24 @@ http.createServer(async(req,res)=>{
     try{const result=await licensing.status(pool,auth.startsWith("Bearer ")?auth.slice(7):"");return respond(result?200:401,result||{error:"unregistered"})}
     catch(e){return respond(503,{error:"status_unavailable"})}
   }
-  if(req.method!=="POST")return respond(405,{error:"method_not_allowed"});
-  if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
+  if(req.method!=="POST" && route!=="/api/licensing/pending")return respond(405,{error:"method_not_allowed"});
+  const publicAction=["/api/licensing/request","/api/licensing/claim"].includes(route);
+  if(!publicAction&&!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
+  if(route==="/api/licensing/pending"){
+    if(req.method!=="GET")return respond(405,{error:"method_not_allowed"});
+    try{return respond(200,{requests:await approvals.list(pool)})}catch(e){return respond(503,{error:"list_unavailable"})}
+  }
   try{
     let body="";
     for await(const chunk of req){body+=chunk;if(body.length>2048)return respond(413,{error:"payload_too_large"})}
     const input=JSON.parse(body);
-    if(route==="/api/licensing/register")return respond(200,await licensing.register(pool,input));
+    if(route==="/api/licensing/request")return respond(200,await approvals.request(pool,input));
+    if(route==="/api/licensing/claim")return respond(200,await approvals.claim(pool,input));
+    if(route==="/api/licensing/approve")return respond(200,await approvals.approve(pool,input.requestId));
     if(route==="/api/licensing/deregister")return respond(200,await licensing.deregister(pool,input));
     return respond(404,{error:"unknown_endpoint"});
   }catch(e){return respond(409,{error:e.message||"licensing_failed"})}
+
  }
  if(route.startsWith("/api/till/")){
   const json=(status,data)=>{res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
