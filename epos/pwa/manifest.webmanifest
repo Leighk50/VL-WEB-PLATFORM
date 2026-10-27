@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Lindus EPOS — Staging",
+  "short_name": "Lindus EPOS",
+  "description": "Village Limits EPOS staging application. Not for live transactions.",
+  "start_url": "/?source=installed",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ed",
+  "theme_color": "#153c32",
+  "lang": "en-GB",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
