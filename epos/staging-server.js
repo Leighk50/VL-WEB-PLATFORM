@@ -9,6 +9,7 @@ const licensing=require("./site-licensing");
 const approvals=require("./licence-approval");
 const masterTill=require("./master-till");
 const printQueue=require("./print-queue");
+const billPrint=require("./bill-print");
 const printAuth=require("./print-service-auth");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
@@ -35,7 +36,7 @@ http.createServer(async(req,res)=>{
   let device;
   try{device=await (route==="/api/print/claim"||route==="/api/print/complete"?printAuth.authenticate(pool,req):authenticateDevice(pool,req))}catch(e){return reply(503,{error:"authentication_unavailable"})}
   if(!device||device.kind!=="till")return reply(401,{error:"registered_till_required"});
-  if(route==="/api/print/test"){const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);if(!licence?.valid)return reply(403,{error:"licence_inactive"})}
+  if(route==="/api/print/test"||route==="/api/print/bill"){const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);if(!licence?.valid)return reply(403,{error:"licence_inactive"})}
   let body={};
   if(req.method==="POST"){
    let raw="";
@@ -44,6 +45,7 @@ http.createServer(async(req,res)=>{
   }
   try{
    if(route==="/api/print/test"&&req.method==="POST")return reply(200,await printQueue.enqueueTest(pool,device));
+   if(route==="/api/print/bill"&&req.method==="POST")return reply(200,await billPrint.enqueueBill(pool,device,body));
    const master=await pool.query(`SELECT master_device_id FROM epos_site_local_services WHERE venue_id=$1`,[device.venue_id]);
    if(master.rows[0]?.master_device_id!==device.id)return reply(403,{error:"master_till_only"});
    if(route==="/api/print/claim"&&req.method==="POST")return reply(200,{job:await printQueue.claimNext(pool,device)});
