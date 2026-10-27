@@ -8,6 +8,7 @@ try {
  $plain=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
  $response=Invoke-RestMethod -Uri 'https://vl-epos-staging-cngrfug6feewdmey.ukwest-01.azurewebsites.net/api/print-service/enrol' -Method Post -Headers @{'x-epos-staging-key'=$plain} -ContentType 'application/json' -Body '{}' -TimeoutSec 20
  if($response.deviceId -ne 'TILL-03'){throw 'Unexpected master device identity'}
+ Add-Type -AssemblyName System.Security -ErrorAction Stop
  $bytes=[System.Text.Encoding]::UTF8.GetBytes([string]$response.token)
  $cipher=[System.Security.Cryptography.ProtectedData]::Protect($bytes,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
  $path=Join-Path $root 'service-token.dpapi'
