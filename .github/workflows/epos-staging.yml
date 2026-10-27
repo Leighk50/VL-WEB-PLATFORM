@@ -34,7 +34,7 @@ jobs:
       - name: Validate EPOS source and tests
         run: |
           node --check epos/catalogue.js
-          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js epos/device-auth.test.js epos/device-pairing.test.js epos/shared-till.test.js epos/site-licensing.test.js epos/browser-licensing.test.js epos/licence-management.test.js epos/master-till.test.js
+          node --test epos/catalogue.test.js epos/admin-integration.test.js epos/catalogue-import.test.js epos/shared-orders.test.js epos/shared-read-api.test.js epos/device-auth.test.js epos/device-pairing.test.js epos/shared-till.test.js epos/site-licensing.test.js epos/browser-licensing.test.js epos/licence-management.test.js epos/master-till.test.js epos/print-queue.test.js
       - name: Build isolated EPOS staging package
         run: |
           mkdir -p epos-staging
@@ -57,6 +57,7 @@ jobs:
           cp epos/shared-till.js epos-staging/shared-till.js
           cp epos/site-licensing.js epos-staging/site-licensing.js
           cp epos/master-till.js epos-staging/master-till.js
+          cp epos/print-queue.js epos-staging/print-queue.js
           cp epos/licence-approval.js epos-staging/licence-approval.js
           cp epos/staging-package.json epos-staging/package.json
           cd epos-staging
