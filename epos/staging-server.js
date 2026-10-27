@@ -10,6 +10,12 @@ const approvals=require("./licence-approval");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
+// Refresh only against an existing paid-through entitlement; never mark invoices paid here.
+if(pool){
+ const renew=()=>licensing.renewPaidLicences(pool,"VL").catch(err=>console.error("Licence refresh failed",err.code||"database_error"));
+ setTimeout(renew,30000).unref();
+ setInterval(renew,6*60*60*1000).unref();
+}
 const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
