@@ -180,6 +180,21 @@ if(view==="tables"){
   grid.append(button(title,()=>{table=i;sharedTable=null;show("till");if(sharedEnabled)loadSharedTable(i+1,{open:true})}));
  });screen.append(grid)
 }
+if(view==="quick"||view==="till"){
+ const printTest=button("PRINT TEST RECEIPT",async()=>{
+  const token=localStorage.getItem("vl_epos_device_token");
+  if(!token)return alert("This till must be registered before submitting print jobs.");
+  printTest.disabled=true;
+  try{
+   const response=await fetch("/api/print/test",{method:"POST",headers:{Authorization:"Bearer "+token},cache:"no-store"});
+   const result=await response.json();
+   if(!response.ok)throw Error(result.error||"Unable to queue receipt");
+   alert("Test receipt queued in Azure. Job "+result.id+". The Master Till print worker must be connected to Azure before it can print.");
+  }catch(error){alert("Print request failed: "+error.message)}
+  finally{printTest.disabled=false}
+ });
+ screen.append(printTest);
+}
 if(view==="quick"&&state.held.length){screen.append(button("Recall Held Sale ("+state.held.length+")",()=>{if(state.quick.length)return alert("Clear or hold the current quick sale first.");state.quick=state.held.pop();save();render()}))}
 if(view==="till"||view==="quick"){screen.append(node("h2",view==="quick"?"Quick Sale · Bar & Counter":"Table "+(table+1)+" · Ordering"));if(view==="till"&&sharedEnabled){const note=node("p",sharedFailure?"Shared ordering unavailable: "+sharedFailure:sharedTable?"Shared PostgreSQL ordering active":"Connecting to shared table…");note.className="muted";screen.append(note)}const dept=node("div");dept.className="department-tabs";for(const d of ["Food","Drinks"]){const b=button(d.toUpperCase(),()=>{department=d;category=categoryGroups[d][0];render()},department===d?"active":"");dept.append(b)}screen.append(dept);
 const tabs=node("div");tabs.className="category-tabs";for(const c of categoryGroups[department]){const b=button(c,()=>{category=c;render()},category===c?"active":"");tabs.append(b)}screen.append(tabs);
