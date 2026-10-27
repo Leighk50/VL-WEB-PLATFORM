@@ -52,5 +52,47 @@ while ($true) {
       }
     }
   }
+  # Azure staging test queue: separate service token, no browser credential.
+  $credentialPath = Join-Path $Root 'service-token.dpapi'
+  if (Test-Path -LiteralPath $credentialPath) {
+    try {
+      $cipher = [Convert]::FromBase64String([System.IO.File]::ReadAllText($credentialPath).Trim())
+      $raw = [System.Security.Cryptography.ProtectedData]::Unprotect($cipher,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
+      $token = [System.Text.Encoding]::UTF8.GetString($raw)
+      $headers = @{Authorization=('Bearer '+$token)}
+      $base = 'https://vl-epos-staging-cngrfug6feewdmey.ukwest-01.azurewebsites.net'
+      $response = Invoke-RestMethod -Uri ($base+'/api/print/claim') -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 15
+      if ($null -ne $response.job) {
+        $id = [string]$response.job.id
+        if ($id -notmatch '^[0-9a-f-]{36}
+) { throw 'Invalid Azure print job ID' }
+        $jobPath = Join-Path $processing ('azure-'+$id+'.json')
+        [System.IO.File]::WriteAllText($jobPath,($response.job | ConvertTo-Json -Depth 5))
+        $outcome = 'review'
+        try {
+          if ($response.job.jobType -ne 'test' -or $response.job.payload.type -ne 'local-test' -or $response.job.payload.siteId -ne 'VL') { throw 'Unsupported Azure job' }
+          $receipt = "LINDUS EPOS`r`nTHE VILLAGE LIMITS`r`n`r`nAZURE QUEUE TEST`r`nTILL-03 MASTER`r`n`r`n"
+          $client = [System.Net.Sockets.TcpClient]::new()
+          try {
+            $client.Connect($ip,$port)
+            $stream=$client.GetStream()
+            [byte[]]$init=@(27,64);$stream.Write($init,0,$init.Length)
+            $bytes=[System.Text.Encoding]::ASCII.GetBytes($receipt);$stream.Write($bytes,0,$bytes.Length)
+            [byte[]]$cut=@(27,100,4,29,86,66,0);$stream.Write($cut,0,$cut.Length)
+            $stream.Flush()
+            $outcome='printed'
+          } finally { $client.Dispose() }
+        } catch { Log ('Azure print uncertain '+$id+': '+$_.Exception.Message) }
+        try {
+          Invoke-RestMethod -Uri ($base+'/api/print/complete') -Method Post -Headers $headers -ContentType 'application/json' -Body (@{id=$id;outcome=$outcome}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+          Move-Item -LiteralPath $jobPath -Destination (Join-Path $(if($outcome -eq 'printed'){$printed}else{$review}) ('azure-'+$id+'.json'))
+          Log ('Azure job '+$id+' outcome '+$outcome)
+        } catch {
+          # Acknowledgement uncertain: leave journal in processing; never print again automatically.
+          Log ('Azure acknowledgement uncertain '+$id+': '+$_.Exception.Message)
+        }
+      }
+    } catch { Log ('Azure polling error: '+$_.Exception.Message) }
+  }
   Start-Sleep -Seconds 2
 }
