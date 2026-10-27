@@ -22,6 +22,18 @@ http.createServer(async(req,res)=>{
     try{const result=await licensing.status(pool,auth.startsWith("Bearer ")?auth.slice(7):"");return respond(result?200:401,result||{error:"unregistered"})}
     catch(e){return respond(503,{error:"status_unavailable"})}
   }
+  if(route==="/api/licensing/devices"){
+    if(req.method!=="GET")return respond(405,{error:"method_not_allowed"});
+    if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
+    try{return respond(200,await licensing.listDevices(pool,"VL"))}
+    catch(e){return respond(503,{error:"device_list_unavailable"})}
+  }
+  if(route==="/api/licensing/renew"){
+    if(req.method!=="POST")return respond(405,{error:"method_not_allowed"});
+    if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
+    try{return respond(200,await licensing.renewPaidLicences(pool,"VL"))}
+    catch(e){return respond(503,{error:"renewal_unavailable"})}
+  }
   if(req.method!=="POST" && route!=="/api/licensing/pending")return respond(405,{error:"method_not_allowed"});
   const publicAction=["/api/licensing/request","/api/licensing/claim"].includes(route);
   if(!publicAction&&!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
