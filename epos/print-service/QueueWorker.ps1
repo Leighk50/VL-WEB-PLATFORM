@@ -71,8 +71,26 @@ while ($true) {
         [System.IO.File]::WriteAllText($jobPath,($response.job | ConvertTo-Json -Depth 5))
         $outcome = 'review'
         try {
-          if ($response.job.jobType -ne 'test' -or $response.job.payload.type -ne 'local-test' -or $response.job.payload.siteId -ne 'VL') { throw 'Unsupported Azure job' }
-          $receipt = "LINDUS EPOS`r`nTHE VILLAGE LIMITS`r`n`r`nAZURE QUEUE TEST`r`nTILL-03 MASTER`r`n`r`n"
+          if ($response.job.jobType -notin @('test','bill') -or $response.job.payload.siteId -ne 'VL') { throw 'Unsupported Azure job' }
+          if ($response.job.jobType -eq 'bill') {
+            $bill=$response.job.payload
+            if ($bill.type -ne 'bill' -or $bill.paymentStatus -ne 'UNPAID') { throw 'Invalid bill payload' }
+            $sum=0
+            $receipt="THE VILLAGE LIMITS`r`nLINDUS EPOS - STAGING`r`nUNPAID BILL - NOT A RECEIPT`r`n`r`n"
+            $receipt+=("Table {0} / {1}`r`n" -f $bill.tableNumber,$bill.tabLabel)
+            foreach($line in $bill.lines){
+              $quantity=[int]$line.quantity;$unit=[int]$line.unitPricePence;$amount=[int]$line.lineTotalPence
+              if($quantity -le 0 -or $unit -lt 0 -or $quantity*$unit -ne $amount){throw 'Invalid line total'}
+              $sum+=$amount
+              $name=([string]$line.name -replace '[^ -~]','?')
+              $receipt+=("{0} x {1}`r`n" -f $quantity,$name)
+              $receipt+=("    GBP {0:N2}`r`n" -f ($amount/100))
+            }
+            if($sum -ne [int]$bill.totalPence){throw 'Bill total mismatch'}
+            $receipt+=("`r`nTOTAL GBP {0:N2}`r`n" -f ($sum/100))
+            $receipt+="VAT breakdown not available`r`nNOT PAID`r`n`r`n"
+          } elseif ($response.job.payload.type -ne 'local-test') { throw 'Unsupported test payload' }
+          if ($response.job.jobType -eq "test") { $receipt = "LINDUS EPOS`r`nTHE VILLAGE LIMITS`r`n`r`nAZURE QUEUE TEST`r`nTILL-03 MASTER`r`n`r`n" }
           $client = [System.Net.Sockets.TcpClient]::new()
           try {
             $client.Connect($ip,$port)
