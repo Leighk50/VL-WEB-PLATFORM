@@ -9,6 +9,7 @@ const licensing=require("./site-licensing");
 const approvals=require("./licence-approval");
 const masterTill=require("./master-till");
 const printQueue=require("./print-queue");
+const printAuth=require("./print-service-auth");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -21,14 +22,20 @@ if(pool){
 const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route==="/api/print-service/enrol"){
+  const reply=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
+  if(req.method!=="POST")return reply(405,{error:"method_not_allowed"});
+  if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return reply(401,{error:"manager_authorisation_required"});
+  if(!pool)return reply(503,{error:"database_unavailable"});
+  try{return reply(200,await printAuth.issue(pool))}catch(e){return reply(409,{error:"enrolment_failed"})}
+ }
  if(route.startsWith("/api/print/")){
   const reply=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
   if(!pool)return reply(503,{error:"database_unavailable"});
   let device;
-  try{device=await authenticateDevice(pool,req)}catch(e){return reply(503,{error:"authentication_unavailable"})}
+  try{device=await (route==="/api/print/claim"||route==="/api/print/complete"?printAuth.authenticate(pool,req):authenticateDevice(pool,req))}catch(e){return reply(503,{error:"authentication_unavailable"})}
   if(!device||device.kind!=="till")return reply(401,{error:"registered_till_required"});
-  const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);
-  if(!licence?.valid)return reply(403,{error:"licence_inactive"});
+  if(route==="/api/print/test"){const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);if(!licence?.valid)return reply(403,{error:"licence_inactive"})}
   let body={};
   if(req.method==="POST"){
    let raw="";
