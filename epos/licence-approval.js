@@ -30,10 +30,10 @@ async function claim(pool,{requestId,claim}){
   await client.query("BEGIN");
   const r=await client.query(`SELECT r.device_code,r.device_type,v.code AS site
  FROM epos_licence_requests r JOIN epos_venues v ON v.id=r.venue_id
- WHERE r.id=$1 AND r.claim_hash=$2 AND r.expires_at>now() AND r.status='approved' FOR UPDATE OF r`,[requestId,hash(claim)]);
+ WHERE r.id=$1 AND r.claim_hash=$2 AND r.expires_at>now() AND r.status IN ('pending','approved') FOR UPDATE OF r`,[requestId,hash(claim)]);
   if(r.rowCount!==1)throw Error("not_approved_or_expired");
-  // Lock the request row across registration; register uses its own transaction.
-  // Pending requests are not consumed on a registration failure.
+  // A valid claim triggers automatic entitlement validation in register().
+  // Existing device credentials are never replaced by this request.
   const data=r.rows[0];
   const result=await register(pool,{siteId:data.site,deviceId:data.device_code,deviceType:data.device_type});
   await client.query("UPDATE epos_licence_requests SET status='claimed' WHERE id=$1",[requestId]);
