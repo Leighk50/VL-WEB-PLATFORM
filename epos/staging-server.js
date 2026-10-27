@@ -7,6 +7,7 @@ const {startPairing,redeemPairing}=require("./device-pairing");
 const sharedTill=require("./shared-till");
 const licensing=require("./site-licensing");
 const approvals=require("./licence-approval");
+const masterTill=require("./master-till");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -19,6 +20,18 @@ if(pool){
 const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
+ if(route==="/api/master-till"){
+  const respond=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
+  if(!pool)return respond(503,{error:"database_unavailable"});
+  if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return respond(401,{error:"manager_authorisation_required"});
+  try{
+   if(req.method==="GET")return respond(200,await masterTill.getMaster(pool));
+   if(req.method!=="POST")return respond(405,{error:"method_not_allowed"});
+   let body="";for await(const chunk of req){body+=chunk;if(body.length>512)return respond(413,{error:"payload_too_large"})}
+   const input=JSON.parse(body);
+   return respond(200,await masterTill.setMaster(pool,input.deviceCode));
+  }catch(e){return respond(409,{error:e.message||"master_configuration_failed"})}
+ }
  if(route.startsWith("/api/licensing/")){
   const respond=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
   if(!pool)return respond(503,{error:"database_unavailable"});
