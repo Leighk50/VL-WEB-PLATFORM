@@ -340,6 +340,39 @@ header h2 small{display:block;font-size:11px;font-weight:400;opacity:.8;margin-t
 }
 @media(max-width:680px){.grid.products{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 
+
+/* Mobile viewport containment: order panel and product scroller are siblings.
+   Nothing can scroll behind the order panel. */
+@media(max-width:1000px){
+ html{height:100%;overflow:hidden!important}
+ body{height:100dvh!important;min-height:0!important;overflow:hidden!important;padding:0!important}
+ header{height:64px!important;min-height:64px!important;flex:none!important}
+ body:has(main>aside.panel:not([hidden])) main,
+ main{position:absolute!important;top:64px!important;bottom:65px!important;left:0!important;right:0!important;height:auto!important;min-height:0!important;max-height:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+ main>aside.panel:not([hidden]){
+  position:relative!important;top:auto!important;left:auto!important;right:auto!important;
+  order:0!important;flex:0 0 194px!important;width:100%!important;
+  height:194px!important;max-height:194px!important;min-height:0!important;
+  margin:0!important;overflow:hidden!important;z-index:1!important;
+  border-bottom:2px solid #d5dde8!important;
+ }
+ main>aside.panel:not([hidden]):not(.mobile-collapsed){
+  flex-basis:min(46dvh,350px)!important;
+  height:min(46dvh,350px)!important;max-height:min(46dvh,350px)!important
+ }
+ main>#screen{
+  order:1!important;position:relative!important;flex:1 1 0!important;
+  min-height:0!important;max-height:none!important;
+  overflow-y:auto!important;overscroll-behavior:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+ }
+ #mobileBottomBar:not([hidden]){bottom:0!important}
+}
+@media(max-width:680px){
+ header{height:56px!important;min-height:56px!important}
+ body:has(main>aside.panel:not([hidden])) main,main{top:56px!important;bottom:65px!important}
+ main>aside.panel:not([hidden]){flex-basis:180px!important;height:180px!important;max-height:180px!important}
+}
 </style>
 <header><h2>Lindus EPOS <small>The Village Limits</small></h2><span class="staging-label">STAGING · UI 10.28-B</span></header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted order-storage-note">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
