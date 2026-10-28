@@ -286,7 +286,22 @@ function printTableBills(){
  }
  window.print();
 }
-$("printBills").onclick=printTableBills;
+$("printBills").onclick=async()=>{
+ if(view!=="till")return alert("Select a table first.");
+ if(!sharedEnabled||!sharedTable?.sessionId)return alert("Shared PostgreSQL table connection required to print directly.");
+ const token=localStorage.getItem("vl_epos_device_token");
+ const buttonElement=$("printBills");
+ buttonElement.disabled=true;
+ try{
+  const response=await fetch("/api/print/bill",{
+   method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+   body:JSON.stringify({tableNumber:table+1}),cache:"no-store"
+  });
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error||"Unable to queue bill");
+ }catch(error){alert("Bill printing failed: "+error.message)}
+ finally{buttonElement.disabled=false}
+};
 $("send").onclick=async()=>{
  if(view!=="till"&&view!=="quick")return;
  const pending=current().filter(x=>!x.sent);
