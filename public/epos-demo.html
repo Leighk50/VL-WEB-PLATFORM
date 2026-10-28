@@ -104,8 +104,25 @@ main aside.panel{position:sticky;top:12px;min-height:calc(100vh - 139px);border-
  .bill-line{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #bbb;padding:8px 0}
  .bill-sheet small{display:block;margin:4px 0}
 }
-main>aside.panel[hidden]{display:none!important}main:has(>aside.panel[hidden]){grid-template-columns:minmax(0,1fr)} </style>
-<header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
+main>aside.panel[hidden]{display:none!important}main:has(>aside.panel[hidden]){grid-template-columns:minmax(0,1fr)} 
+/* Tablet/phone order strip: summary stays above products without scrolling. */
+#mobileOrderToggle{display:none}
+@media(max-width:1000px){
+ main{display:flex;flex-direction:column}
+ main>aside.panel:not([hidden]){order:-1;position:sticky;top:0;z-index:4;min-height:0;max-height:none;padding:10px 14px;gap:3px;box-shadow:0 4px 18px #102b3240}
+ main>#screen{order:1;min-height:0}
+ #mobileOrderToggle{display:block;align-self:flex-start;min-height:38px;padding:7px 12px;font-size:13px}
+ main>aside.panel #tableTitle{margin:0;font-size:16px}
+ main>aside.panel #total{font-size:22px;margin:0;padding:4px 0;border-top:0}
+ main>aside.panel #tab{max-height:34vh;overflow:auto;flex:none}
+ main>aside.panel.mobile-collapsed #tab,
+ main>aside.panel.mobile-collapsed #printBills,
+ main>aside.panel.mobile-collapsed .sale-actions{display:none}
+ main>aside.panel.mobile-collapsed{max-height:145px}
+}
+@media(max-width:680px){main{display:flex;flex-direction:column}main>aside.panel:not([hidden]){top:0}nav{z-index:3}}
+</style>
+<header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
 <script>
 const tables=[2,6,3,2,2,4,8,6,6,2,2];let items=[];
@@ -165,6 +182,18 @@ async function refreshSharedTables(){
  if(view==="tables")render();
 }
 function show(v){view=v;render();if(v==="tables")refreshSharedTables()}
+let mobileOrderExpanded=false;
+$("mobileOrderToggle").onclick=()=>{
+ mobileOrderExpanded=!mobileOrderExpanded;
+ updateMobileOrder();
+};
+function updateMobileOrder(){
+ const aside=document.querySelector("main > aside.panel");
+ aside.classList.toggle("mobile-collapsed",!mobileOrderExpanded);
+ $("mobileOrderToggle").textContent=mobileOrderExpanded?"Hide order details":"View order details";
+ $("mobileOrderToggle").setAttribute("aria-expanded",String(mobileOrderExpanded));
+}
+updateMobileOrder();
 function render(){const nav=$("nav");nav.replaceChildren();for(const v of ["quick","tables","till","kitchen","bar","shared test","manager"]){const b=button(v.toUpperCase(),()=>v==="shared test"?location.assign("/shared"):v==="manager"?location.assign("/manager"):v==="till"?show("tables"):show(v));if(view===v)b.className="active";nav.append(b)}
 const screen=$("screen");screen.replaceChildren();const orderPanel=document.querySelector("main > aside.panel");orderPanel.hidden=view==="tables"||view==="kitchen"||view==="bar";
 if(view==="tables"){
