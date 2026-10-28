@@ -200,7 +200,7 @@ if(view==="quick"||view==="till"){
    const payload={tableNumber:table+1};if(tabId)payload.tabId=tabId;
    const response=await fetch("/api/print/bill",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
    const result=await response.json();if(!response.ok)throw Error(result.error||"Bill could not be queued");
-   alert("UNPAID bill queued for the Master Till printer. Job "+result.id);
+   // Printer routing is resolved by the site print service; no user prompt on success.
   };
   const printAll=button("PRINT TABLE BILL",async()=>{try{await queueBill()}catch(e){alert(e.message)}});
   screen.append(printAll);
