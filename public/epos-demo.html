@@ -106,7 +106,7 @@ main aside.panel{position:sticky;top:12px;min-height:calc(100vh - 139px);border-
 }
 main>aside.panel[hidden]{display:none!important}main:has(>aside.panel[hidden]){grid-template-columns:minmax(0,1fr)} </style>
 <header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
-<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
+<dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
 <script>
 const tables=[2,6,3,2,2,4,8,6,6,2,2];let items=[];
 const mixers=["Tonic","Light Tonic","Elderflower Tonic","Mediterranean Tonic","Ginger Ale","Dash Coke","Dash Diet Coke","Dash Lemonade"],lager=["Top","Blackcurrant","Lime"];
@@ -245,13 +245,17 @@ function renderModifierButtons(){
  }
 }
 function renderTabAssignment(){const box=$("tabAssignment");box.replaceChildren();const options=view==="quick"?["Quick Sale"]:state.tableTabs[table];for(const name of options){const active=selectedTab===name;const b=button((active?"✓  ":"")+name,()=>{selectedTab=name;renderTabAssignment()},active?"selected-modifier":"");b.setAttribute("aria-pressed",String(active));box.append(b)}if(view!=="quick")box.append(button("+ New Tab",async()=>{const tabs=state.tableTabs[table];let n=1;while(tabs.includes("Tab "+n))n++;const next="Tab "+n;if(sharedEnabled){try{if(!sharedTable?.sessionId)throw Error("Table not connected");await sharedApi(table+1,"POST",{action:"addTab",label:next});await loadSharedTable(table+1);selectedTab=next;renderTabAssignment()}catch(e){alert("Could not create tab: "+e.message)}return}selectedTab=next;tabs.push(selectedTab);save();renderTabAssignment()}));}
+const allergenNames=["Celery","Cereals containing gluten","Crustaceans","Eggs","Fish","Lupin","Milk","Molluscs","Mustard","Peanuts","Sesame","Soya","Sulphites","Tree nuts"];
+let declaredAllergens=[];
 function openItem(p){
- product=p;selectedModifier="";selectedGarnishes=[];selectedTab=view==="quick"?"Quick Sale":state.tableTabs[table][0];$("itemTitle").textContent=p[0];
+ product=p;selectedModifier="";selectedGarnishes=[];declaredAllergens=[];$("otherAllergy").value="";$("allergenPanel").hidden=true;$("allergenToggle").setAttribute("aria-expanded","false");renderAllergenChoices();selectedTab=view==="quick"?"Quick Sale":state.tableTabs[table][0];$("itemTitle").textContent=p[0];
  const measure=$("measure");measure.replaceChildren();
  for(const m of Object.keys(p[4]||{"Standard":p[2]}))measure.append(new Option(m,m));
  if(p[4]&&Object.hasOwn(p[4],preferredMeasures[p[1]]))measure.value=preferredMeasures[p[1]];
  renderModifierButtons();renderGarnishButtons();renderTabAssignment();$("note").value="";$("dialog").showModal();
 }
+function renderAllergenChoices(){const box=$("allergenChoices");box.replaceChildren();for(const name of allergenNames){const b=button((declaredAllergens.includes(name)?"✓ ":"")+name,()=>{declaredAllergens=declaredAllergens.includes(name)?declaredAllergens.filter(x=>x!==name):[...declaredAllergens,name];renderAllergenChoices()});b.setAttribute("aria-pressed",String(declaredAllergens.includes(name)));box.append(b)}}
+$("allergenToggle").onclick=()=>{const panel=$("allergenPanel");panel.hidden=!panel.hidden;$("allergenToggle").setAttribute("aria-expanded",String(!panel.hidden))};
 $("cancel").onclick=()=>$("dialog").close();
 $("add").onclick=()=>{
  const p=product,m=$("measure").value;
@@ -260,7 +264,7 @@ $("add").onclick=()=>{
  if(selectedModifier&&!option)return alert("Modifier not found.");
  if(spirit&&option&&(!Number.isInteger(option.pricePence)||option.pricePence<=0))return alert("Mixer price has not been imported.");
  const extra=option?.pricePence||0;
- const entry={name:p[0],productId:p[6],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],tab:view==="quick"?"Quick Sale":selectedTab,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),sent:false};current().push(entry);if(view==="till"&&sharedEnabled)sharedDrafts[table].push(entry);
+ const entry={name:p[0],productId:p[6],plu:p[5]||null,route:p[3],measure:p[4]?m:"",modifier:option?.name||"",modifierProductId:spirit?option?.id||null:null,modifierPLU:spirit?option?.plu||null:null,modifierPricePence:extra,garnishes:[...selectedGarnishes],tab:view==="quick"?"Quick Sale":selectedTab,price:(p[4]?p[4][m]:p[2])+extra,note:$("note").value.trim(),allergens:[...declaredAllergens,...($("otherAllergy").value.trim()?[$("otherAllergy").value.trim()]:[])],sent:false};current().push(entry);if(view==="till"&&sharedEnabled)sharedDrafts[table].push(entry);
  save();$("dialog").close();render();
 };
 function printTableBills(){
@@ -280,7 +284,7 @@ function printTableBills(){
      item.append(node("span",line.name+(line.measure?" · "+line.measure:"")),node("strong",money(line.price)));
      bill.append(item);
      if(line.modifier)bill.append(node("small","↳ "+line.modifier));
-     if(line.garnishes?.length)bill.append(node("small","↳ "+line.garnishes.join(", ")));
+     if(line.garnishes?.length)bill.append(node("small","↳ "+line.garnishes.join(", ")));if(line.allergens?.length)bill.append(node("strong","CUSTOMER ALLERGY: "+line.allergens.join(", ")));
    }
    bill.append(node("h3","Total "+money(sum)));target.append(bill);
  }
@@ -309,8 +313,8 @@ $("send").onclick=async()=>{
  if(view==="till"&&sharedEnabled){
   if(sharedSubmitting)return;
   if(!sharedTable?.sessionId)return alert("Table is not connected. Unsent items are retained.");
-  if(pending.some(x=>!x.productId||!x.measure||x.modifier||x.garnishes?.length||x.note))
-   return alert("Shared staging currently supports plain catalogue items only. Additions and notes are not yet supported; the draft has been retained.");
+  if(pending.some(x=>!x.productId||!x.measure||x.modifier||x.garnishes?.length||x.note||x.allergens?.length))
+   return alert("Shared staging currently supports plain catalogue items only. Additions, instructions and declared allergies require server support. This draft is retained and MUST NOT be treated as sent to the kitchen.");
   const groups=new Map();
   for(const item of pending){if(!groups.has(item.tab))groups.set(item.tab,[]);groups.get(item.tab).push(item)}
   sharedSubmitting=true;
