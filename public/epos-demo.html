@@ -229,6 +229,50 @@ header h2 small{display:block;font-size:11px;font-weight:400;opacity:.8;margin-t
  .grid.products{grid-template-columns:repeat(2,minmax(0,1fr))!important}
  .grid.products .product-tile{min-height:69px!important}
 }
+
+/* Approved Lindus EPOS mobile/tablet visual design */
+@media(max-width:1000px){
+ header{background:#101c2e!important;min-height:48px;padding:10px 13px!important}
+ header h2{color:white!important;font-size:19px!important;font-weight:750;letter-spacing:-.02em}
+ header h2 small{font-size:11px!important}
+ .staging-label{font-size:9px!important;max-width:82px;opacity:.65}
+ main{gap:5px!important;padding:5px!important}
+ main>aside.panel:not([hidden]){border-radius:9px!important;background:#fff!important;border:1px solid #dbe3e9!important;padding:7px 9px!important;box-shadow:none!important}
+ main>aside.panel #tableTitle{font-size:16px!important;color:#172c41!important}
+ #mobileOrderToggle{background:#f0f4f8!important;border:0!important;border-radius:6px!important;color:#263f53!important;font-size:11px!important;min-height:26px!important}
+ #tab{border:0}
+ #tab .order-item-row{display:grid;grid-template-columns:23px minmax(0,1fr) auto;gap:5px;align-items:start;border-bottom:1px solid #e8edf1!important;font-size:13px!important;padding:3px 0!important}
+ .order-qty{font-weight:700}
+ .order-description{min-width:0;overflow-wrap:anywhere}
+ .order-price{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;font-weight:600}
+ .order-item-row.unsent-item{color:#b4232c}
+ main>aside.panel #total{border-top:1px solid #dce3ea!important;font-size:20px!important;color:#102238!important;font-weight:900!important;padding:5px 0!important}
+ main>aside.panel.mobile-collapsed #tab{max-height:143px!important}
+ main>#screen{background:#fff!important;border:0!important;border-radius:9px!important;padding:8px!important}
+ #screen>h2{font-size:15px!important;margin:2px 0 8px!important}
+ .department-tabs{display:flex;gap:4px;margin-bottom:6px}
+ .department-tabs button{flex:1;min-height:42px!important;background:#e9eef4!important;color:#182d43!important;border:0!important;font-size:14px!important}
+ .department-tabs button.active{background:#112e67!important;color:#fff!important}
+ .category-tabs{display:flex;flex-wrap:nowrap!important;overflow-x:auto;gap:4px;padding-bottom:6px}
+ .category-tabs button{min-height:39px!important;white-space:nowrap;flex-shrink:0;background:#edf1f7!important;border:0!important;color:#1c3043!important;font-size:12px!important}
+ .category-tabs button.active{background:#112e67!important;color:#fff!important}
+ .grid.products{gap:5px!important}
+ .grid.products .product-tile{background:#35cfe8!important;border:0!important;border-radius:6px!important;min-height:69px!important;box-shadow:none!important;padding:10px!important;justify-content:center!important}
+ .grid.products .product-tile:nth-child(5n+2){background:#ffe765!important}
+ .grid.products .product-tile strong{font-size:14px!important;font-weight:650!important;color:#10212f!important}
+ .grid.products .product-tile small{display:none}
+ #mobileBottomBar{background:#101c2e!important;gap:4px!important}
+ #mobileBottomBar button{background:#1b304d!important;border-radius:7px!important;color:#f4f7fa!important;font-weight:600}
+ #mobileBottomBar #mobileSend{background:#13915d!important}
+}
+@media(min-width:681px) and (max-width:1000px){
+ main>aside.panel:not([hidden]){max-height:36vh!important}
+ .grid.products{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:680px){
+ main>aside.panel:not([hidden]){max-height:38vh!important}
+ .grid.products{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
 </style>
 <header><h2>Lindus EPOS <small>The Village Limits</small></h2><span class="staging-label">STAGING · TEST MODE</span></header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted order-storage-note">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
@@ -358,7 +402,11 @@ const tabs=node("div");tabs.className="category-tabs";for(const c of categoryGro
 const measureBar=node("div");measureBar.className="measure-bar";const spiritCats=["Gin","Vodka","Whisky","Brandy","Other Spirits","Spirits"];const sizes=category==="Draught"?["Pint","Half"]:spiritCats.includes(category)?["Single","Double"]:category==="Wine"?["125ml","250ml","Bottle"]:category==="Soft Drinks"?["Small","Large"]:[];for(const size of sizes){const b=button(size,()=>{preferredMeasures[category]=size;render()},(preferredMeasures[category]||sizes[0])===size?"active":"");measureBar.append(b)}if(sizes.length)screen.append(measureBar);
 const grid=node("div");grid.className="grid products";const shown=items.filter(x=>x[1]===category);for(const p of shown){const size=preferredMeasures[category]||sizes[0];const amount=p[4]?(p[4][size]??Object.values(p[4])[0]):p[2];const b=button(" ",()=>openItem(p),"product-tile");b.replaceChildren();b.append(node("strong",p[0]),node("small",money(amount)));grid.append(b)}if(!shown.length)screen.append(node("p","No products in this category yet. Products will be added from the ICR Touch import and website menus."));screen.append(grid)}
 if(view==="kitchen"||view==="bar"){screen.append(node("h2",view==="kitchen"?"Kitchen orders":"Bar orders"));const orders=state.orders.filter(x=>x.route===view&&x.status!=="collected");if(!orders.length)screen.append(node("p","No outstanding orders"));for(const o of orders){const box=node("section","");box.className="panel";box.append(node("h3",o.origin+" — "+o.status));for(const i of o.items){const l=node("div","1 × "+i.name+(i.measure?" ("+i.measure+")":"")+(i.tab?" ["+i.tab+"]":"")+(i.modifier?" + "+i.modifier:"")+(i.garnishes?.length?" + "+i.garnishes.join(" + "):"")+(i.note?" — "+i.note:"")+(i.seat?" · Seat "+i.seat:""));l.className="line";box.append(l)}if(view==="kitchen"){const counts={};o.items.forEach(i=>counts[i.name]=(counts[i.name]||0)+1);box.append(node("strong","DISH SUMMARY"));for(const [name,count] of Object.entries(counts))box.append(node("div",count+" × "+name))}const next={new:"preparing",preparing:"ready",ready:"collected"}[o.status];box.append(button(next==="preparing"?"Start preparing":next==="ready"?"Mark ready":"Mark collected",()=>{o.status=next;save();render()}));screen.append(box)}}
-if(view!=="quick"&&view!=="till"){return;} $("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;let quantity=0;current().forEach((i,index)=>{total+=i.price;quantity+=Number(i.quantity||1);const line=node("div",(view==="quick"?"":(i.tab||"Tab 1")+" · ")+i.name+(i.measure?" · "+i.measure:"")+" — "+money(i.price)+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));line.className="line";line.style.whiteSpace="pre-line";if(i.paid)line.append(node("small","PAID"));if(!i.sent&&!i.paid)line.append(button("Remove",()=>{if(view==="till"&&sharedEnabled){const n=sharedDrafts[table].indexOf(i);if(n>=0)sharedDrafts[table].splice(n,1)}current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Qty "+quantity+"   ·   Total "+money(total);$("printBills").hidden=view!=="till";}
+if(view!=="quick"&&view!=="till"){return;} $("tableTitle").textContent=label();const tab=$("tab");tab.replaceChildren();let total=0;let quantity=0;current().forEach((i,index)=>{total+=i.price;quantity+=Number(i.quantity||1);const line=node("div","");line.className="line order-item-row";
+const qty=node("span",String(i.quantity||1));qty.className="order-qty";
+const description=node("span",i.name+(i.measure?" · "+i.measure:"")+(i.modifier?"\n↳ "+i.modifier:"")+(i.garnishes?.length?"\n↳ "+i.garnishes.join(" + "):"")+(i.note?"\nNOTE: "+i.note:""));description.className="order-description";description.style.whiteSpace="pre-line";
+const price=node("span",money(i.price));price.className="order-price";
+line.append(qty,description,price);if(!i.sent)line.classList.add("unsent-item");if(i.paid)line.append(node("small","PAID"));if(!i.sent&&!i.paid)line.append(button("Remove",()=>{if(view==="till"&&sharedEnabled){const n=sharedDrafts[table].indexOf(i);if(n>=0)sharedDrafts[table].splice(n,1)}current().splice(index,1);save();render()}));tab.append(line)});$("total").textContent="Qty "+quantity+"   ·   Total "+money(total);$("printBills").hidden=view!=="till";}
 let selectedModifier="";let selectedTab="Tab 1";let selectedGarnishes=[];const garnishOptions=["Ice","Lemon","Lime"];
 /* Product-linked mixer pricing: null means not imported/verified, never free. */
 let mixerCatalog=[];
