@@ -199,8 +199,38 @@ main>aside.panel[hidden]{display:none!important}main:has(>aside.panel[hidden]){g
  .department-tabs button{min-height:42px}
  .category-tabs button{min-height:40px}
 }
+
+/* Phone refinement after real-device review */
+header h2 small{display:block;font-size:11px;font-weight:400;opacity:.8;margin-top:2px}
+.staging-label{font-size:10px;letter-spacing:.03em;opacity:.8;text-align:right}
+@media(max-width:1000px){
+ header{min-height:0}
+ header h2{font-size:17px;line-height:1.1}
+ main>aside.panel:not([hidden]){padding:8px 10px!important;gap:0!important;min-height:0!important;max-height:unset!important;box-shadow:0 2px 8px #102b3220}
+ main>aside.panel #tab{max-height:160px!important;min-height:0!important;flex:none!important}
+ main>aside.panel #tab .line{padding:3px 0!important;white-space:normal!important;font-size:13px!important;line-height:1.2!important}
+ main>aside.panel #total{font-size:20px!important;margin:2px 0!important;padding:3px 0!important}
+ main>aside.panel .order-storage-note{display:none!important}
+ main>aside.panel.mobile-collapsed #tab{max-height:112px!important}
+ main>aside.panel.mobile-collapsed #tab .line:nth-last-child(n+5){display:none!important}
+ main>aside.panel.mobile-collapsed #tab .line:nth-last-child(-n+4){display:block!important}
+ main>aside.panel.mobile-collapsed #tab .line button{display:none!important}
+ main>aside.panel.mobile-collapsed #printBills{display:none!important}
+ .grid.products .product-tile{background:#3dd9e9!important;border-color:#25b8c9!important;min-height:74px!important;padding:9px!important}
+ .grid.products .product-tile:nth-child(5n+2){background:#ffeb64!important;border-color:#e4d045!important}
+ .grid.products .product-tile strong{color:#102c3a!important;font-size:14px!important}
+ .grid.products .product-tile small{color:#194b53!important}
+ #screen>h2{margin:4px 0 8px}
+}
+@media(max-width:680px){
+ header{padding:9px 12px!important}
+ main{padding:4px!important;gap:5px!important}
+ main>aside.panel #tab{max-height:140px!important}
+ .grid.products{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .grid.products .product-tile{min-height:69px!important}
+}
 </style>
-<header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
+<header><h2>Lindus EPOS <small>The Village Limits</small></h2><span class="staging-label">STAGING · TEST MODE</span></header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted order-storage-note">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
 <script>
 const tables=[2,6,3,2,2,4,8,6,6,2,2];let items=[];
@@ -305,7 +335,7 @@ if(view==="quick"||view==="till"){
   }catch(error){alert("Print request failed: "+error.message)}
   finally{printTest.disabled=false}
  });
- screen.append(printTest);
+ if(view==="till")screen.append(printTest);
  if(view==="till"&&sharedEnabled&&sharedTable?.sessionId){
   const queueBill=async(tabId)=>{
    const token=localStorage.getItem("vl_epos_device_token");
