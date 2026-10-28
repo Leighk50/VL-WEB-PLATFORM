@@ -7,6 +7,7 @@ on:
       - feature/epos-catalogue-v01
     paths:
       - "public/epos-demo.html"
+      - "public/epos-mobile-v1.css"
       - "public/epos-licensing.html"
       - "public/epos-shared-test.html"
       - "public/epos-device-registration.html"
@@ -39,6 +40,7 @@ jobs:
         run: |
           mkdir -p epos-staging
           cp public/epos-demo.html epos-staging/index.html
+          cp public/epos-mobile-v1.css epos-staging/epos-mobile-v1.css
           cp public/epos-licensing.html epos-staging/licensing.html
           cp epos/pwa/manifest.webmanifest epos-staging/manifest.webmanifest
           cp epos/pwa/icon.svg epos-staging/icon.svg
