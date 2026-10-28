@@ -121,6 +121,46 @@ main>aside.panel[hidden]{display:none!important}main:has(>aside.panel[hidden]){g
  main>aside.panel.mobile-collapsed{max-height:145px}
 }
 @media(max-width:680px){main{display:flex;flex-direction:column}main>aside.panel:not([hidden]){top:0}nav{z-index:3}}
+
+/* Mobile ordering v1: Pocket Touch-inspired high-density touchscreen layout */
+@media(max-width:1000px){
+ body{background:#edf2f4}
+ header{background:#101e30;padding:10px 14px}
+ header h2{font-size:17px}
+ nav{background:#122339;gap:4px;padding:5px 8px;position:sticky;top:0;z-index:6}
+ nav button{min-width:74px;min-height:43px;font-size:12px;padding:7px}
+ main{padding:6px;gap:7px}
+ main>aside.panel:not([hidden]){order:-1;top:52px;border-radius:10px;border:1px solid #d5dfe5;padding:9px 12px}
+ main>aside.panel #tab{max-height:34vh}
+ main>aside.panel #tableTitle{font-size:17px;font-weight:800}
+ main>aside.panel #total{font-size:23px;font-weight:900;color:#10283d}
+ main>aside.panel.mobile-collapsed{max-height:unset}
+ main>aside.panel.mobile-collapsed #tab{display:block;max-height:132px;overflow:hidden;flex:none}
+ main>aside.panel.mobile-collapsed #tab .line:nth-last-child(n+5){display:none}
+ main>aside.panel.mobile-collapsed #tab .line:nth-last-child(-n+4){display:block}
+ main>aside.panel.mobile-collapsed #tab .line{padding:3px 0;font-size:13px;border-color:#e5ecef}
+ main>aside.panel.mobile-collapsed #tab .line button{display:none}
+ #mobileOrderToggle{font-size:12px;min-height:32px}
+ #screen{padding:10px}
+ .department-tabs button{min-height:44px;font-size:15px}
+ .category-tabs button{min-height:40px}
+ .grid.products{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+ .grid.products .product-tile{min-height:74px;border-radius:7px;padding:9px;background:#38d9e8;border-color:#22b9c8}
+ .grid.products .product-tile:nth-child(5n+2){background:#ffed65;border-color:#e6d34a}
+ .grid.products .product-tile strong{font-size:14px;color:#0a2632}
+ .grid.products .product-tile small{font-size:12px;color:#163a45}
+ .sale-actions button{min-height:48px}
+}
+@media(max-width:680px){
+ nav{top:0}
+ main>aside.panel:not([hidden]){top:51px}
+ .grid.products{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+ .grid.products .product-tile{min-height:70px}
+ #screen{padding:8px}
+ .category-tabs{flex-wrap:nowrap;overflow-x:auto}
+ .category-tabs button{white-space:nowrap;flex-shrink:0}
+ main>aside.panel.mobile-collapsed #tab{max-height:124px}
+}
 </style>
 <header><h2>THE VILLAGE LIMITS · EPOS</h2>DEVELOPMENT DEMO — no live orders or payments</header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted">Orders saved in this browser only.</p></aside></main>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
