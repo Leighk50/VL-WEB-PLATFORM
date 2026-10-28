@@ -20,7 +20,7 @@ if(pool){
  setTimeout(renew,30000).unref();
  setInterval(renew,6*60*60*1000).unref();
 }
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js","/epos-mobile-v1.css":"epos-mobile-v1.css"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
  if(route==="/api/print-service/enrol"){
