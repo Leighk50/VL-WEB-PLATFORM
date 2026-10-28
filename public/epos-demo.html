@@ -273,6 +273,31 @@ header h2 small{display:block;font-size:11px;font-weight:400;opacity:.8;margin-t
  main>aside.panel:not([hidden]){max-height:38vh!important}
  .grid.products{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
+
+/* Pocket Touch-style full-width fixed order display on mobile/tablet */
+@media(max-width:1000px){
+ body:has(main>aside.panel:not([hidden])) main{padding-top:205px!important}
+ main>aside.panel:not([hidden]){
+  position:fixed!important;top:54px!important;left:0!important;right:0!important;
+  width:100%!important;max-width:none!important;box-sizing:border-box!important;
+  margin:0!important;border-radius:0!important;z-index:15!important;
+  height:190px!important;max-height:190px!important;min-height:0!important;
+  overflow:hidden!important;padding:7px 12px!important;
+  border-left:0!important;border-right:0!important;
+  box-shadow:0 3px 9px #142c3820!important;
+ }
+ main>aside.panel #tab{overflow-y:auto!important;max-height:106px!important}
+ main>aside.panel.mobile-collapsed #tab{max-height:106px!important}
+ main>aside.panel:not(.mobile-collapsed){height:min(54vh,430px)!important;max-height:54vh!important}
+ main>aside.panel:not(.mobile-collapsed) #tab{max-height:calc(54vh - 110px)!important}
+ main>aside.panel #total{margin-top:auto!important}
+}
+@media(max-width:680px){
+ body:has(main>aside.panel:not([hidden])) main{padding-top:195px!important}
+ main>aside.panel:not([hidden]){top:49px!important;height:181px!important;max-height:181px!important}
+ main>aside.panel:not(.mobile-collapsed){height:min(52vh,390px)!important;max-height:52vh!important}
+ main>aside.panel:not(.mobile-collapsed) #tab{max-height:calc(52vh - 105px)!important}
+}
 </style>
 <header><h2>Lindus EPOS <small>The Village Limits</small></h2><span class="staging-label">STAGING · TEST MODE</span></header><nav id="nav"></nav><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted order-storage-note">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
