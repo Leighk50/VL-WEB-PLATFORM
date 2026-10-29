@@ -14,6 +14,22 @@ $log = Join-Path $Root 'print-service.log'
 function Log([string]$message) {
   Add-Content -LiteralPath $log -Value ("{0:o} {1}" -f [DateTime]::UtcNow,$message)
 }
+function Test-PrinterTcp([string]$HostIP,[int]$HostPort=9100){
+ $socket=[System.Net.Sockets.TcpClient]::new()
+ $attempt=$null
+ try {
+  $attempt=$socket.BeginConnect($HostIP,$HostPort,$null,$null)
+  if(-not $attempt.AsyncWaitHandle.WaitOne(1500)){return $false}
+  $socket.EndConnect($attempt)
+  return $true
+ } catch {return $false}
+ finally {
+  if($null -ne $attempt){$attempt.AsyncWaitHandle.Close()}
+  $socket.Dispose()
+ }
+}
+$lastPrinterState=@{}
+$lastPrinterReport=[datetime]::MinValue
 Log 'Local queue worker started; staging test jobs only.'
 # A job in processing after a crash is ambiguous: never replay it automatically.
 foreach ($orphan in @(Get-ChildItem -LiteralPath $processing -Filter '*.json' -File)) {
@@ -62,6 +78,20 @@ while ($true) {
       $token = [System.Text.Encoding]::UTF8.GetString($raw)
       $headers = @{Authorization=('Bearer '+$token)}
       $base = 'https://vl-epos-staging-cngrfug6feewdmey.ukwest-01.azurewebsites.net'
+      # Do not claim new jobs unless the receipt printer is reachable.
+      # A queued job can then resume safely when the printer returns.
+      $receiptOnline=Test-PrinterTcp -HostIP $ip -HostPort $port
+      $kitchenOnline=Test-PrinterTcp -HostIP '192.168.0.192' -HostPort 9100
+      $states=@{receipt=$(if($receiptOnline){'online'}else{'offline'});kitchen=$(if($kitchenOnline){'online'}else{'offline'})}
+      foreach($role in @('receipt','kitchen')){
+       if($lastPrinterState[$role] -ne $states[$role] -or ((Get-Date)-$lastPrinterReport).TotalSeconds -ge 15){
+        Invoke-RestMethod -Uri ($base+'/api/print/status-report') -Method Post -Headers $headers -ContentType 'application/json' -Body (@{role=$role;state=$states[$role]}|ConvertTo-Json) -TimeoutSec 10 | Out-Null
+        if($lastPrinterState[$role] -ne $states[$role]){Log ('Printer '+$role+' '+$states[$role])}
+        $lastPrinterState[$role]=$states[$role]
+       }
+      }
+      $lastPrinterReport=Get-Date
+      if(-not $receiptOnline){Start-Sleep -Seconds 5;continue}
       $response = Invoke-RestMethod -Uri ($base+'/api/print/claim') -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 15
       if ($null -ne $response.job) {
         $id = [string]$response.job.id
