@@ -11,6 +11,7 @@ const masterTill=require("./master-till");
 const printQueue=require("./print-queue");
 const billPrint=require("./bill-print");
 const printAuth=require("./print-service-auth");
+const printerMonitoring=require("./printer-monitoring");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -34,7 +35,7 @@ http.createServer(async(req,res)=>{
   const reply=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
   if(!pool)return reply(503,{error:"database_unavailable"});
   let device;
-  try{device=await (route==="/api/print/claim"||route==="/api/print/complete"?printAuth.authenticate(pool,req):authenticateDevice(pool,req))}catch(e){return reply(503,{error:"authentication_unavailable"})}
+  try{device=await (route==="/api/print/claim"||route==="/api/print/complete"||route==="/api/print/status-report"?printAuth.authenticate(pool,req):authenticateDevice(pool,req))}catch(e){return reply(503,{error:"authentication_unavailable"})}
   if(!device||device.kind!=="till")return reply(401,{error:"registered_till_required"});
   if(route==="/api/print/test"||route==="/api/print/bill"){const licence=await licensing.status(pool,(req.headers.authorization||"").slice(7)).catch(()=>null);if(!licence?.valid)return reply(403,{error:"licence_inactive"})}
   let body={};
@@ -44,10 +45,12 @@ http.createServer(async(req,res)=>{
    catch(e){return reply(400,{error:"invalid_payload"})}
   }
   try{
+   if(route==="/api/print/status"&&req.method==="GET")return reply(200,{printers:await printerMonitoring.status(pool,device)});
    if(route==="/api/print/test"&&req.method==="POST")return reply(200,await printQueue.enqueueTest(pool,device));
    if(route==="/api/print/bill"&&req.method==="POST")return reply(200,await billPrint.enqueueBill(pool,device,body));
    const master=await pool.query(`SELECT master_device_id FROM epos_site_local_services WHERE venue_id=$1`,[device.venue_id]);
    if(master.rows[0]?.master_device_id!==device.id)return reply(403,{error:"master_till_only"});
+   if(route==="/api/print/status-report"&&req.method==="POST")return reply(200,await printerMonitoring.report(pool,device,body));
    if(route==="/api/print/claim"&&req.method==="POST")return reply(200,{job:await printQueue.claimNext(pool,device)});
    if(route==="/api/print/complete"&&req.method==="POST")return reply(200,await printQueue.complete(pool,device,body));
    return reply(405,{error:"unsupported_action"});
