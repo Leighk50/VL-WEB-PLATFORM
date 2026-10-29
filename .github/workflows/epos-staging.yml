@@ -62,6 +62,7 @@ jobs:
           cp epos/print-queue.js epos-staging/print-queue.js
           cp epos/bill-print.js epos-staging/bill-print.js
           cp epos/print-service-auth.js epos-staging/print-service-auth.js
+          cp epos/printer-monitoring.js epos-staging/printer-monitoring.js
           cp epos/licence-approval.js epos-staging/licence-approval.js
           cp epos/staging-package.json epos-staging/package.json
           cd epos-staging
