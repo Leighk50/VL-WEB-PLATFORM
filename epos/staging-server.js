@@ -13,6 +13,7 @@ const billPrint=require("./bill-print");
 const printAuth=require("./print-service-auth");
 const printerMonitoring=require("./printer-monitoring");
 const productManagement=require("./product-management");
+const catalogueReconciliation=require("./catalogue-reconciliation");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -66,6 +67,8 @@ http.createServer(async(req,res)=>{
    if(req.method!=="POST")return reply(405,{error:"method_not_allowed"});
    let raw="";for await(const part of req){raw+=part;if(raw.length>16384)return reply(413,{error:"payload_too_large"})}
    const body=JSON.parse(raw);
+   if(body.action==="importPreview")return reply(200,await catalogueReconciliation.preview(pool));
+   if(body.action==="importMissing")return reply(200,await catalogueReconciliation.importMissing(pool));
    if(body.action==="saveProduct")return reply(200,await productManagement.saveProduct(pool,body.product));
    if(body.action==="saveGroup")return reply(200,await productManagement.saveGroup(pool,body.group));
    return reply(400,{error:"invalid_action"});
