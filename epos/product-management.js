@@ -26,8 +26,8 @@ async function saveProduct(pool,input){
  if(!measures||typeof measures!=="object"||Array.isArray(measures)||Object.keys(measures).length>20||Object.entries(measures).some(([k,v])=>!k||k.length>50||!Number.isSafeInteger(v)||v<0||v>10000000))throw Error("invalid_measures");
  const levels=extra.priceLevelsPence??[];
  if(!Array.isArray(levels)||levels.length>10||levels.some(v=>!Number.isSafeInteger(v)||v<0||v>10000000))throw Error("invalid_price_levels");
- const display=extra.displaySettings??{buttonColour:"default",sortOrder:0,epos:true,mainMenu:false,sundayMenu:false,website:false};
- if(!display||!["default","blue","yellow","green"].includes(display.buttonColour)||!Number.isInteger(display.sortOrder)||display.sortOrder<0||display.sortOrder>99999||["epos","mainMenu","sundayMenu","website"].some(k=>typeof display[k]!=="boolean"))throw Error("invalid_display_settings");
+ const display=extra.displaySettings??{buttonColour:"default",sortOrder:0,epos:true,mainMenu:false,sundayMenu:false,website:false,specials:false};
+ if(!display||!["default","blue","yellow","green"].includes(display.buttonColour)||!Number.isInteger(display.sortOrder)||display.sortOrder<0||display.sortOrder>99999||["epos","mainMenu","sundayMenu","website","specials"].some(k=>typeof display[k]!=="boolean"))throw Error("invalid_display_settings");
  const client=await pool.connect();
  try{
   await client.query("BEGIN");
