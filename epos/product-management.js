@@ -2,7 +2,7 @@
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const name=(s,max)=>typeof s==="string"&&s.trim().length>0&&s.trim().length<=max?s.trim():null;
 async function list(pool){
- const products=await pool.query(`SELECT p.id,p.name,p.category,p.price_pence AS "pricePence",p.printer_role AS "printerRole",p.active,
+ const products=await pool.query(`SELECT p.id,p.name,p.category,p.price_pence AS "pricePence",p.printer_role AS "printerRole",p.active,p.plu,p.source_group AS "sourceGroup",p.description,p.allergens,p.source_menu AS "sourceMenu",p.review_note AS "reviewNote",p.measures,p.price_levels_pence AS "priceLevelsPence",p.display_settings AS "displaySettings",p.legacy_source_id AS "legacySourceId",
  COALESCE(jsonb_agg(l.group_id) FILTER(WHERE l.group_id IS NOT NULL),'[]'::jsonb) AS "groupIds"
  FROM epos_catalogue_products p LEFT JOIN epos_product_option_groups l ON l.product_id=p.id
  WHERE p.venue_id=(SELECT id FROM epos_venues WHERE code='VL') GROUP BY p.id ORDER BY p.category,p.name`);
@@ -18,6 +18,16 @@ async function saveProduct(pool,input){
  const title=name(input.name,120),category=name(input.category,60);
  if(!title||!category||!Number.isSafeInteger(input.pricePence)||input.pricePence<0||input.pricePence>10000000||!["kitchen","bar","receipt"].includes(input.printerRole)||typeof input.active!=="boolean")throw Error("invalid_product");
  if(!Array.isArray(input.groupIds)||input.groupIds.length>20||input.groupIds.some(x=>!UUID.test(x))||new Set(input.groupIds).size!==input.groupIds.length)throw Error("invalid_groups");
+ const extra=input.details||{};
+ if(typeof extra!=="object"||Array.isArray(extra)||extra===null)throw Error("invalid_details");
+ const optionalText=(value,max)=>value==null?"":typeof value==="string"&&value.length<=max?value:(()=>{throw Error("invalid_text_field")})();
+ const plu=optionalText(extra.plu,50),sourceGroup=optionalText(extra.sourceGroup,100),description=optionalText(extra.description,2000),allergens=optionalText(extra.allergens,1000),sourceMenu=optionalText(extra.sourceMenu,60),reviewNote=optionalText(extra.reviewNote,1000);
+ const measures=extra.measures??{Standard:input.pricePence};
+ if(!measures||typeof measures!=="object"||Array.isArray(measures)||Object.keys(measures).length>20||Object.entries(measures).some(([k,v])=>!k||k.length>50||!Number.isSafeInteger(v)||v<0||v>10000000))throw Error("invalid_measures");
+ const levels=extra.priceLevelsPence??[];
+ if(!Array.isArray(levels)||levels.length>10||levels.some(v=>!Number.isSafeInteger(v)||v<0||v>10000000))throw Error("invalid_price_levels");
+ const display=extra.displaySettings??{buttonColour:"default",sortOrder:0,epos:true,mainMenu:false,sundayMenu:false,website:false};
+ if(!display||!["default","blue","yellow","green"].includes(display.buttonColour)||!Number.isInteger(display.sortOrder)||display.sortOrder<0||display.sortOrder>99999||["epos","mainMenu","sundayMenu","website"].some(k=>typeof display[k]!=="boolean"))throw Error("invalid_display_settings");
  const client=await pool.connect();
  try{
   await client.query("BEGIN");
@@ -29,6 +39,8 @@ async function saveProduct(pool,input){
   [input.id||null,title,category,input.pricePence,input.printerRole,input.active]);
   if(r.rowCount!==1)throw Error("product_not_found");
   const id=r.rows[0].id;
+  await client.query(`UPDATE epos_catalogue_products SET plu=$2,source_group=$3,description=$4,allergens=$5,source_menu=$6,review_note=$7,measures=$8::jsonb,price_levels_pence=$9::jsonb,display_settings=$10::jsonb WHERE id=$1`,
+  [id,plu,sourceGroup,description,allergens,sourceMenu||null,reviewNote,JSON.stringify(measures),JSON.stringify(levels),JSON.stringify(display)]);
   await client.query("DELETE FROM epos_product_option_groups WHERE product_id=$1",[id]);
   for(const groupId of input.groupIds){
    const added=await client.query(`INSERT INTO epos_product_option_groups(product_id,group_id)
