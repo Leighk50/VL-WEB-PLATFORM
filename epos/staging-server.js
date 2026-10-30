@@ -12,6 +12,7 @@ const printQueue=require("./print-queue");
 const billPrint=require("./bill-print");
 const printAuth=require("./print-service-auth");
 const printerMonitoring=require("./printer-monitoring");
+const productManagement=require("./product-management");
 const catalogue=require("./catalogue-data.json");
 const databaseUrl=process.env.POSTGRESQLCONNSTR_EPOS_DATABASE_URL||process.env.EPOS_DATABASE_URL;
 const pool=databaseUrl?new Pool({connectionString:databaseUrl,connectionTimeoutMillis:5000,max:2}):null;
@@ -21,7 +22,7 @@ if(pool){
  setTimeout(renew,30000).unref();
  setInterval(renew,6*60*60*1000).unref();
 }
-const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js","/epos-mobile-v1.css":"epos-mobile-v1.css"};
+const root=__dirname,files={"/":"index.html","/kitchen":"kitchen.html","/catalogue":"catalogue.html","/manager":"manager.html","/product-admin":"product-admin.html","/devices":"devices.html","/shared":"shared.html","/licensing":"licensing.html","/catalogue-data.json":"catalogue-data.json","/manifest.webmanifest":"manifest.webmanifest","/icon.svg":"icon.svg","/service-worker.js":"service-worker.js","/epos-mobile-v1.css":"epos-mobile-v1.css"};
 http.createServer(async(req,res)=>{
  const route=(req.url||"/").split("?")[0];
  if(route==="/api/print-service/enrol"){
@@ -55,6 +56,20 @@ http.createServer(async(req,res)=>{
    if(route==="/api/print/complete"&&req.method==="POST")return reply(200,await printQueue.complete(pool,device,body));
    return reply(405,{error:"unsupported_action"});
   }catch(e){console.error("Print queue error",e.code||e.message);return reply(409,{error:"print_queue_operation_failed"})}
+ }
+ if(route==="/api/catalogue-admin"){
+  const reply=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
+  if(!pool)return reply(503,{error:"database_unavailable"});
+  if(!authenticated(req,process.env.EPOS_STAGING_API_KEY))return reply(401,{error:"manager_authorisation_required"});
+  try{
+   if(req.method==="GET")return reply(200,await productManagement.list(pool));
+   if(req.method!=="POST")return reply(405,{error:"method_not_allowed"});
+   let raw="";for await(const part of req){raw+=part;if(raw.length>16384)return reply(413,{error:"payload_too_large"})}
+   const body=JSON.parse(raw);
+   if(body.action==="saveProduct")return reply(200,await productManagement.saveProduct(pool,body.product));
+   if(body.action==="saveGroup")return reply(200,await productManagement.saveGroup(pool,body.group));
+   return reply(400,{error:"invalid_action"});
+  }catch(e){return reply(400,{error:e.message||"catalogue_admin_failed"})}
  }
  if(route==="/api/master-till"){
   const respond=(code,data)=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store"});res.end(JSON.stringify(data))};
