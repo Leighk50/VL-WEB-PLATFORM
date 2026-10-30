@@ -43,7 +43,7 @@ async function addOrder(pool,{sessionId,tabId,deviceId,requestId,lines}){
   const orderId=randomUUID();
   await client.query("INSERT INTO epos_orders(id,session_id,tab_id,origin_table_id,status) VALUES($1,$2,$3,$4,'new')",[orderId,sessionId,tabId,session.rows[0].table_id]);
   for(const line of lines){
-   await client.query("INSERT INTO epos_order_lines(id,order_id,product_id,product_name,quantity,unit_price_pence,modifiers,instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),orderId,line.productId,line.name,line.quantity,line.unitPricePence,JSON.stringify(line.modifiers||[]),line.instructions||""]);
+   await client.query("INSERT INTO epos_order_lines(id,order_id,product_id,product_name,quantity,unit_price_pence,modifiers,instructions,serving_option) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",[randomUUID(),orderId,line.productId,line.name,line.quantity,line.unitPricePence,JSON.stringify(line.modifiers||[]),line.instructions||"",line.servingOption||"standard"]);
   }
   const result={orderId,sessionId,tabId,accepted:true};
   await client.query("INSERT INTO epos_idempotency(device_id,request_id,response,venue_id) VALUES($1,$2,$3,$4)",[device.rows[0].code,requestId,JSON.stringify(result),session.rows[0].venue_id]);
