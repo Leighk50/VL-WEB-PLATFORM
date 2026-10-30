@@ -5,7 +5,7 @@ async function getSession(pool,tableId){
  const result=await pool.query(`SELECT s.id AS "sessionId",s.version,t.id AS "tableId",
   COALESCE((SELECT jsonb_agg(jsonb_build_object('id',b.id,'label',b.label,'status',b.status,
    'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',l.id,'name',l.product_name,'pricePence',l.unit_price_pence,
-    'quantity',l.quantity,'modifiers',l.modifiers,'instructions',l.instructions,'status',o.status)
+    'quantity',l.quantity,'servingOption',l.serving_option,'modifiers',l.modifiers,'instructions',l.instructions,'status',o.status)
     ORDER BY o.created_at,l.id)
     FROM epos_orders o JOIN epos_order_lines l ON l.order_id=o.id
     WHERE o.tab_id=b.id AND o.status<>'cancelled'),'[]'::jsonb))
@@ -39,7 +39,12 @@ function validatedLines(catalogue,requested){
   if(!Number.isSafeInteger(price)||price<=0)throw Error("Product price unavailable");
   if(!Number.isInteger(line.quantity)||line.quantity<1||line.quantity>20)throw Error("Invalid quantity");
   if(line.modifiers!==undefined&&(!Array.isArray(line.modifiers)||line.modifiers.length))throw Error("Modifiers not enabled in shared test yet");
-  return {productId:p.id,name:p.name+" · "+line.measure,quantity:line.quantity,unitPricePence:price,modifiers:[],instructions:""};
+  const starter=p.category==="Starters";
+  const option=line.servingOption|| (starter?"starter":"standard");
+  if(!((starter&&["starter","with_mains","main_portion"].includes(option))||(!starter&&option==="standard")))throw Error("Invalid serving option");
+  const finalPrice=option==="main_portion"?price*2:price;
+  if(!Number.isSafeInteger(finalPrice))throw Error("Invalid price");
+  return {productId:p.id,name:p.name+" · "+line.measure,quantity:line.quantity,unitPricePence:finalPrice,servingOption:option,modifiers:[],instructions:""};
  });
 }
 async function submitOrder(pool,catalogue,{tableId,tabId,requestId,lines},device){
