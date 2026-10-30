@@ -1,0 +1,10 @@
+BEGIN;
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS plu text;
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS source_group text;
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS allergens text NOT NULL DEFAULT '';
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS source_menu text;
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS review_note text NOT NULL DEFAULT '';
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS price_levels_pence jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE epos_catalogue_products ADD COLUMN IF NOT EXISTS display_settings jsonb NOT NULL DEFAULT '{"buttonColour":"default","sortOrder":0,"epos":true,"mainMenu":false,"sundayMenu":false,"website":false}'::jsonb;
+COMMIT;
