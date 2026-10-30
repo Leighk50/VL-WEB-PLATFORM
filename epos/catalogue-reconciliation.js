@@ -8,8 +8,8 @@ function normalized(){
   seen.add(p.id);
   const measures=p.measures||{};
   const prices=Object.values(measures);
-  if(!prices.length||prices.some(v=>!Number.isSafeInteger(v)||v<0))throw Error("invalid_legacy_price:"+p.id);
-  return {sourceId:p.id,name:p.name,category:p.category,pricePence:measures.Standard??prices[0],measures,printerRole:p.route==="kitchen"?"kitchen":p.route==="bar"?"bar":"receipt",active:p.available===true};
+  if(prices.some(v=>!Number.isSafeInteger(v)||v<0)||(!prices.length&&p.available===true))throw Error("invalid_legacy_price:"+p.id);
+  return {sourceId:p.id,name:p.name,category:p.category,pricePence:measures.Standard??prices[0]??0,measures,printerRole:p.route==="kitchen"?"kitchen":p.route==="bar"?"bar":"receipt",active:p.available===true};
  });
 }
 async function preview(pool){
