@@ -380,7 +380,53 @@ header h2 small{display:block;font-size:11px;font-weight:400;opacity:.8;margin-t
 #tab .order-description{min-width:0!important}
 
 #printerAlert:not([hidden]){position:fixed;top:0;right:0;z-index:50;background:#a52028;color:#fff;padding:8px 12px;font-size:13px;font-weight:800;max-width:90vw;box-shadow:0 2px 8px #0003}
-.serving-choice{border:1px solid #d7e2e8;border-radius:10px;margin:12px 0;padding:10px}.serving-choice legend{font-weight:750;padding:0 5px}.serving-choice label{display:flex;align-items:center;gap:9px;margin:5px 0;padding:10px;border-radius:8px;background:#f1f5f8;cursor:pointer;font-weight:600}.serving-choice input[type="radio"]{width:20px;height:20px;flex:none;accent-color:#19765c}.serving-choice label:has(input:checked){background:#e0f2e9;outline:2px solid #19815f}.serving-choice[hidden]{display:none!important}</style>
+.serving-choice{border:1px solid #d7e2e8;border-radius:10px;margin:12px 0;padding:10px}.serving-choice legend{font-weight:750;padding:0 5px}.serving-choice label{display:flex;align-items:center;gap:9px;margin:5px 0;padding:10px;border-radius:8px;background:#f1f5f8;cursor:pointer;font-weight:600}.serving-choice input[type="radio"]{width:20px;height:20px;flex:none;accent-color:#19765c}.serving-choice label:has(input:checked){background:#e0f2e9;outline:2px solid #19815f}.serving-choice[hidden]{display:none!important}
+/* Lindus desktop EPOS design v1 — isolated from mobile ordering layout */
+@media(min-width:1001px){
+ :root{--till-navy:#101d30;--till-blue:#12356c;--till-cyan:#38cce6;--till-yellow:#ffe36a;--till-bg:#eef3f7}
+ html,body{background:var(--till-bg)!important;color:#1a2c3e!important}
+ header{height:70px;box-sizing:border-box;padding:12px 24px!important;background:var(--till-navy)!important;border:0!important;box-shadow:none!important}
+ header h2{font-size:23px!important;font-weight:800!important;letter-spacing:-.025em!important}
+ header h2 small{display:block;font-size:12px;font-weight:500;color:#b8c9d9;margin-top:3px}
+ .staging-label{font-size:12px;letter-spacing:.07em;color:#c1d1df}
+ nav{background:#192d46!important;border:0!important;display:flex!important;gap:7px!important;padding:10px 18px!important}
+ nav button{min-height:47px!important;min-width:108px!important;margin:0!important;padding:9px 14px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#d9e5ef!important;font-size:13px!important;font-weight:750!important}
+ nav button.active{background:#345e91!important;color:#fff!important;box-shadow:none!important}
+ nav button:hover{background:#294966!important}
+ main{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(360px,32%)!important;gap:14px!important;padding:14px!important;min-height:calc(100vh - 137px)!important;max-width:none!important;margin:0!important}
+ main>.panel{border:1px solid #dce5ee!important;border-radius:14px!important;background:#fff!important;box-shadow:0 4px 15px #2034480b!important;padding:17px!important}
+ main>#screen{background:#fff!important}
+ main>#screen>h2{font-size:22px!important;font-weight:800!important;margin:0 0 12px!important}
+ .department-tabs{display:flex!important;gap:7px!important;margin-bottom:10px!important}
+ .department-tabs button{flex:1!important;min-height:52px!important;background:#e8eef6!important;color:#213a57!important;border:0!important;font-size:16px!important;font-weight:750!important}
+ .department-tabs button.active{background:var(--till-blue)!important;color:#fff!important}
+ .category-tabs{display:flex!important;gap:6px!important;flex-wrap:wrap!important;padding:0 0 12px!important;border-color:#e1e8f0!important}
+ .category-tabs button{min-height:43px!important;padding:8px 14px!important;margin:0!important;background:#edf2f8!important;color:#29435d!important;border:1px solid #e0e8f1!important;font-size:13px!important}
+ .category-tabs button.active{background:var(--till-blue)!important;color:white!important;border-color:var(--till-blue)!important}
+ .measure-bar{padding:11px 0!important}
+ .measure-bar button.active{background:#1c426b!important;color:#fff!important}
+ .grid.products{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(142px,1fr))!important;gap:9px!important}
+ .grid.products .product-tile{min-height:101px!important;display:flex!important;align-items:stretch!important;justify-content:space-between!important;border:0!important;border-radius:10px!important;padding:13px!important;background:var(--till-cyan)!important;box-shadow:0 2px 0 #0d6e8218!important}
+ .grid.products .product-tile:nth-child(5n+2){background:var(--till-yellow)!important}
+ .grid.products .product-tile:hover{filter:brightness(.96)!important;transform:translateY(-1px)}
+ .grid.products .product-tile strong{font-size:15px!important;font-weight:750!important;color:#10273c!important}
+ .grid.products .product-tile small{font-size:14px!important;font-weight:800!important;color:#173c51!important}
+ main aside.panel{top:14px!important;min-height:calc(100vh - 170px)!important}
+ #tableTitle{font-size:23px!important;font-weight:800!important;margin:0 0 12px!important}
+ #tab{min-height:160px!important;max-height:calc(100vh - 430px)!important;overflow:auto!important}
+ #tab .order-item-row{display:grid!important;grid-template-columns:26px minmax(0,1fr) 80px!important;gap:7px!important;align-items:start!important;padding:8px 0!important;border-bottom:1px solid #e6edf3!important}
+ #tab .order-price{text-align:right!important;justify-self:end!important;font-variant-numeric:tabular-nums!important;font-weight:750!important}
+ #total{margin-top:auto!important;font-size:27px!important;color:#152c44!important}
+ .sale-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
+ .sale-actions button{min-height:59px!important;border-radius:9px!important;font-weight:800!important}
+ #send{background:#13885f!important;color:white!important;border:0!important}
+ #pay{background:#f3cb5b!important;color:#172d43!important;border:0!important}
+ #hold{background:#e7eef5!important;color:#203c57!important}
+ #clear{background:#fff0ee!important;color:#963f37!important}
+ #printBills{background:#eaf2fa!important;color:#153d64!important;border:1px solid #cddfea!important}
+ #mobileOrderToggle,#mobileBottomBar{display:none!important}
+}
+</style>
 <header><h2>Lindus EPOS <small>The Village Limits</small></h2><span class="staging-label">STAGING · UI 10.28-C</span></header><nav id="nav"></nav><div id="printerAlert" role="status" hidden></div><main><div id="screen" class="panel"></div><aside class="panel"><h2 id="tableTitle"></h2><button id="mobileOrderToggle" type="button" aria-expanded="false">View order details</button><div id="tab"></div><h2 id="total"></h2><button id="printBills" class="print-bills">Print Table Bills</button><div class="sale-actions"><button id="send">Send Order</button><button id="pay">Pay / Record</button><button id="hold">Hold Sale</button><button id="clear">Clear Draft</button></div><p class="muted order-storage-note">Orders saved in this browser only.</p></aside></main><div id="mobileBottomBar" aria-label="Mobile ordering controls"><button id="mobileTables" type="button">Tables</button><button id="mobileOrder" type="button">Order</button><button id="mobileSend" type="button">Send Order</button><button id="mobileBill" type="button">Bill</button><button id="mobileMore" type="button">More</button></div>
 <dialog id="dialog"><h2 id="itemTitle"></h2><label>Measure<select id="measure"></select></label><fieldset id="servingHeading" hidden class="serving-choice"><legend>Serve as</legend><label><input type="radio" name="servingOption" value="starter" checked> As Starter</label><label><input type="radio" name="servingOption" value="with_mains"> Serve with Mains</label><label><input type="radio" name="servingOption" value="main_portion"> Make into a Main (double price)</label></fieldset><fieldset id="foodChoicePanel" hidden class="serving-choice"><legend id="foodChoiceTitle">Food options</legend><div id="foodChoiceButtons" class="modifier-grid"></div></fieldset><label id="modifierHeading">Additions</label><div id="modifierButtons" class="modifier-grid"></div><p id="modifierHint" class="muted"></p><label id="garnishHeading">Ice & Garnishes — select any</label><div id="garnishButtons" class="modifier-grid"></div><label>Tab Assignment</label><div class="tab-assignment" id="tabAssignment"></div><p class="muted">Assign each item to a separate bill within this table.</p><label>Individual instructions<textarea id="note" rows="3"></textarea></label><button type="button" id="allergenToggle" aria-expanded="false">ALLERGENS · Optional</button><div id="allergenPanel" hidden><p class="muted">Select allergies declared for this individual dish. Chef must verify suitability.</p><div id="allergenChoices" class="modifier-grid"></div><label>Other declared allergy<input id="otherAllergy" maxlength="120" placeholder="e.g. Kiwi"></label></div><p><button id="cancel">Cancel</button><button id="add">Add item</button></p></dialog><div id="billPreview"></div>
 <script>
