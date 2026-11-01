@@ -18,7 +18,7 @@ function fresh(){buttons=Array.from({length:20},blank);selected=0;renderEditor()
 $("new").onclick=fresh;$("columns").onchange=refresh;$("label").oninput=update;$("color").onchange=update;$("search").oninput=showResults;
 $("type").onchange=()=>{const b=buttons[selected];b.type=$("type").value;b.productId=undefined;b.label="";renderEditor();refresh()};
 $("load").onclick=async()=>{try{data=await api("GET");const e=$("existing");e.replaceChildren(new Option("Choose saved layout",""));data.layouts.forEach((x,i)=>e.add(new Option(x.name+" · "+x.deviceClass,String(i))));status("Loaded "+data.products.length+" products and "+data.layouts.length+" drafts");renderEditor()}catch(e){status(e.message)}};
-$("existing").onchange=()=>{const saved=data.layouts[Number($("existing").value)];if(!saved)return;$("name").value=saved.name;$("device").value=saved.deviceClass;$("columns").value=String(saved.layout.columns);buttons=saved.layout.buttons.map(x=>({...x}));selected=0;renderEditor();refresh()};
+$("existing").onchange=()=>{if($("existing").value==="")return;const saved=data.layouts[Number($("existing").value)];if(!saved)return;$("name").value=saved.name;$("device").value=saved.deviceClass;$("columns").value=String(saved.layout.columns);buttons=saved.layout.buttons.map(x=>({...x}));selected=0;renderEditor();refresh()};
 $("save").onclick=async()=>{try{const r=await api("POST",{name:$("name").value,deviceClass:$("device").value,layout:{columns:Number($("columns").value),buttons}});status("Draft saved. Operational till unchanged.");$("load").click()}catch(e){status(e.message)}};
 fresh();
 </script></html>
