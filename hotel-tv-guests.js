@@ -7,14 +7,21 @@ function today(now){const p=ukParts(now);return p.year+'-'+p.month+'-'+p.day;}
 function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!isNaN(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s;}
 function checkoutTime(day){const d=new Date(day+'T12:00:00Z'),weekend=[0,6].includes(d.getUTCDay()),base=new Date(day+'T'+(weekend?'11':'10')+':00:00Z'),p=ukParts(base),local=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute);return new Date(base.getTime()-(local-base.getTime())).toISOString();}
 function cleanArrivals(items){if(!Array.isArray(items)||items.length>1000)throw Error('Invalid booking import.');return items.map(r=>{if(!r||!Number.isInteger(r.room)||r.room<1||r.room>6||!validDate(r.checkin)||!validDate(r.checkout)||r.checkout<=r.checkin)throw Error('Invalid booking dates or room.');const first=String(r.first||'').trim(),last=String(r.last||'').trim();if(!first||!last||first.length>80||last.length>100||/[\x00-\x1f<>]/.test(first+last))throw Error('Invalid guest name.');return {room:r.room,first,last,checkin:r.checkin,checkout:r.checkout};});}
-function activeWelcome(items,room,now=new Date()){
- const day=today(now),time=now.getTime();
+function activeStay(items,room,now){
+ const time=now.getTime();
  // Arrival-day welcomes start after the outgoing checkout cutoff, never at midnight.
  const matches=items.filter(r=>r.room===room&&Date.parse(checkoutTime(r.checkin))<=time&&Date.parse(checkoutTime(r.checkout))>time);
- if(matches.length!==1)return null;
- const r=matches[0],expiresAt=checkoutTime(r.checkout),isCheckoutDay=r.checkout===day;
+ return matches.length===1?matches[0]:null;
+}
+function stayId(stay){
+ return hash(JSON.stringify([stay.room,stay.checkin,stay.checkout,stay.first,stay.last]));
+}
+function activeWelcome(items,room,now=new Date()){
+ const r=activeStay(items,room,now);
+ if(!r)return null;
+ const expiresAt=checkoutTime(r.checkout),isCheckoutDay=r.checkout===today(now);
  const weekend=[0,6].includes(new Date(r.checkout+'T12:00:00Z').getUTCDay()),checkoutLabel=weekend?'11am':'10am';
- return {name:r.first+' '+r.last,expiresAt,isCheckoutDay,checkoutLabel,checkoutMessage:isCheckoutDay?'Thank you for staying at The Village Limits. Checkout today is by '+checkoutLabel+'. When you are ready to check out, please leave your keys in your room and close the door behind you.':''};
+ return {name:r.tvName??(r.first+' '+r.last),expiresAt,isCheckoutDay,checkoutLabel,checkoutMessage:isCheckoutDay?'Thank you for staying at The Village Limits. Checkout today is by '+checkoutLabel+'. When you are ready to check out, please leave your keys in your room and close the door behind you.':''};
 }
 async function payload(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>256000)throw Error('Import too large.');}return JSON.parse(text);}
 function hash(token){return crypto.createHash('sha256').update(token).digest('hex');}
@@ -22,12 +29,32 @@ function devices(){return read('tv-devices.json',[]).filter(d=>d.approved||Date.
 function deviceList(){return devices().map(d=>({id:d.id,room:d.room,code:d.id.slice(0,8).toUpperCase(),approved:d.approved,created:d.created}));}
 function json(res,status,value,extra={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...extra});res.end(JSON.stringify(value));}
 async function handleGuestTv(req,res,p,identity,enabled){
- const register=p==='/api/tv/device-register',welcome=p.match(/^\/api\/tv\/rooms\/([1-6])\/welcome$/),volumeAdmin=p==='/api/admin/tv/volume-test',volumeResult=p.match(/^\/api\/tv\/rooms\/(1)\/volume-result$/),admin=p==='/api/admin/tv/devices'||volumeAdmin,arrivals=p==='/api/admin/guest-sms/tv-arrivals';if(!register&&!welcome&&!volumeResult&&!admin&&!arrivals)return false;
+ const register=p==='/api/tv/device-register',welcome=p.match(/^\/api\/tv\/rooms\/([1-6])\/welcome$/),volumeAdmin=p==='/api/admin/tv/volume-test',volumeResult=p.match(/^\/api\/tv\/rooms\/(1)\/volume-result$/),nameAdmin=p==='/api/admin/tv/welcome-names',admin=p==='/api/admin/tv/devices'||volumeAdmin||nameAdmin,arrivals=p==='/api/admin/guest-sms/tv-arrivals';if(!register&&!welcome&&!volumeResult&&!admin&&!arrivals)return false;
  const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, X-TV-Token','Access-Control-Allow-Methods':register||volumeResult?'POST, OPTIONS':'GET, OPTIONS'};
  if((register||welcome||volumeResult)&&req.method==='OPTIONS'){res.writeHead(204,cors);res.end();return true;}
  if(admin||arrivals){if(!identity){json(res,401,{error:'Please sign in.'});return true;}if(!identity.isOwner&&!identity.permissions.includes(admin?'settings':'guest_sms')){json(res,403,{error:'Permission required.'});return true;}if(req.method!=='GET'&&req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)throw Error();}catch{json(res,403,{error:'Invalid request origin.'});return true;}}}
  try{
-  if(arrivals&&req.method==='POST'){const b=await payload(req),items=cleanArrivals(b.items);const cancelled=Array.isArray(b.cancelled)?b.cancelled.filter(r=>r&&Number.isInteger(r.room)&&r.room>=1&&r.room<=6&&validDate(r.checkin)):[];const key=r=>r.room+'|'+r.checkin,person=r=>r.first+'|'+r.last+'|'+r.checkin+'|'+r.checkout;const replaced=new Set(items.map(key)),moved=new Set(items.map(person)),removed=new Set(cancelled.map(key));const retained=read('tv-arrivals.json',{items:[]}).items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!replaced.has(key(r))&&!moved.has(person(r))&&!removed.has(key(r)));const combined=retained.concat(items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!removed.has(key(r))));write('tv-arrivals.json',{updatedAt:new Date().toISOString(),items:combined});json(res,200,{ok:true,count:items.length});return true;}
+  if(arrivals&&req.method==='POST'){const b=await payload(req),items=cleanArrivals(b.items);const cancelled=Array.isArray(b.cancelled)?b.cancelled.filter(r=>r&&Number.isInteger(r.room)&&r.room>=1&&r.room<=6&&validDate(r.checkin)):[];const key=r=>r.room+'|'+r.checkin,person=r=>r.first+'|'+r.last+'|'+r.checkin+'|'+r.checkout;const replaced=new Set(items.map(key)),moved=new Set(items.map(person)),removed=new Set(cancelled.map(key));const previous=read('tv-arrivals.json',{items:[]}).items;const retained=previous.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!replaced.has(key(r))&&!moved.has(person(r))&&!removed.has(key(r)));const overrides=new Map(previous.filter(r=>typeof r.tvName==='string').map(r=>[stayId(r),r.tvName]));const combined=retained.concat(items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!removed.has(key(r))).map(r=>overrides.has(stayId(r))?{...r,tvName:overrides.get(stayId(r))}:r));write('tv-arrivals.json',{updatedAt:new Date().toISOString(),items:combined});json(res,200,{ok:true,count:items.length});return true;}
+  if(nameAdmin){
+   if(req.method==='GET'){
+    const {items}=read('tv-arrivals.json',{items:[]}),now=new Date();
+    const rooms=Array.from({length:6},(_,i)=>{
+     const room=i+1,stay=enabled(room)?activeStay(items,room,now):null;
+     return {room,stay:stay?{id:stayId(stay),guestName:stay.first+' '+stay.last,override:stay.tvName??null}:null};
+    });
+    json(res,200,{rooms});return true;
+   }
+   if(req.method!=='POST'){json(res,405,{error:'Method not allowed.'});return true;}
+   const b=await payload(req);
+   if(!b||!Number.isInteger(b.room)||b.room<1||b.room>6||
+      (b.name!==null&&(typeof b.name!=='string'||b.name.length>181||/[\x00-\x1f<>]/.test(b.name))))throw Error('Invalid TV welcome name.');
+   const saved=read('tv-arrivals.json',{items:[]}),stay=activeStay(saved.items,b.room,new Date());
+   if(!enabled(b.room)||!stay||stayId(stay)!==b.stayId){json(res,409,{error:'The current stay has changed. Reload the welcome names.'});return true;}
+   if(b.name===null)delete stay.tvName;
+   else stay.tvName=b.name.trim();
+   write('tv-arrivals.json',saved);
+   json(res,200,{ok:true});return true;
+  }
   if(volumeAdmin){
    const saved=read('tv-volume-test.json',{});
    if(req.method==='GET'){json(res,200,saved);return true;}
