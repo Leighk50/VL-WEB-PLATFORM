@@ -36,3 +36,53 @@ const sendVolume=document.createElement('button');sendVolume.type='button';sendV
 document.getElementById('feedAddress').textContent='Shared installer: '+location.origin+'/tv/install/';load();request('/api/content').then(({data})=>{document.getElementById('menuSummary').textContent=(data.menus||[]).filter(m=>m.visible).map(m=>m.name).join(' · ')||'No visible website menus.';document.getElementById('eventSummary').textContent=(data.events||[]).filter(e=>e.visible).length+' visible website events. Dated past events are excluded from the TV feed.';}).catch(()=>{document.getElementById('menuSummary').textContent='Website content could not be read.';document.getElementById('eventSummary').textContent='Website content could not be read.';});})();
 
 
+
+;(function(){
+ const endpoint='/api/admin/tv/welcome-names';
+ const status=document.getElementById('welcomeNamesStatus');
+ const rooms=document.getElementById('welcomeNameRooms');
+ async function request(options){
+  const response=await fetch(endpoint,options);
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||'Could not update TV welcome names.');
+  return data;
+ }
+ async function load(){
+  const data=await request();
+  rooms.replaceChildren();
+  for(const {room,stay} of data.rooms){
+   const row=document.createElement('div');
+   const label=document.createElement('label');
+   label.textContent='Room '+room+(stay?' · Guest SMS name: '+stay.guestName:' · No current stay');
+   row.append(label);
+   rooms.append(row);
+   if(!stay)continue;
+   const input=document.createElement('input');
+   input.type='text';
+   input.maxLength=181;
+   input.value=stay.override??stay.guestName;
+   label.append(input);
+   const save=document.createElement('button'),reset=document.createElement('button');
+   save.type=reset.type='button';
+   save.textContent='Save TV name';
+   reset.textContent='Use Guest SMS name';
+   reset.disabled=stay.override===null;
+   async function update(name){
+    input.disabled=save.disabled=reset.disabled=true;
+    try{
+     await request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,stayId:stay.id,name})});
+     await load();
+     status.textContent='Room '+room+' welcome name updated.';
+    }catch(error){
+     status.textContent=error.message;
+     input.disabled=save.disabled=false;
+     reset.disabled=stay.override===null;
+    }
+   }
+   save.onclick=()=>update(input.value);
+   reset.onclick=()=>update(null);
+   row.append(save,reset);
+  }
+ }
+ load().then(()=>{status.textContent='';}).catch(error=>{status.textContent=error.message;});
+})();
