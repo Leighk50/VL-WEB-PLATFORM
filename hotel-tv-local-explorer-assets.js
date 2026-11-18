@@ -1,9 +1,9 @@
 'use strict';
 const zlib=require('node:zlib');
-// Read only allowlisted media from the already verified signed 1.2.11 archive.
+// Read only allowlisted media from the already verified signed 1.2.12 archive.
 function media(name){
  if(!['lindus-combined-test.mp4','lindus-welcome-music.wav'].includes(name))throw Error('Unknown pilot asset');
- const zip=require('./hotel-tv-release').loadRelease().bytes;
+ const zip=require('./hotel-tv-release').loadPilotRelease().bytes;
  let end=zip.length-22;while(end>=Math.max(0,zip.length-65557)&&zip.readUInt32LE(end)!==0x06054b50)end--;
  if(end<0)throw Error('Invalid signed archive');
  let cursor=zip.readUInt32LE(end+16);const count=zip.readUInt16LE(end+10);
