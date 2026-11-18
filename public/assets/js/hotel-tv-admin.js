@@ -50,33 +50,47 @@ document.getElementById('feedAddress').textContent='Shared installer: '+location
  async function load(){
   const data=await request();
   rooms.replaceChildren();
-  for(const {room,stay} of data.rooms){
+  for(const {room,stay,manual,canAdd} of data.rooms){
    const row=document.createElement('div');
    const label=document.createElement('label');
    label.textContent='Room '+room+(stay?' · Guest SMS name: '+stay.guestName:' · No current stay');
    row.append(label);
    rooms.append(row);
-   if(!stay)continue;
+   if(!stay&&!canAdd)continue;
    const input=document.createElement('input');
    input.type='text';
    input.maxLength=181;
-   input.value=stay.override??stay.guestName;
+   input.value=stay?(stay.override??stay.guestName):(manual?.name??'');
+   input.required=!stay;
+   if(!stay)input.placeholder='Guest name';
+   const checkout=document.createElement('input');
+   if(!stay){
+    checkout.type='date';
+    checkout.required=true;
+    checkout.value=manual?.checkout??'';
+    const checkoutLabel=document.createElement('label');
+    checkoutLabel.textContent='Checkout date';
+    checkoutLabel.append(checkout);
+    row.append(checkoutLabel);
+   }
    label.append(input);
    const save=document.createElement('button'),reset=document.createElement('button');
    save.type=reset.type='button';
    save.textContent='Save TV name';
-   reset.textContent='Use Guest SMS name';
-   reset.disabled=stay.override===null;
+   reset.textContent=stay?'Use Guest SMS name':'Remove manual name';
+   const canReset=stay?stay.override!==null:!!manual;
+   reset.disabled=!canReset;
    async function update(name){
-    input.disabled=save.disabled=reset.disabled=true;
+    if(name!==null&&(!input.reportValidity()||!checkout.reportValidity()))return;
+    input.disabled=checkout.disabled=save.disabled=reset.disabled=true;
     try{
-     await request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room,stayId:stay.id,name})});
+     await request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(stay?{room,stayId:stay.id,name}:{room,mode:'manual',manualId:manual?.id??null,checkout:checkout.value,name})});
      await load();
      status.textContent='Room '+room+' welcome name updated.';
     }catch(error){
      status.textContent=error.message;
-     input.disabled=save.disabled=false;
-     reset.disabled=stay.override===null;
+     input.disabled=checkout.disabled=save.disabled=false;
+     reset.disabled=!canReset;
     }
    }
    save.onclick=()=>update(input.value);
