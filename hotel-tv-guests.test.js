@@ -16,6 +16,16 @@ test('Names require an approved room-specific TV token; imports retain current s
  assert.equal((await (await get(1)).json()).welcome.name,'');
  assert.equal((await change(null)).status,200);
  assert.equal((await (await get(1)).json()).welcome.name,'Jane Smith');
-assert.equal((await fetch(base+'/api/tv/rooms/1/welcome')).status,403);await post('/api/admin/guest-sms/tv-arrivals',{items:[]},owner);assert.equal((await (await get(1)).json()).welcome.name,'Jane Smith');await post('/api/admin/guest-sms/tv-arrivals',{items:[],cancelled:[{room:1,checkin:stay.checkin}]},owner);assert.equal((await (await get(1)).json()).welcome,null);await post('/api/tv/device-register',{room:2,token});assert.equal((await get(2)).status,403);
+assert.equal((await fetch(base+'/api/tv/rooms/1/welcome')).status,403);await post('/api/admin/guest-sms/tv-arrivals',{items:[]},owner);assert.equal((await (await get(1)).json()).welcome.name,'Jane Smith');await post('/api/admin/guest-sms/tv-arrivals',{items:[],cancelled:[{room:1,checkin:stay.checkin}]},owner);assert.equal((await (await get(1)).json()).welcome,null);const manual={room:1,mode:'manual',manualId:null,name:'Manual Guest',checkout:day(1)};
+ assert.equal((await post(names,manual,owner)).status,200);
+ assert.equal((await (await get(1)).json()).welcome.name,'Manual Guest');
+ assert.equal((await post(names,manual,owner)).status,409);
+ await post('/api/admin/guest-sms/tv-arrivals',{items:[]},owner);
+ assert.equal((await (await get(1)).json()).welcome.name,'Manual Guest');
+ await post('/api/admin/guest-sms/tv-arrivals',{items:[stay]},owner);
+ assert.equal((await (await get(1)).json()).welcome.name,'Jane Smith');
+ await post('/api/admin/guest-sms/tv-arrivals',{items:[],cancelled:[{room:1,checkin:stay.checkin}]},owner);
+ assert.equal((await (await get(1)).json()).welcome,null);
+ await post('/api/tv/device-register',{room:2,token});assert.equal((await get(2)).status,403);
  }finally{await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
 });
