@@ -7,17 +7,20 @@ function today(now){const p=ukParts(now);return p.year+'-'+p.month+'-'+p.day;}
 function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!isNaN(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s;}
 function checkoutTime(day){const d=new Date(day+'T12:00:00Z'),weekend=[0,6].includes(d.getUTCDay()),base=new Date(day+'T'+(weekend?'11':'10')+':00:00Z'),p=ukParts(base),local=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute);return new Date(base.getTime()-(local-base.getTime())).toISOString();}
 function cleanArrivals(items){if(!Array.isArray(items)||items.length>1000)throw Error('Invalid booking import.');return items.map(r=>{if(!r||!Number.isInteger(r.room)||r.room<1||r.room>6||!validDate(r.checkin)||!validDate(r.checkout)||r.checkout<=r.checkin)throw Error('Invalid booking dates or room.');const first=String(r.first||'').trim(),last=String(r.last||'').trim();if(!first||!last||first.length>80||last.length>100||/[\x00-\x1f<>]/.test(first+last))throw Error('Invalid guest name.');return {room:r.room,first,last,checkin:r.checkin,checkout:r.checkout};});}
-function activeStay(items,room,now){
+function activeStays(items,room,now){
  const time=now.getTime();
  // Arrival-day welcomes start after the outgoing checkout cutoff, never at midnight.
- const matches=items.filter(r=>r.room===room&&Date.parse(checkoutTime(r.checkin))<=time&&Date.parse(checkoutTime(r.checkout))>time);
- return matches.length===1?matches[0]:null;
+ return items.filter(r=>r.room===room&&(r.manualStart||Date.parse(checkoutTime(r.checkin))<=time)&&Date.parse(checkoutTime(r.checkout))>time);
+}
+function manualWelcome(saved,room,now){
+ return (saved.manual||[]).find(r=>r.room===room&&Date.parse(checkoutTime(r.checkout))>now.getTime());
 }
 function stayId(stay){
  return hash(JSON.stringify([stay.room,stay.checkin,stay.checkout,stay.first,stay.last]));
 }
 function activeWelcome(items,room,now=new Date()){
- const r=activeStay(items,room,now);
+ const matches=activeStays(items,room,now);
+ const r=matches.length===1?matches[0]:null;
  if(!r)return null;
  const expiresAt=checkoutTime(r.checkout),isCheckoutDay=r.checkout===today(now);
  const weekend=[0,6].includes(new Date(r.checkout+'T12:00:00Z').getUTCDay()),checkoutLabel=weekend?'11am':'10am';
@@ -34,13 +37,16 @@ async function handleGuestTv(req,res,p,identity,enabled){
  if((register||welcome||volumeResult)&&req.method==='OPTIONS'){res.writeHead(204,cors);res.end();return true;}
  if(admin||arrivals){if(!identity){json(res,401,{error:'Please sign in.'});return true;}if(!identity.isOwner&&!identity.permissions.includes(admin?'settings':'guest_sms')){json(res,403,{error:'Permission required.'});return true;}if(req.method!=='GET'&&req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)throw Error();}catch{json(res,403,{error:'Invalid request origin.'});return true;}}}
  try{
-  if(arrivals&&req.method==='POST'){const b=await payload(req),items=cleanArrivals(b.items);const cancelled=Array.isArray(b.cancelled)?b.cancelled.filter(r=>r&&Number.isInteger(r.room)&&r.room>=1&&r.room<=6&&validDate(r.checkin)):[];const key=r=>r.room+'|'+r.checkin,person=r=>r.first+'|'+r.last+'|'+r.checkin+'|'+r.checkout;const replaced=new Set(items.map(key)),moved=new Set(items.map(person)),removed=new Set(cancelled.map(key));const previous=read('tv-arrivals.json',{items:[]}).items;const retained=previous.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!replaced.has(key(r))&&!moved.has(person(r))&&!removed.has(key(r)));const overrides=new Map(previous.filter(r=>typeof r.tvName==='string').map(r=>[stayId(r),r.tvName]));const combined=retained.concat(items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!removed.has(key(r))).map(r=>overrides.has(stayId(r))?{...r,tvName:overrides.get(stayId(r))}:r));write('tv-arrivals.json',{updatedAt:new Date().toISOString(),items:combined});json(res,200,{ok:true,count:items.length});return true;}
+  if(arrivals&&req.method==='POST'){const b=await payload(req),items=cleanArrivals(b.items);const cancelled=Array.isArray(b.cancelled)?b.cancelled.filter(r=>r&&Number.isInteger(r.room)&&r.room>=1&&r.room<=6&&validDate(r.checkin)):[];const key=r=>r.room+'|'+r.checkin,person=r=>r.first+'|'+r.last+'|'+r.checkin+'|'+r.checkout;const replaced=new Set(items.map(key)),moved=new Set(items.map(person)),removed=new Set(cancelled.map(key));const saved=read('tv-arrivals.json',{items:[]}),previous=saved.items;const retained=previous.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!replaced.has(key(r))&&!moved.has(person(r))&&!removed.has(key(r)));const overrides=new Map(previous.filter(r=>typeof r.tvName==='string').map(r=>[stayId(r),r.tvName]));const combined=retained.concat(items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now()&&!removed.has(key(r))).map(r=>overrides.has(stayId(r))?{...r,tvName:overrides.get(stayId(r))}:r));const now=new Date();const manual=(saved.manual||[]).filter(r=>Date.parse(checkoutTime(r.checkout))>now.getTime()&&!combined.some(item=>item.room===r.room&&Date.parse(checkoutTime(item.checkin))<Date.parse(checkoutTime(r.checkout)))&&!cancelled.some(c=>c.room===r.room&&c.checkin===r.checkin));write('tv-arrivals.json',{updatedAt:now.toISOString(),items:combined,manual});json(res,200,{ok:true,count:items.length});return true;}
   if(nameAdmin){
    if(req.method==='GET'){
-    const {items}=read('tv-arrivals.json',{items:[]}),now=new Date();
+    const saved=read('tv-arrivals.json',{items:[]}),now=new Date();
     const rooms=Array.from({length:6},(_,i)=>{
-     const room=i+1,stay=enabled(room)?activeStay(items,room,now):null;
-     return {room,stay:stay?{id:stayId(stay),guestName:stay.first+' '+stay.last,override:stay.tvName??null}:null};
+     const room=i+1,available=enabled(room),matches=available?activeStays(saved.items,room,now):[];
+     const stay=matches.length===1?matches[0]:null;
+     const manual=available&&!matches.length?manualWelcome(saved,room,now):undefined;
+     return {room,stay:stay?{id:stayId(stay),guestName:stay.first+' '+stay.last,override:stay.tvName??null}:null,manual:manual?{id:manual.id,name:manual.tvName,checkout:manual.checkout}:null,canAdd:available&&!matches.length};
+
     });
     json(res,200,{rooms});return true;
    }
@@ -48,8 +54,23 @@ async function handleGuestTv(req,res,p,identity,enabled){
    const b=await payload(req);
    if(!b||!Number.isInteger(b.room)||b.room<1||b.room>6||
       (b.name!==null&&(typeof b.name!=='string'||b.name.length>181||/[\x00-\x1f<>]/.test(b.name))))throw Error('Invalid TV welcome name.');
-   const saved=read('tv-arrivals.json',{items:[]}),stay=activeStay(saved.items,b.room,new Date());
-   if(!enabled(b.room)||!stay||stayId(stay)!==b.stayId){json(res,409,{error:'The current stay has changed. Reload the welcome names.'});return true;}
+   const saved=read('tv-arrivals.json',{items:[]}),now=new Date(),matches=activeStays(saved.items,b.room,now);
+   const changed=()=>json(res,409,{error:'The current stay has changed. Reload the welcome names.'});
+   if(!enabled(b.room)){changed();return true;}
+   if(b.mode==='manual'){
+    const current=manualWelcome(saved,b.room,now);
+    if(matches.length||(current?.id??null)!==b.manualId){changed();return true;}
+    const manual=(saved.manual||[]).filter(r=>r.room!==b.room&&Date.parse(checkoutTime(r.checkout))>now.getTime());
+    if(b.name!==null){
+     const name=b.name.trim();
+     if(!name||!validDate(b.checkout)||Date.parse(checkoutTime(b.checkout))<=now.getTime()||saved.items.some(item=>item.room===b.room&&item.checkin<b.checkout&&Date.parse(checkoutTime(item.checkout))>now.getTime()))throw Error('Enter a guest name and a future checkout date.');
+     manual.push({id:crypto.randomUUID(),room:b.room,manualStart:true,tvName:name,checkout:b.checkout,checkin:current?.checkin??today(now)});
+    }
+    write('tv-arrivals.json',{...saved,manual});
+    json(res,200,{ok:true});return true;
+   }
+   const stay=matches.length===1?matches[0]:null;
+   if(!stay||stayId(stay)!==b.stayId){changed();return true;}
    if(b.name===null)delete stay.tvName;
    else stay.tvName=b.name.trim();
    write('tv-arrivals.json',saved);
@@ -69,7 +90,9 @@ async function handleGuestTv(req,res,p,identity,enabled){
    if(volumeResult){const b=await payload(req);if(!test.command||b.id!==test.command.id||Date.parse(test.command.expiresAt)<Date.now())throw Error('Volume test expired or replaced.');
     const number=v=>Number.isInteger(v)&&v>=0&&v<=100?v:null;
     const result={id:b.id,before:number(b.before),after:number(b.after),error:typeof b.error==='string'?b.error.slice(0,200):'',methods:Array.isArray(b.methods)?b.methods.filter(x=>typeof x==='string'&&/^[a-zA-Z0-9_.]{1,100}$/.test(x)).slice(0,60):[],receivedAt:new Date().toISOString()};write('tv-volume-test.json',{...test,result});json(res,200,{ok:true},cors);return true;}
-   const saved=read('tv-arrivals.json',{items:[]});const live=saved.items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now());if(live.length!==saved.items.length)write('tv-arrivals.json',{...saved,items:live});json(res,200,{welcome:activeWelcome(live,room),volumeTest:room===1&&test.command&&Date.parse(test.command.expiresAt)>Date.now()&&!test.result?test.command:null},cors);return true;}
+   const saved=read('tv-arrivals.json',{items:[]});const now=new Date();const live=saved.items.filter(r=>Date.parse(checkoutTime(r.checkout))>Date.now());if(live.length!==saved.items.length)write('tv-arrivals.json',{...saved,items:live});const manual=manualWelcome(saved,room,now);
+   const welcomeItems=manual&&!activeStays(live,room,now).length?[manual]:live;
+   json(res,200,{welcome:activeWelcome(welcomeItems,room,now),volumeTest:room===1&&test.command&&Date.parse(test.command.expiresAt)>Date.now()&&!test.result?test.command:null},cors);return true;}
   json(res,405,{error:'Method not allowed.'},register||welcome||volumeResult?cors:{});
  }catch(e){json(res,400,{error:e.message},register||welcome||volumeResult?cors:{});}return true;
 }
