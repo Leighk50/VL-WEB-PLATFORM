@@ -2,10 +2,11 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const releases={
  '1.2.12':{parts:4,size:35376452,sha256:'d8d42c8266e60097685c56ea58495a2244157decb5985b253d1596dfd792b166'},
+ '1.2.17':{parts:8,size:4335034,sha256:'ab290c942e7a23b106ac38ea0739443ab6c59c96ed5d76eb0209bd9561c8bbfc'},
  '1.2.16':{parts:8,size:4621808,sha256:'8fdf71c09f5c2c274aca1e42f46c3c7261b956d6f6720b41feae421a11dc23d0'}
 };
 const cached=new Map();
-function loadRelease(version='1.2.16'){
+function loadRelease(version='1.2.17'){
  if(cached.has(version))return cached.get(version);
  const release=releases[version];
  if(!release)throw Error('Unknown TV release');
